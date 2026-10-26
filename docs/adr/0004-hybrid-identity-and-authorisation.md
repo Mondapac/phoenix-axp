@@ -34,6 +34,7 @@ and transferable.
    own keys), `LastHolderPolicy`, protected keys granted only by system roles. Scopes: platform,
    tenant, site/organisation. Optional LDAP group → role mapping only through an audited use
    case. Record-level permissions for Objects and forms.
+   *(Amended by ADR-0018: a site-scoped grant may include the site's descendants; access flows only downward.)*
 8. **Audit:** every permission and role change is audited (ADR-0015).
 9. **Transferred from MondaPac:** `platform/authz`, `platform/call-context`, the role model with
    its policies, `test/authz` and the contract snapshots. **Not transferred:** registration,

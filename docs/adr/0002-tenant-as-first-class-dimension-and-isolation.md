@@ -17,6 +17,7 @@ other's data, and some require a separate database or an on-premise installation
    portal-user**, each with its own sign-in and sessions; Vertical → content types, Objects and
    extensions; Region Stack and `HOSTED_MARKETS` → **Deployment** (on-prem or SaaS) and
    `HOSTED_TENANTS`.
+   *(Amended by ADR-0018: Site is a tree under the tenant, with content sharing inside the tenant.)*
 2. **Mandatory context.** Every request, job and consumed event resolves to exactly one tenant.
    There is no default tenant. A deployment rejects any tenant not in `HOSTED_TENANTS`. The BFF
    derives `x-tenant-id` from the host only.
