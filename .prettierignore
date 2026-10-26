@@ -1,0 +1,10 @@
+# Prettier formats code and config only; prose docs keep their own layout.
+*.md
+docs/
+.claude/
+pnpm-lock.yaml
+dist/
+coverage/
+node_modules/
+**/generated/
+prisma/migrations/
