@@ -1,0 +1,16 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "paths": {
+      "@phoenix/shared-kernel": ["./packages/shared-kernel/src/index.ts"],
+      "@phoenix/shared-kernel/contexts": ["./packages/shared-kernel/src/contexts.ts"],
+      "@phoenix/shared-kernel/authenticated-actor": [
+        "./packages/shared-kernel/src/authenticated-actor.ts"
+      ],
+      "@phoenix/shared-kernel/testing": ["./packages/shared-kernel/src/testing.ts"]
+    }
+  },
+  "include": ["src", "packages"]
+}

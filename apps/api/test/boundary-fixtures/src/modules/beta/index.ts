@@ -1,0 +1,1 @@
+export { betaFacade } from './contracts';
