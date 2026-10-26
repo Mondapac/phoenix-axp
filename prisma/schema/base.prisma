@@ -1,0 +1,21 @@
+// Shared Prisma configuration (ADR-02). Models live in one file per module next to this one;
+// each module owns exactly one PostgreSQL schema and no relation may cross schemas.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../../apps/api/src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+// The model map of the tenant guard and the "model to owning module" rule: written on every
+// `prisma generate`, beside the client.
+generator modelMap {
+  provider = "node scripts/generate-model-map.mjs"
+  output   = "../../apps/api/src/generated/model-map.ts"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["platform"]
+}

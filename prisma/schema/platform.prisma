@@ -1,0 +1,22 @@
+// Platform infrastructure tables (schema "platform"). Not a business module: these tables are
+// written through platform/* services only (ADR-01, ADR-12). The CHECK constraints, the grants
+// and the row-level security policy are hand-written in the migrations.
+
+/// A row of one tenant that exists to prove the isolation layers end to end (ADR-02 and the
+/// Phase 0 PoC item 2): the tenant guard in Prisma and PostgreSQL row-level security. No
+/// business data. The row-level security policy on this table is the reference for every
+/// tenant-scoped table that follows.
+model IsolationProbe {
+  /// UUIDv7 from the IdGenerator.
+  id        String   @id @db.Uuid
+  /// The tenant (ADR-02): mandatory, no default, first in every key.
+  tenantId  String   @map("tenant_id") @db.VarChar(32)
+  /// A short code chosen by the writer, unique within the tenant.
+  label     String   @db.VarChar(64)
+  /// From the injected Clock, UTC.
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, label], map: "isolation_probe_tenant_id_label_key")
+  @@map("isolation_probe")
+  @@schema("platform")
+}
