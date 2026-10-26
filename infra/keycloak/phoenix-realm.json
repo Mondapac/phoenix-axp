@@ -1,0 +1,8 @@
+{
+  "realm": "phoenix",
+  "displayName": "Phoenix AXP (local development placeholder)",
+  "enabled": true,
+  "registrationAllowed": false,
+  "clients": [],
+  "users": []
+}

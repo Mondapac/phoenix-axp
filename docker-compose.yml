@@ -1,0 +1,110 @@
+# Local development dependencies only (ADR-05, ADR-11, ADR-12, ADR-13). The API and the worker
+# run on the host (`pnpm dev`, `pnpm dev:worker`). Credentials here are local-only defaults,
+# never secrets, and every port is published on 127.0.0.1 only so other machines on the
+# network cannot reach them. Host ports can be moved with the variables listed in .env.example.
+#
+# PostgreSQL roles: `postgres` is the bootstrap superuser and nothing else; no URL names it. On
+# a fresh volume the image runs scripts/db/bootstrap-dev.sql once, which creates the migration
+# role `phoenix_migrator` (owner of the database) and the application login `phoenix_api`
+# (group `phoenix_app`). On an existing volume, run it again with `pnpm db:bootstrap`.
+#
+# Phase 0 uses PostgreSQL only. Valkey, Mailpit, Keycloak, Flowable and SeaweedFS are here so
+# the later slices that need them (docs/platform-deferred.md) find them running; nothing in the
+# API connects to them yet.
+name: phoenix
+
+services:
+  postgres:
+    # PostgreSQL 17, the major version of production (ADR-05). Alpine variant of the official
+    # image; the minor version floats within 17.
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: phoenix
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs once, on an empty data directory. A checkout without the file fails instead of
+      # mounting an empty directory.
+      - type: bind
+        source: ./scripts/db/bootstrap-dev.sql
+        target: /docker-entrypoint-initdb.d/10-bootstrap-dev.sql
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      # Over TCP: during the first initialisation the image runs a socket-only server, which
+      # a socket check would report healthy before the real server is up.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U postgres -d phoenix']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  valkey:
+    # Valkey 8.1 (BSD-3-Clause), the open-source Redis fork: cache, rate limits and queues
+    # when a slice needs them.
+    image: valkey/valkey:8.1-alpine
+    ports:
+      - '127.0.0.1:${VALKEY_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    # Mailpit v1.27: catches all outgoing mail. SMTP on 1025, web UI on http://localhost:8025.
+    image: axllent/mailpit:v1.27
+    ports:
+      - '127.0.0.1:${SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025'
+
+  keycloak:
+    # Keycloak 26.3.1 (identity provider), dev mode: in-memory H2 store, HTTP only, never for
+    # production. Imports the placeholder realm `phoenix` from infra/keycloak/ on start; the
+    # identity slice replaces it with real clients. Admin console: http://localhost:8180
+    # (admin / admin).
+    image: quay.io/keycloak/keycloak:26.3.1
+    command: ['start-dev', '--import-realm']
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: '8080'
+    ports:
+      - '127.0.0.1:${KEYCLOAK_PORT:-8180}:8080'
+    volumes:
+      - type: bind
+        source: ./infra/keycloak/phoenix-realm.json
+        target: /opt/keycloak/data/import/phoenix-realm.json
+        read_only: true
+        bind:
+          create_host_path: false
+
+  flowable:
+    # Flowable REST 7.1.0 (BPMN engine, Apache-2.0) with its default in-memory H2 database:
+    # a local placeholder for the workflow slice. REST API on
+    # http://localhost:8090/flowable-rest/service/ (rest-admin / test).
+    image: flowable/flowable-rest:7.1.0
+    environment:
+      FLOWABLE_REST_APP_ADMIN_USER_ID: rest-admin
+      FLOWABLE_REST_APP_ADMIN_PASSWORD: test
+    ports:
+      - '127.0.0.1:${FLOWABLE_PORT:-8090}:8080'
+
+  seaweedfs:
+    # SeaweedFS 3.80 (Apache-2.0): master, volume, filer and the S3 gateway in one process,
+    # the local S3-compatible object store for the storage slice. S3 on http://localhost:8333.
+    image: chrislusf/seaweedfs:3.80
+    command: ['server', '-s3', '-dir=/data']
+    ports:
+      - '127.0.0.1:${SEAWEED_MASTER_PORT:-9333}:9333'
+      - '127.0.0.1:${SEAWEED_FILER_PORT:-8888}:8888'
+      - '127.0.0.1:${S3_PORT:-8333}:8333'
+    volumes:
+      - seaweedfs-data:/data
+
+volumes:
+  postgres-data:
+  seaweedfs-data:
