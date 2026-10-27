@@ -14,7 +14,7 @@ export const MAX_DOCUMENT_LENGTH = 256 * 1024;
  * data schema may hold: they bound the compiler's work (security review H1). A large form has
  * a few hundred fields of a handful of keywords each.
  */
-export const MAX_SCHEMA_MEMBERS = 20_000;
+export const MAX_SCHEMA_MEMBERS = 5_000;
 export const MAX_SCHEMA_REFS = 500;
 
 /** The only meta-schema a data schema may name: JSON Schema draft-07, the one Ajv checks. */

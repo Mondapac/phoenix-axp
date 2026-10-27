@@ -131,7 +131,7 @@ describe('checkRevisionDocuments', () => {
       ),
     ).toMatchObject({ error: { field: 'jsonSchema', problem: 'too-complex' } });
     const wide = Object.fromEntries(
-      Array.from({ length: 10_001 }, (_, i) => [`p${i}`, { type: 'string' }]),
+      Array.from({ length: 5_001 }, (_, i) => [`p${i}`, { type: 'string' }]),
     );
     expect(
       checkRevisionDocuments(
