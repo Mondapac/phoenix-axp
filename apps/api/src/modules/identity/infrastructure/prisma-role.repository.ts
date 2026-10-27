@@ -53,6 +53,41 @@ export class PrismaRoleRepository implements RoleRepository {
     return row === null ? null : roleOf(row);
   }
 
+  async findTenantSystemRole(tenant: TenantContext): Promise<RoleRecord | null> {
+    const row = await this.prisma.tx(tenant).role.findFirst({
+      where: { tenantId: tenant.tenantId, kind: 'system', scope: 'tenant' },
+      select: ROLE,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return row === null ? null : roleOf(row);
+  }
+
+  async insertTenantSystemRole(
+    tenant: TenantContext,
+    role: { readonly id: Id<'Role'>; readonly key: string },
+    at: Temporal.Instant,
+  ): Promise<'created' | 'taken'> {
+    try {
+      await this.prisma.tx(tenant).role.create({
+        data: {
+          tenantId: tenant.tenantId,
+          id: role.id,
+          key: role.key,
+          kind: 'system',
+          scope: 'tenant',
+          permissionKeys: [],
+          version: 1,
+          createdAt: dateOf(at),
+          updatedAt: dateOf(at),
+        },
+      });
+      return 'created';
+    } catch (error) {
+      if (this.prisma.violatedConstraint(error) === 'role_tenant_id_key_key') return 'taken';
+      throw error;
+    }
+  }
+
   async insertCustom(
     tenant: TenantContext,
     role: {

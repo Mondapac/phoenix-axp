@@ -3,7 +3,7 @@
     "action": "identity.account.created",
     "targetType": "identity.account",
     "targetId": "id",
-    "actors": ["authenticated"],
+    "actors": ["authenticated", "system"],
     "before": null,
     "after": {
       "source": "enumOf(directory|local)"
@@ -109,6 +109,17 @@
     }
   },
   {
+    "action": "identity.role.founding-assigned",
+    "targetType": "identity.role-assignment",
+    "targetId": "id",
+    "actors": ["system"],
+    "before": null,
+    "after": {
+      "accountId": "id",
+      "roleId": "id"
+    }
+  },
+  {
     "action": "identity.role.permissions-changed",
     "targetType": "identity.role",
     "targetId": "id",
@@ -132,6 +143,14 @@
       "roleId": "id",
       "siteId": "optional(id)"
     },
+    "after": null
+  },
+  {
+    "action": "identity.role.system-seeded",
+    "targetType": "identity.role",
+    "targetId": "id",
+    "actors": ["system"],
+    "before": null,
     "after": null
   },
   {

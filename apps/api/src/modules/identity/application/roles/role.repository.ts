@@ -28,6 +28,17 @@ export interface RoleRepository {
   /** Every role of the tenant, by key. */
   list(tenant: TenantContext): Promise<RoleRecord[]>;
   find(tenant: TenantContext, id: Id<'Role'>): Promise<RoleRecord | null>;
+  /** The tenant's system role of tenant scope (the oldest, should there be several), or null. */
+  findTenantSystemRole(tenant: TenantContext): Promise<RoleRecord | null>;
+  /**
+   * The tenant's system role of tenant scope, at version 1, with no keys (it holds its scope);
+   * `taken` when the tenant has a role of that key.
+   */
+  insertTenantSystemRole(
+    tenant: TenantContext,
+    role: { readonly id: Id<'Role'>; readonly key: string },
+    at: Temporal.Instant,
+  ): Promise<'created' | 'taken'>;
   /** A custom role at version 1; `taken` when the tenant has a role of that key. */
   insertCustom(
     tenant: TenantContext,

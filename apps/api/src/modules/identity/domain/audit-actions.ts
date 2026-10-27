@@ -16,11 +16,14 @@ export const ACCOUNT_PROVISIONED = defineAuditAction({
   after: { boundSubjectId, source: auditField.enumOf(ACCOUNT_SOURCES) },
 });
 
-/** A local staff account created in studio, before its first sign-in. */
+/**
+ * A local staff account created before its first sign-in: in studio, or by the first-
+ * administrator command (system).
+ */
 export const ACCOUNT_CREATED = defineAuditAction({
   action: 'identity.account.created',
   targetType: 'identity.account',
-  actors: ['authenticated'],
+  actors: ['authenticated', 'system'],
   after: { source: auditField.enumOf(ACCOUNT_SOURCES) },
 });
 
@@ -133,6 +136,24 @@ export const ROLE_REVOKED = defineAuditAction({
   before: grant,
 });
 
+/** The tenant's system role, created by the first-administrator command. */
+export const SYSTEM_ROLE_SEEDED = defineAuditAction({
+  action: 'identity.role.system-seeded',
+  targetType: 'identity.role',
+  actors: ['system'],
+});
+
+/**
+ * The founding grant of the tenant's system role (owner card of slice 1.6): not a GrantPolicy
+ * grant, made by the platform team's command while the tenant has no holder.
+ */
+export const FOUNDING_ADMINISTRATOR_ASSIGNED = defineAuditAction({
+  action: 'identity.role.founding-assigned',
+  targetType: 'identity.role-assignment',
+  actors: ['system'],
+  after: { accountId: auditField.id(), roleId: auditField.id() },
+});
+
 export const IDENTITY_AUDIT_ACTIONS = [
   ACCOUNT_PROVISIONED,
   ACCOUNT_CREATED,
@@ -148,4 +169,6 @@ export const IDENTITY_AUDIT_ACTIONS = [
   ROLE_PERMISSIONS_CHANGED,
   ROLE_ASSIGNED,
   ROLE_REVOKED,
+  SYSTEM_ROLE_SEEDED,
+  FOUNDING_ADMINISTRATOR_ASSIGNED,
 ] as const;

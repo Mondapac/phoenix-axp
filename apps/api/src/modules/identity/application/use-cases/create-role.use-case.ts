@@ -12,6 +12,7 @@ import { IDENTITY_ROLES_MANAGE } from '../../contracts/permissions';
 import { ROLE_CREATED } from '../../domain/audit-actions';
 import {
   parseRoleKey,
+  TENANT_SYSTEM_ROLE_KEY,
   parseRolePermissionKeys,
   type CustomRoleScope,
   type InvalidRoleValue,
@@ -62,6 +63,10 @@ export class CreateRole extends UseCase<CreateRoleInput, { id: Id<'Role'> }, Cre
     }
     const key = parseRoleKey(input.key);
     if (!key.ok) return Promise.resolve(key);
+    // The system role's seed key stays free for the first-administrator command.
+    if (key.value === TENANT_SYSTEM_ROLE_KEY) {
+      return Promise.resolve(err({ code: 'identity.role.key-taken' } as const));
+    }
     const keys = parseRolePermissionKeys(input.permissionKeys, (k) =>
       keyFitsRole(k, input.scope, this.catalogue),
     );
