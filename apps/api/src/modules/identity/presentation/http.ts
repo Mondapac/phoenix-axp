@@ -1,7 +1,7 @@
 import { HttpException } from '@nestjs/common';
 import { parseId } from '@phoenix/shared-kernel';
 import type { Id, Result } from '@phoenix/shared-kernel';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { ACCESS_DENIED_STATUS, type AccessDenied } from '../../../platform/authz';
 
 // The HTTP edge of the identity controllers: request parsing and the error body of
@@ -14,6 +14,18 @@ const FAILURE_STATUS: Readonly<Record<string, number>> = Object.freeze({
   'identity.account.username-taken': 409,
   'identity.account.not-local': 409,
   'identity.account.own-account': 422,
+  'identity.account.not-linked': 409,
+  'identity.role.not-found': 404,
+  'identity.role.key-taken': 409,
+  'identity.role.not-editable': 409,
+  'identity.role-assignment.not-found': 404,
+  'identity.role-assignment.exists': 409,
+  'identity.site.not-found': 404,
+  // GrantPolicy and LastHolderPolicy: the reason of a refused grant is logged, never answered.
+  'role.not-grantable': 403,
+  'member.self': 422,
+  'member.outranks-actor': 403,
+  'member.last-holder': 409,
   'sign-in.flow-invalid': 400,
   'sign-in.rejected': 401,
   'sign-in.no-staff-account': 403,
@@ -54,3 +66,10 @@ export function idParam<K extends string>(text: string, notFound: string): Id<K>
   const id = parseId<K>(text);
   return id.ok ? id.value : fail(404, notFound);
 }
+
+/** A UUIDv7 in a body, branded as the id of `K`. */
+export const idField = <K extends string>() =>
+  z
+    .string()
+    .refine((text) => parseId(text).ok, 'must be a UUIDv7')
+    .transform((text) => text as Id<K>);

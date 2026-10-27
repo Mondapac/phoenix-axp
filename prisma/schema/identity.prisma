@@ -78,6 +78,8 @@ model Role {
   assignments    RoleAssignment[]
 
   @@unique([tenantId, id], map: "role_tenant_id_id_key")
+  /// The target of role_assignment's foreign key, which makes a grant's level its role's scope.
+  @@unique([tenantId, id, scope], map: "role_tenant_id_id_scope_key")
   @@unique([tenantId, key], map: "role_tenant_id_key_key")
   @@map("role")
   @@schema("identity")
@@ -97,10 +99,13 @@ model RoleAssignment {
   includeDescendants Boolean  @map("include_descendants")
   createdAt          DateTime @map("created_at") @db.Timestamptz(3)
   account            Account  @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "role_assignment_account_fkey")
-  role               Role     @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "role_assignment_role_fkey")
+  /// Through the role's scope too: a grant sits at its role's level (ADR-0018 decision 6).
+  role               Role     @relation(fields: [tenantId, roleId, level], references: [tenantId, id, scope], onDelete: Restrict, onUpdate: Restrict, map: "role_assignment_role_fkey")
 
   @@unique([tenantId, id], map: "role_assignment_tenant_id_id_key")
-  @@index([tenantId, accountId], map: "role_assignment_tenant_id_account_id_idx")
+  /// One grant of a role to an account per place. NULLS NOT DISTINCT in the migration, so a
+  /// tenant grant (no site) is unique too; Prisma cannot say so.
+  @@unique([tenantId, accountId, roleId, siteId], map: "role_assignment_tenant_id_account_id_role_id_site_id_key")
   @@index([tenantId, roleId], map: "role_assignment_tenant_id_role_id_idx")
   @@map("role_assignment")
   @@schema("identity")
