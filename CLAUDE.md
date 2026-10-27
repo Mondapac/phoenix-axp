@@ -134,6 +134,9 @@ change one only through a new ADR or an "Amended by" note.
 - `pnpm licences` = the dependency licence gate (ADR-0009); `pnpm db:check-reversible` runs
   every migration up -> down -> up; `pnpm db:bootstrap` recreates the dev DB roles on an
   existing volume.
+- `pnpm lint` also runs `packages/ui/lint/check-css.mjs` (logical CSS, tokens only); the UI ESLint
+  rules are in `packages/ui/lint/ui-rules.mjs`. `pnpm --filter @phoenix/ui tokens` regenerates
+  `tokens.css` from `panel-tokens.ts`.
 Update this section in the same PR when a script changes.
 
 ## Working rules for Claude

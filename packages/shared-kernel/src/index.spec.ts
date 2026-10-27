@@ -29,11 +29,16 @@ describe('the public surface of the kernel', () => {
       'isAuditActionDefinition',
       'isMinted',
       'mintTenantContext',
+      'normaliseForStorage',
+      'normaliseInput',
+      'normaliseLetters',
       'ok',
       'parseContentHash',
       'parseCorrelationId',
       'parseId',
       'parseTenantId',
+      'searchKey',
+      'toAsciiDigits',
       'uuidV7',
     ]);
   });
