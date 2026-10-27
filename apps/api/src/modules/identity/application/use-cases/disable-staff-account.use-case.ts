@@ -26,7 +26,7 @@ export type DisableStaffAccountFailure = AccountNotFound | AccountNotLocal | Own
  * Disables a local staff account and ends all its sessions in one unit (ADR-0004 decision 2,
  * PoC 2 verdict 4): the next request with any of its cookies is refused, and its next sign-in
  * too. A directory account is disabled in the directory; the sync applies it (ADR-0022
- * decision 2). Disabling an already disabled account changes nothing.
+ * decision 6). Disabling an already disabled account changes nothing.
  */
 export class DisableStaffAccount extends UseCase<
   DisableStaffAccountInput,

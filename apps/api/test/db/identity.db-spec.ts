@@ -18,7 +18,9 @@ import { TenantRegistry } from '../../src/platform/tenant-config/tenant-registry
 import { StaleAggregateError } from '../../src/platform/unit-of-work/errors';
 import { IdentityAuthorisationCheck } from '../../src/modules/identity/application/access/identity-authorisation-check';
 import { SessionAuthenticator } from '../../src/modules/identity/application/access/session-authenticator';
+import { DirectorySyncRunner } from '../../src/modules/identity/application/directory-sync-runner';
 import { SignInFlows } from '../../src/modules/identity/application/sign-in-flow';
+import type { StaffDirectory } from '../../src/modules/identity/application/staff-directory';
 import type {
   ProviderFailure,
   ProviderIdentity,
@@ -29,11 +31,17 @@ import { CompleteStaffSignIn } from '../../src/modules/identity/application/use-
 import { CreateLocalStaffAccount } from '../../src/modules/identity/application/use-cases/create-local-staff-account.use-case';
 import { DisableStaffAccount } from '../../src/modules/identity/application/use-cases/disable-staff-account.use-case';
 import { ListStaffAccounts } from '../../src/modules/identity/application/use-cases/list-staff-accounts.use-case';
+import { RunDirectorySyncNow } from '../../src/modules/identity/application/use-cases/run-directory-sync-now.use-case';
 import { SignOut } from '../../src/modules/identity/application/use-cases/sign-out.use-case';
+import { SyncDirectoryAccounts } from '../../src/modules/identity/application/use-cases/sync-directory-accounts.use-case';
+import { UpdateDirectorySyncInterval } from '../../src/modules/identity/application/use-cases/update-directory-sync-interval.use-case';
+import { ViewDirectorySync } from '../../src/modules/identity/application/use-cases/view-directory-sync.use-case';
 import { ViewOwnAccount } from '../../src/modules/identity/application/use-cases/view-own-account.use-case';
 import { IDENTITY_PERMISSIONS } from '../../src/modules/identity/contracts/permissions';
 import { IDENTITY_AUDIT_ACTIONS } from '../../src/modules/identity/domain/audit-actions';
+import type { DirectoryStatus } from '../../src/modules/identity/domain/directory-sync';
 import { PrismaAccountRepository } from '../../src/modules/identity/infrastructure/prisma-account.repository';
+import { PrismaDirectorySyncRepository } from '../../src/modules/identity/infrastructure/prisma-directory-sync.repository';
 import { PrismaSessionRepository } from '../../src/modules/identity/infrastructure/prisma-session.repository';
 import { TEST_TENANT_CONFIG_DIRS, TEST_TENANTS, testTenantId } from '../support/test-config';
 import {
@@ -84,6 +92,28 @@ class ScriptedProvider implements StaffIdentityProvider {
   }
 }
 
+/** The tenant's directory: every subject enabled unless set otherwise; `down` answers nothing. */
+class ScriptedDirectory implements StaffDirectory {
+  readonly statuses = new Map<string, DirectoryStatus>();
+  down = false;
+  /** When set, the answer for every subject. */
+  everyone: DirectoryStatus | null = null;
+  statusOf(_tenant: TenantContext, subjects: readonly string[]) {
+    if (this.down)
+      return Promise.resolve({ ok: false as const, error: 'directory.unavailable' as const });
+    return Promise.resolve(
+      ok(
+        new Map(
+          subjects.map((subject) => [
+            subject,
+            this.everyone ?? this.statuses.get(subject) ?? 'enabled',
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
 const unique = (prefix: string): string => `${prefix}-${randomUUID().slice(0, 8)}`;
 
 describe.each(TEST_TENANTS)('the identity module in tenant %s (database integration)', (code) => {
@@ -95,6 +125,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
   const ids = new SequenceIdGenerator(clock);
   const audit = new RecordingAuditWriter();
   const provider = new ScriptedProvider();
+  const directory = new ScriptedDirectory();
   const flows = new SignInFlows(Buffer.alloc(32, 9));
   let persistence: Persistence;
   /** The application login, writing roles and grants under the tenant's own policy. */
@@ -114,7 +145,13 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
     const sessions = new PrismaSessionRepository(p.service);
     const check = new IdentityAuthorisationCheck(uow, sessions, permissions, clock);
     const gate = createUseCaseGate(tenants, permissions, check);
+    const syncs = new PrismaDirectorySyncRepository(p.service);
+    const runner = new DirectorySyncRunner(uow, syncs, accounts, sessions, directory, audit, clock);
     return {
+      sync: new SyncDirectoryAccounts(gate, runner),
+      syncNow: new RunDirectorySyncNow(gate, runner),
+      viewSync: new ViewDirectorySync(gate, uow, syncs),
+      setInterval: new UpdateDirectorySyncInterval(gate, uow, syncs, audit, clock),
       authenticator: new SessionAuthenticator(uow, sessions, clock),
       begin: new BeginStaffSignIn(gate, flows, provider),
       complete: new CompleteStaffSignIn(
@@ -477,6 +514,200 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       } finally {
         await writer.query('ROLLBACK');
       }
+    });
+
+    describe('the directory sync (owner decision P6)', () => {
+      const system = testCallContext(tenant, 'system');
+      /** "Sync now" a minute after whatever ran before: past the 30 s cooldown. */
+      const syncNow = (context: CallContext = admin) => {
+        clock.advance(Temporal.Duration.from({ minutes: 1 }));
+        return identity.syncNow.execute(context, undefined);
+      };
+      const statusOf = async (accountId: Id<'Account'>) => {
+        const listed = await identity.list.execute(admin, undefined);
+        if (!listed.ok) throw new Error('list failed');
+        return listed.value.find((account) => account.id === accountId)?.status;
+      };
+
+      it('runs on schedule only once the interval has passed, and "sync now" at any time', async () => {
+        const first = await identity.sync.execute(system, undefined);
+        expect(first).toMatchObject({ ok: true, value: { outcome: 'completed' } });
+        expect(await identity.sync.execute(system, undefined)).toMatchObject({
+          ok: true,
+          value: { outcome: 'skipped' },
+        });
+        // "Sync now" right after a start is skipped; a minute later it runs.
+        expect(await identity.syncNow.execute(admin, undefined)).toMatchObject({
+          ok: true,
+          value: { outcome: 'skipped' },
+        });
+        expect(await syncNow()).toMatchObject({
+          ok: true,
+          value: { outcome: 'completed' },
+        });
+        clock.advance(Temporal.Duration.from({ minutes: 5 }));
+        expect(await identity.sync.execute(system, undefined)).toMatchObject({
+          ok: true,
+          value: { outcome: 'completed' },
+        });
+        const state = await identity.viewSync.execute(admin, undefined);
+        expect(state.ok && state.value).toMatchObject({
+          intervalMinutes: 5,
+          lastOutcome: 'completed',
+          lastStartedAt: clock.now(),
+        });
+        // The scheduled use case is the system actor's only; "sync now" needs the manage key.
+        expect(await identity.sync.execute(admin, undefined)).toEqual({
+          ok: false,
+          error: { code: 'access.denied' },
+        });
+        const plain = await contextOf(
+          (await signedIn({ username: unique('plain'), directory: true })).sessionToken,
+        );
+        for (const refused of [
+          await syncNow(plain),
+          await identity.viewSync.execute(plain, undefined),
+          await identity.setInterval.execute(plain, { version: 1, intervalMinutes: 10 }),
+        ]) {
+          expect(refused).toEqual({ ok: false, error: { code: 'access.denied' } });
+        }
+      });
+
+      it('runs once when two scheduled runs start together', async () => {
+        clock.advance(Temporal.Duration.from({ minutes: 60 }));
+        const runs = await Promise.all([
+          identity.sync.execute(system, undefined),
+          identity.sync.execute(system, undefined),
+        ]);
+        expect(runs.map((run) => run.ok && run.value.outcome).sort()).toEqual([
+          'completed',
+          'skipped',
+        ]);
+      });
+
+      it('disables a person disabled or gone in AD, ends their sessions, and re-enables them', async () => {
+        const goneName = unique('gone');
+        const offName = unique('off');
+        const gone = await signedIn({ username: goneName, directory: true });
+        const off = await signedIn({ username: offName, directory: true });
+        const localName = unique('loc');
+        const local = await identity.create.execute(admin, { username: localName });
+        if (!local.ok) throw new Error(local.error.code);
+        // A linked local account: the directory never decides about it, even when it says gone.
+        await signedIn({ username: localName, directory: false });
+        directory.statuses.set(`sub-${localName}`, 'missing');
+        directory.statuses.set(`sub-${goneName}`, 'missing');
+        directory.statuses.set(`sub-${offName}`, 'disabled');
+
+        const ran = await syncNow();
+        expect(ran).toMatchObject({
+          ok: true,
+          value: { outcome: 'completed', accountsDisabled: 2 },
+        });
+        expect(await statusOf(gone.accountId)).toBe('disabled');
+        expect(await statusOf(off.accountId)).toBe('disabled');
+        expect(await statusOf(local.value.id)).toBe('active');
+        for (const token of [gone.sessionToken, off.sessionToken]) {
+          expect((await identity.authenticator.authenticate(tenant, token)).ok).toBe(false);
+        }
+        expect(audit.actions()).toContain('identity.account.disabled-by-directory');
+
+        directory.statuses.set(`sub-${offName}`, 'enabled');
+        expect(await syncNow()).toMatchObject({
+          ok: true,
+          value: { outcome: 'completed', accountsDisabled: 0, accountsEnabled: 1 },
+        });
+        expect(await statusOf(off.accountId)).toBe('active');
+        expect(await statusOf(gone.accountId)).toBe('disabled');
+        expect(audit.actions()).toContain('identity.account.enabled-by-directory');
+        // Re-enabled, the person signs in again: the old sessions stay ended.
+        expect((await identity.authenticator.authenticate(tenant, off.sessionToken)).ok).toBe(
+          false,
+        );
+      });
+
+      it('changes nothing when the directory does not answer, or would disable most accounts', async () => {
+        const keptName = unique('kept');
+        const kept = await signedIn({ username: keptName, directory: true });
+        directory.statuses.set(`sub-${keptName}`, 'disabled');
+        directory.down = true;
+        expect(await syncNow()).toMatchObject({
+          ok: true,
+          value: { outcome: 'failed', accountsDisabled: 0 },
+        });
+        directory.down = false;
+        expect(await statusOf(kept.accountId)).toBe('active');
+
+        // Ten or more accounts, all of them reported gone: a broken link, not a mass leave.
+        for (let n = 0; n < 10; n += 1)
+          await signedIn({ username: unique('crowd'), directory: true });
+        directory.everyone = 'missing';
+        try {
+          expect(await syncNow()).toMatchObject({
+            ok: true,
+            value: { outcome: 'halted', accountsDisabled: 0 },
+          });
+        } finally {
+          directory.everyone = null;
+        }
+        expect(await statusOf(kept.accountId)).toBe('active');
+        expect((await identity.authenticator.authenticate(tenant, kept.sessionToken)).ok).toBe(
+          true,
+        );
+        const state = await identity.viewSync.execute(admin, undefined);
+        expect(state.ok && state.value.lastOutcome).toBe('halted');
+        expect(audit.actions()).toContain('identity.directory-sync.ran');
+        directory.statuses.clear();
+      });
+
+      it('sets the interval within 1 to 60 minutes, with a version a run does not change', async () => {
+        const before = await identity.viewSync.execute(admin, undefined);
+        if (!before.ok) throw new Error('view failed');
+        await syncNow();
+        const { version } = before.value;
+        // A different value per tenant fixture, so each sees only its own.
+        const minutes = 15 + TEST_TENANTS.indexOf(code);
+        for (const intervalMinutes of [0, 61]) {
+          expect(await identity.setInterval.execute(admin, { version, intervalMinutes })).toEqual({
+            ok: false,
+            error: { code: 'identity.value.invalid', field: 'intervalMinutes' },
+          });
+        }
+        expect(
+          await identity.setInterval.execute(admin, { version, intervalMinutes: minutes }),
+        ).toEqual({
+          ok: true,
+          value: undefined,
+        });
+        await expect(
+          identity.setInterval.execute(admin, { version, intervalMinutes: 30 }),
+        ).rejects.toThrow(StaleAggregateError);
+        const after = await identity.viewSync.execute(admin, undefined);
+        expect(after.ok && after.value).toMatchObject({
+          intervalMinutes: minutes,
+          version: version + 1,
+        });
+        expect(audit.actions()).toContain('identity.directory-sync.interval-changed');
+
+        // Ten minutes after the last start is not due; the new interval is.
+        clock.advance(Temporal.Duration.from({ minutes: 10 }));
+        expect(await identity.sync.execute(system, undefined)).toMatchObject({
+          ok: true,
+          value: { outcome: 'skipped' },
+        });
+        clock.advance(Temporal.Duration.from({ minutes: minutes - 10 }));
+        expect(await identity.sync.execute(system, undefined)).toMatchObject({
+          ok: true,
+          value: { outcome: 'completed' },
+        });
+        // The other tenant's setting is its own.
+        const elsewhere = await persistence.unitOfWork.run(
+          other,
+          async () => ok(await new PrismaDirectorySyncRepository(persistence.service).read(other)),
+          { readOnly: true },
+        );
+        expect(elsewhere.ok && elsewhere.value.intervalMinutes).not.toBe(minutes);
+      });
     });
   });
 });

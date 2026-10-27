@@ -20,6 +20,24 @@
     }
   },
   {
+    "action": "identity.account.disabled-by-directory",
+    "targetType": "identity.account",
+    "targetId": "id",
+    "actors": ["authenticated", "system"],
+    "before": null,
+    "after": {
+      "sessionsEnded": "integer"
+    }
+  },
+  {
+    "action": "identity.account.enabled-by-directory",
+    "targetType": "identity.account",
+    "targetId": "id",
+    "actors": ["authenticated", "system"],
+    "before": null,
+    "after": null
+  },
+  {
     "action": "identity.account.linked",
     "targetType": "identity.account",
     "targetId": "id",
@@ -38,6 +56,31 @@
     "after": {
       "boundSubjectId": "id",
       "source": "enumOf(directory|local)"
+    }
+  },
+  {
+    "action": "identity.directory-sync.interval-changed",
+    "targetType": "identity.directory-sync",
+    "targetId": "enumOf(tenant)",
+    "actors": ["authenticated"],
+    "before": {
+      "intervalMinutes": "integer"
+    },
+    "after": {
+      "intervalMinutes": "integer"
+    }
+  },
+  {
+    "action": "identity.directory-sync.ran",
+    "targetType": "identity.directory-sync",
+    "targetId": "enumOf(tenant)",
+    "actors": ["authenticated", "system"],
+    "before": null,
+    "after": {
+      "accountsChecked": "integer",
+      "accountsDisabled": "integer",
+      "accountsEnabled": "integer",
+      "outcome": "enumOf(completed|failed|halted)"
     }
   },
   {

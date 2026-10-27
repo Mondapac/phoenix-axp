@@ -13,6 +13,8 @@ const CONFIG: KeycloakConfig = {
   studioClientSecret: 'client-secret',
   studioCallbackUrl: 'https://studio.example.test/auth/callback',
   directoryClaim: 'ldap_id',
+  adminClientId: 'phoenix-core-admin',
+  adminClientSecret: null,
 };
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });

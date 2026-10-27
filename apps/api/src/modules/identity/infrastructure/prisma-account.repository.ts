@@ -3,7 +3,11 @@ import { Temporal } from '@phoenix/shared-kernel';
 import type { Id, Population, TenantContext } from '@phoenix/shared-kernel';
 import { PrismaService } from '../../../platform/persistence/prisma.service';
 import { StaleAggregateError } from '../../../platform/unit-of-work/errors';
-import type { AccountListItem, AccountRepository } from '../application/account.repository';
+import type {
+  AccountListItem,
+  AccountRepository,
+  DirectoryAccount,
+} from '../application/account.repository';
 import type { Account, AccountSource, AccountStatus } from '../domain/account';
 
 const dateOf = (instant: Temporal.Instant): Date => new Date(instant.epochMilliseconds);
@@ -111,6 +115,51 @@ export class PrismaAccountRepository implements AccountRepository {
       data: { subject, version: { increment: 1 }, updatedAt: dateOf(at) },
     });
     if (count === 0) throw new StaleAggregateError('identity.account', id);
+  }
+
+  async directoryAccounts(
+    tenant: TenantContext,
+    afterId: Id<'Account'> | null,
+    limit: number,
+  ): Promise<DirectoryAccount[]> {
+    const rows = await this.prisma.tx(tenant).account.findMany({
+      where: {
+        tenantId: tenant.tenantId,
+        population: 'tenant-staff',
+        source: 'directory',
+        ...(afterId === null ? {} : { id: { gt: afterId } }),
+      },
+      select: { id: true, subject: true, status: true, version: true },
+      orderBy: [{ id: 'asc' }],
+      take: limit,
+    });
+    // The CHECK gives every directory account a subject.
+    return rows.flatMap((row) =>
+      row.subject === null
+        ? []
+        : [
+            {
+              id: row.id as Id<'Account'>,
+              subject: row.subject,
+              status: row.status as AccountStatus,
+              version: row.version,
+            },
+          ],
+    );
+  }
+
+  async setStatusIfUnchanged(
+    tenant: TenantContext,
+    id: Id<'Account'>,
+    expectedVersion: number,
+    status: AccountStatus,
+    at: Temporal.Instant,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.tx(tenant).account.updateMany({
+      where: { tenantId: tenant.tenantId, id, version: expectedVersion, status: { not: status } },
+      data: { status, version: { increment: 1 }, updatedAt: dateOf(at) },
+    });
+    return count === 1;
   }
 
   async disable(

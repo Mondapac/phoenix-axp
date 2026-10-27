@@ -32,7 +32,7 @@ describe('the identity API (HTTP)', () => {
   });
 
   describe.each(TEST_TENANTS)('in tenant %s', (tenant) => {
-    const call = (method: 'get' | 'post', path: string, target = app) =>
+    const call = (method: 'get' | 'post' | 'put', path: string, target = app) =>
       request(target.getHttpServer())[method](path).set('x-tenant-id', tenant);
 
     it("redirects a sign-in to the tenant's realm with a Lax flow cookie", async () => {
@@ -90,8 +90,13 @@ describe('the identity API (HTTP)', () => {
       ['post', '/identity/staff/sign-out'],
       ['get', '/identity/staff-accounts'],
       ['post', '/identity/staff-accounts'],
+      ['get', '/identity/directory-sync'],
+      ['put', '/identity/directory-sync'],
+      ['post', '/identity/directory-sync/run'],
     ] as const)('refuses an anonymous %s %s with 401', async (method, path) => {
-      const response = await call(method, path).send({ username: 'x' });
+      // A valid body for each route, so the refusal is the authentication's, not the parser's.
+      const body = method === 'put' ? { version: 1, intervalMinutes: 5 } : { username: 'x' };
+      const response = await call(method, path).send(body);
       expect(response.status).toBe(401);
       expect(response.body).toEqual({ statusCode: 401, code: 'access.unauthenticated' });
     });

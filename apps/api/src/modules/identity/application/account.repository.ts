@@ -1,5 +1,5 @@
 import type { Id, Temporal, TenantContext } from '@phoenix/shared-kernel';
-import type { Account, AccountSource } from '../domain/account';
+import type { Account, AccountSource, AccountStatus } from '../domain/account';
 
 export interface AccountListItem extends Account {
   readonly createdAt: Temporal.Instant;
@@ -31,6 +31,23 @@ export interface AccountRepository {
     subject: string,
     at: Temporal.Instant,
   ): Promise<void>;
+  /** Up to `limit` directory staff accounts after `afterId`, by id. */
+  directoryAccounts(
+    tenant: TenantContext,
+    afterId: Id<'Account'> | null,
+    limit: number,
+  ): Promise<DirectoryAccount[]>;
+  /**
+   * Sets the status of an account still at `expectedVersion` and still in the other status;
+   * false when it changed meanwhile (the sync then leaves it to its next run).
+   */
+  setStatusIfUnchanged(
+    tenant: TenantContext,
+    id: Id<'Account'>,
+    expectedVersion: number,
+    status: AccountStatus,
+    at: Temporal.Instant,
+  ): Promise<boolean>;
   /** Throws StaleAggregateError on another version. */
   disable(
     tenant: TenantContext,
@@ -38,6 +55,14 @@ export interface AccountRepository {
     expectedVersion: number,
     at: Temporal.Instant,
   ): Promise<void>;
+}
+
+/** A directory account as the sync reads it. */
+export interface DirectoryAccount {
+  readonly id: Id<'Account'>;
+  readonly subject: string;
+  readonly status: AccountStatus;
+  readonly version: number;
 }
 
 export const ACCOUNT_REPOSITORY = Symbol('ACCOUNT_REPOSITORY');
