@@ -61,6 +61,30 @@ describe('the identity API (HTTP)', () => {
       expect(response.body).toEqual({ statusCode: 400, code: 'sign-in.flow-invalid' });
     });
 
+    it('logs a refused sign-in with its reason, never the code or the state', async () => {
+      const code = 'code-sentinel-4f1c';
+      const state = 'state-sentinel-9b2e';
+      const response = await call(
+        'get',
+        `/identity/staff/sign-in/callback?code=${code}&state=${state}`,
+      ).set('x-correlation-id', `refused-${tenant}`);
+      expect(response.status).toBe(400);
+      const refused = logLines.filter(
+        (line) =>
+          line.msg === 'identity.sign-in.refused' &&
+          (line as Record<string, unknown>).tenantId === tenant,
+      );
+      expect(refused.length).toBeGreaterThan(0);
+      expect(refused.at(-1)).toMatchObject({
+        reason: 'sign-in.flow-invalid',
+        accountId: null,
+        tenantId: tenant,
+      });
+      const text = JSON.stringify(refused);
+      expect(text).not.toContain(code);
+      expect(text).not.toContain(state);
+    });
+
     it.each([
       ['get', '/identity/staff/me'],
       ['post', '/identity/staff/sign-out'],
