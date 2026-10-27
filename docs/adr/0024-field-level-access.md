@@ -1,9 +1,8 @@
 # ADR-0024: Field-Level Access and Per-Definition Operation Permissions
 
-**Status:** Proposed — 2026-10-27, for decision by `software-architect` and `cto` (the owner
-delegated the design on 2026-10-27; the requirement itself is owner decision D8 of the Phase 2
-review)
-**Amends (if accepted):** ADR-0004 decision 6 (permission keys)
+**Status:** Accepted — 2026-10-27, by `software-architect` and `cto` (the owner delegated the
+design on 2026-10-27; the requirement itself is owner decision D8 of the Phase 2 review)
+**Amends:** ADR-0004 decisions 6 (permission keys) and 7 (role content)
 **Relates to:** ADR-0004, ADR-0007, ADR-0017 (Objects), ADR-0018 (site scope),
 `docs/phases/phase-2-review.md` (D6, D8, slice 2.0)
 
@@ -67,4 +66,38 @@ application layer).
 - Mandatory security review (authorisation path).
 
 ## Decision
-Pending: `software-architect` and `cto`.
+1. Option A is adopted, with the changes below; Options B and C are rejected.
+2. The static keys `objects.record.*` and `forms.submission.*` are held per role with a definition
+   qualifier: `all` or a list of definition ids (`all` includes definitions created later). The use
+   case enforces it with `grantCoversDefinition`, next to `grantCoversSite`. Check order: tenant,
+   site (ADR-0018), definition, record ownership, field mode.
+3. Field rules (`hidden | read | edit`) belong to the role, keyed by stable field id, versioned
+   (V1). Changes to field rules, qualifiers and the `sensitive` flag are new actions in the closed
+   audit catalogue, with ids only in audit values.
+4. Default (D9): a field without a rule follows the operation permission; a field marked
+   `sensitive` is `hidden` until a rule opens it; a field is never wider than its operation; an
+   unknown field id is hidden. Fields holding encrypted personal data (`SubjectKeyService`) are
+   `sensitive` by default. Removing `sensitive` needs a protected key.
+5. `FieldPolicy` in `platform/authz` is a pure function over the actor's rules, read through a
+   `FieldRuleReader` port that identity implements (fail-closed placeholder: everything hidden),
+   and a field descriptor passed by the caller. It evaluates against the revision the record was
+   written under (V3); a field is sensitive if that revision or the current one marks it. It is
+   computed once per request and definition revision inside the actor-snapshot unit (ADR-0020);
+   nothing is cached across requests.
+6. Reads: REST leaves hidden fields out. GraphQL generated fields are nullable and a hidden field
+   resolves to `null` without an error. A reference expands only with read on the target
+   definition and record, under the target's policy; otherwise `null`. Search projects at query
+   time, refuses filter, sort or aggregate on a field the actor cannot read, and never indexes
+   sensitive fields. Exports and AI tools (ADR-0011) apply the requester's policy when they run;
+   sensitive fields never reach a model.
+7. Writes: a payload containing any field whose mode is not `edit` is refused, whatever its value,
+   with `403 access.field-denied`, naming no hidden field. On create, the create permission gives
+   `edit` unless a rule narrows it. Publishing a definition warns when a required field is hidden
+   for a role that can create.
+8. A user task can narrow fields further; the effective mode is the narrower of role and step.
+9. Portal users hold no roles (ADR-0019): their visibility is a per-field portal setting on the
+   definition, hidden by default.
+10. GrantPolicy also bounds qualifiers and field modes: nobody grants wider than they hold.
+11. ADR-0017 (Objects) must name `FieldPolicy` as the only projection.
+12. security-tester review is mandatory on slice 2.0 and on every read path in 2.5 and 2.8;
+    database-designer signs off the rule tables.
