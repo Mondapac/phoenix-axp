@@ -41,7 +41,10 @@ own database and login `flowable`, created by `scripts/db/bootstrap-flowable-dev
 older volume `pnpm db:bootstrap` creates them. `docker compose up -d flowable` builds the image;
 `FLOWABLE_PASSWORD=phoenix-dev-flowable pnpm flowable:check` probes it (health, a timer, the
 tenant on history). Flowable creates its admin user on the first start only: changing
-`FLOWABLE_REST_APP_ADMIN_PASSWORD` later does not change the stored password.
+`FLOWABLE_REST_APP_ADMIN_PASSWORD` later does not change the stored password. The API reaches it
+through `FLOWABLE_URL`, `FLOWABLE_USER` and `FLOWABLE_PASSWORD` (all three or none; required in
+production; unset, engine commands wait). With `FLOWABLE_TEST_URL` and `FLOWABLE_TEST_PASSWORD`
+set, `pnpm test:db` also runs the process bridge against that engine (CI always does).
 
 `.env.example` sets `NODE_ENV=development`. Keep it set: while a port is bound to a fail-closed
 placeholder (ADR-0010; today identity's authorisation check and tenancy's site-ancestry
@@ -92,7 +95,9 @@ APP_ROLE=api node apps/api/dist/run-command.js identity.bootstrap-tenant-admin -
 
 - `apps/api/src/platform/`: the platform layer; `apps/api/src/modules/`: business modules
   (`tenancy`: site tree, organization chart, site domains, tenant settings; `forms`: form
-  definitions, immutable revisions with JSON Schema checked by Ajv, submission policy, retention). Every use case extends `UseCase` from `platform/authz` and declares a static
+  definitions, immutable revisions with JSON Schema checked by Ajv, submission policy, retention;
+  `process`: BPMN revisions checked by an intake allow-list, the bridge to Flowable with a lease
+  relay, watermark sync and incidents). Every use case extends `UseCase` from `platform/authz` and declares a static
   `access` rule (`permissions`, `anonymous`, `own-resources` or `system`); the `UseCaseGate`
   checks it on every entry, and `apps/api/test/authz/use-cases.spec.ts` fails a use case
   without one. A use case appends its events to its module's outbox through the `OutboxWriter`

@@ -24,6 +24,9 @@ const PRODUCTION_SESSION = {
   KEYCLOAK_STUDIO_CLIENT_SECRET: 'client-secret',
   STUDIO_SIGN_IN_CALLBACK_URL: 'https://studio.example.test/auth/callback',
   KEYCLOAK_ADMIN_CLIENT_SECRET: 'admin-secret',
+  FLOWABLE_URL: 'http://flowable:8080/flowable-rest/service',
+  FLOWABLE_USER: 'phoenix-core',
+  FLOWABLE_PASSWORD: 'engine-secret',
 };
 
 /** The object storage issues only: production also requires the session settings. */
@@ -49,6 +52,7 @@ describe('loadAppConfig', () => {
       storage: null,
       session: { secret: config.session.secret, panelOrigins: [], staffSessionHours: 8 },
       keycloak: null,
+      flowable: null,
     });
     expect(config.session.secret).toHaveLength(32);
     expect(Object.isFrozen(config)).toBe(true);
@@ -294,7 +298,7 @@ describe('loadAppConfig', () => {
         HOSTED_TENANTS: 'demo-fa',
         NODE_ENV: 'production',
         PANEL_ORIGINS: 'http://studio.example.test',
-      }).filter((issue) => !issue.startsWith('S3_'));
+      }).filter((issue) => !issue.startsWith('S3_') && !issue.startsWith('FLOWABLE_'));
       expect(production).toEqual([
         'SESSION_SECRET: required in production (sessions, ADR-0004)',
         'PANEL_ORIGINS: "http://studio.example.test" must be an origin over https',
@@ -314,6 +318,33 @@ describe('loadAppConfig', () => {
           KEYCLOAK_URL: 'http://sso.example.test',
         }).filter((issue) => issue.startsWith('KEYCLOAK')),
       ).toEqual(['KEYCLOAK_URL: must be https in production (client secrets, ADR-0004)']);
+    });
+
+    it('takes the Flowable variables together, requires them in production, and keeps the password out of issues', () => {
+      expect(issuesOf({ HOSTED_TENANTS: 'demo-fa', FLOWABLE_PASSWORD: 'engine-secret' })).toEqual([
+        expect.stringMatching(/^FLOWABLE_URL: .*set together/),
+        expect.stringMatching(/^FLOWABLE_USER: .*set together/),
+      ]);
+      expect(
+        issuesOf({ HOSTED_TENANTS: 'demo-fa', NODE_ENV: 'production' }).filter((issue) =>
+          issue.startsWith('FLOWABLE_'),
+        ),
+      ).toEqual([
+        'FLOWABLE_URL: required in production (process engine, ADR-0005)',
+        'FLOWABLE_USER: required in production (process engine, ADR-0005)',
+        'FLOWABLE_PASSWORD: required in production (process engine, ADR-0005)',
+      ]);
+      const config = loadAppConfig({
+        HOSTED_TENANTS: 'demo-fa',
+        FLOWABLE_URL: 'http://flowable:8080/flowable-rest/service/',
+        FLOWABLE_USER: 'phoenix-core',
+        FLOWABLE_PASSWORD: 'engine-secret',
+      });
+      expect(config.flowable).toEqual({
+        url: 'http://flowable:8080/flowable-rest/service',
+        user: 'phoenix-core',
+        password: 'engine-secret',
+      });
     });
 
     it('never puts a secret in an issue', () => {
