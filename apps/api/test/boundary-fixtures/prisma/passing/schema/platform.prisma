@@ -1,0 +1,9 @@
+// Allowed: a scoped model whose only key is the single-column UUID @id.
+model PlatformProbe {
+  id       String @id @db.Uuid
+  tenantId String @map("tenant_id")
+  label    String
+
+  @@map("probe")
+  @@schema("platform")
+}

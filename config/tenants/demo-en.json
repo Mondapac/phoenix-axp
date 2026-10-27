@@ -1,0 +1,9 @@
+{
+  "code": "demo-en",
+  "displayName": "Synthetic English demo",
+  "defaultLocale": "en-CA",
+  "supportedLocales": ["en-CA", "fr-CA"],
+  "timeZone": "America/Toronto",
+  "calendar": "gregory",
+  "direction": "ltr"
+}

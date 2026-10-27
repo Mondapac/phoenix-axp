@@ -1,0 +1,29 @@
+// Deliberate violations of the persistence boundaries; boundaries.spec.ts expects each one.
+
+/// Allowed (control): a scoped model of beta that alpha's files name below.
+model BetaThing {
+  id        String     @id @db.Uuid
+  tenantId  String     @map("tenant_id")
+  crossings BetaCross[]
+
+  @@schema("beta")
+}
+
+/// Violation: a relation that crosses into another module's schema.
+model BetaCross {
+  id       String      @id @db.Uuid
+  tenantId String      @map("tenant_id")
+  thingId  String      @map("thing_id") @db.Uuid
+  thing    BetaThing   @relation(fields: [tenantId, thingId], references: [tenantId, id])
+  parentId String      @map("parent_id") @db.Uuid
+  parent   AlphaParent @relation(fields: [tenantId, parentId], references: [tenantId, id])
+
+  @@schema("beta")
+}
+
+/// Violation: an enum in another module's schema.
+enum BetaKind {
+  ONE
+
+  @@schema("alpha")
+}

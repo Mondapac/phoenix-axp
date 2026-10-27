@@ -1,0 +1,9 @@
+// Allowed: a scoped model of a second module, in its own schema.
+
+model BetaThing {
+  id       String @id @db.Uuid
+  tenantId String @map("tenant_id")
+
+  @@map("thing")
+  @@schema("beta")
+}

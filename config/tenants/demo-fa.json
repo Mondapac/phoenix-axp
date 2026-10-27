@@ -1,0 +1,9 @@
+{
+  "code": "demo-fa",
+  "displayName": "دموی فارسی",
+  "defaultLocale": "fa-IR",
+  "supportedLocales": ["fa-IR", "en-US"],
+  "timeZone": "Asia/Tehran",
+  "calendar": "persian",
+  "direction": "rtl"
+}

@@ -1,0 +1,17 @@
+node_modules/
+.env
+.DS_Store
+Thumbs.db
+
+# Build and test output
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local environment (see .env.example)
+.env.*
+!.env.example
+
+# Generated Prisma client and model map (pnpm db:generate)
+apps/api/src/generated/
+.local/

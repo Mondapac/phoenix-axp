@@ -1,0 +1,52 @@
+// Allowed cases of the persistence boundaries (each says why).
+
+/// A scoped parent. Its keys and indexes all lead with tenantId: the composite key children
+/// point at, a `name:`-named selector, a second selector and plain indexes (one in the named
+/// `fields:` form, one with a sort modifier).
+model AlphaParent {
+  id       String       @id @db.Uuid
+  tenantId String       @map("tenant_id")
+  code     String
+  kind     String
+  children AlphaChild[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code], name: "byCode", map: "alpha_parent_code_key")
+  @@unique([tenantId, kind])
+  @@index([tenantId, code(sort: Desc)])
+  @@index(fields: [tenantId, kind])
+  @@map("parent")
+  @@schema("alpha")
+}
+
+/// A scoped child: its foreign key carries tenantId at the same position on both sides.
+model AlphaChild {
+  id       String      @id @db.Uuid
+  tenantId String      @map("tenant_id")
+  parentId String      @map("parent_id")
+  parent   AlphaParent @relation(fields: [tenantId, parentId], references: [tenantId, id])
+
+  @@unique([tenantId, id])
+  @@map("child")
+  @@schema("alpha")
+}
+
+/// A compound @@id led by tenantId (the throttle shape).
+model AlphaThrottle {
+  tenantId String @map("tenant_id")
+  kind     String
+  keyHash  Bytes  @map("key_hash")
+
+  @@id([tenantId, kind, keyHash])
+  @@map("throttle")
+  @@schema("alpha")
+}
+
+/// @tenant-scope none: a tenant-free lookup the fixture needs to prove the exemption line.
+model AlphaLookup {
+  code  String @id
+  label String
+
+  @@map("lookup")
+  @@schema("alpha")
+}

@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify (tenants ${{ matrix.tenants.name }}, Node ${{ matrix.node.label }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Tenant matrix (ADR-0002): each entry is one deployment's HOSTED_TENANTS, booted and
+        # probed below. Every entry names tenants that have a file in config/tenants/. The test
+        # suites always run against both fixtures, whatever the entry.
+        tenants:
+          - name: demo-fa
+            hosted: demo-fa
+          - name: demo-en
+            hosted: demo-en
+        # The exact minimum of `engines.node` in package.json, and the version in .nvmrc.
+        # Raise both together.
+        node:
+          - label: minimum
+            version: 24.20.0
+          - label: .nvmrc
+            version-file: .nvmrc
+
+    services:
+      # Same image and major version as docker-compose.yml. Pulled from Google's mirror of the
+      # official image: Docker Hub rate-limits anonymous pulls from CI runners.
+      postgres:
+        image: mirror.gcr.io/library/postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: phoenix
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d phoenix"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # Job level holds only what the application may see. MIGRATION_DATABASE_URL is set on the
+    # steps that need it, never here, so the boot probes run without it.
+    env:
+      DATABASE_URL: postgresql://phoenix_api:phoenix_api@localhost:5432/phoenix
+      HOSTED_TENANTS: ${{ matrix.tenants.hosted }}
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A service container cannot mount a repository file, so the bootstrap runs here. The
+      # second run is the existing-volume path: the file must converge, not fail.
+      - name: Create database roles (cluster bootstrap)
+        run: |
+          for run in 1 2; do
+            docker exec -i "${{ job.services.postgres.id }}" psql -v ON_ERROR_STOP=1 -U postgres -d phoenix < scripts/db/bootstrap-dev.sql
+          done
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # One of the two is set per matrix entry; node-version wins when both are set.
+          node-version: ${{ matrix.node.version }}
+          node-version-file: ${{ matrix.node.version-file }}
+          cache: pnpm
+
+      - name: Show the Node.js version
+        run: node --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
+
+      # Typecheck, lint, boundaries, licences, tests, database tests and the up -> down -> up
+      # migration check: the same command developers run locally.
+      - name: Verify
+        run: pnpm verify
+        env:
+          MIGRATION_DATABASE_URL: postgresql://phoenix_migrator:phoenix_migrator@localhost:5432/phoenix
+          # Fewer database spec files at once than Jest's default on the small CI runners.
+          TEST_DB_MAX_WORKERS: '2'
+
+      - name: Build
+        run: pnpm build
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+        env:
+          MIGRATION_DATABASE_URL: postgresql://phoenix_migrator:phoenix_migrator@localhost:5432/phoenix
+
+      # Job environment only: this process has no migration URL, and its start-up self-check
+      # refuses any role but the application login.
+      - name: Boot the API for these tenants, probe readiness and the security headers
+        run: |
+          APP_ROLE=api PORT=3000 node apps/api/dist/main &
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://localhost:3000/health/ready; then
+              node scripts/check-http-headers.mjs http://localhost:3000
+              exit $?
+            fi
+            sleep 1
+          done
+          echo "API did not become ready" >&2
+          exit 1
+
+      # The worker role opens no port and exits 0 on SIGTERM (main.ts handles the signal
+      # itself; exit 143 would mean no handler ran).
+      - name: Boot the worker role, check it opens no port and stops on SIGTERM
+        run: |
+          APP_ROLE=worker PORT=3100 node apps/api/dist/main &
+          worker=$!
+          sleep 8
+          kill -0 "$worker" || { echo "Worker exited early" >&2; exit 1; }
+          if ss -ltnp | grep -q "pid=$worker,"; then
+            echo "Worker opened a listening port" >&2
+            ss -ltnp | grep "pid=$worker," >&2
+            exit 1
+          fi
+          kill -TERM "$worker"
+          wait "$worker" || { echo "Worker did not stop cleanly on SIGTERM" >&2; exit 1; }

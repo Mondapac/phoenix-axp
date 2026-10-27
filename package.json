@@ -1,0 +1,41 @@
+{
+  "name": "phoenix-axp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Phoenix AXP (Agentic Experience Platform): multi-tenant DXP, modular monolith.",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=24.20.0"
+  },
+  "scripts": {
+    "postinstall": "prisma generate",
+    "dev": "pnpm --filter @phoenix/shared-kernel build && pnpm --filter @phoenix/api dev",
+    "dev:worker": "node scripts/dev-worker.mjs",
+    "build": "pnpm db:generate && pnpm -r build && node scripts/check-built-kernel.mjs",
+    "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
+    "lint": "eslint . && prettier --check . && node scripts/check-adr-references.mjs",
+    "format": "prettier --write .",
+    "test": "pnpm -r test",
+    "test:db": "pnpm --filter @phoenix/api test:db",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "node scripts/migrate-dev.mjs",
+    "db:check-reversible": "node scripts/check-migrations-reversible.mjs",
+    "db:bootstrap": "docker compose exec -T postgres psql -U postgres -d phoenix -f /docker-entrypoint-initdb.d/10-bootstrap-dev.sql",
+    "licences": "node scripts/check-licences.mjs",
+    "verify": "pnpm db:generate && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm licences && pnpm test && pnpm test:db && pnpm db:check-reversible",
+    "boundaries": "pnpm --filter @phoenix/api boundaries && node scripts/check-prisma-boundaries.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^24.19.0",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.0.0",
+    "prettier": "^3.9.9",
+    "prisma": "^7.10.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0"
+  }
+}

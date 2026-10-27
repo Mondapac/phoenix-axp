@@ -1,0 +1,135 @@
+// Deliberate violations of the persistence boundaries; boundaries.spec.ts expects each one,
+// and nothing else.
+
+/// Violation: neither scoped nor exempt.
+model AlphaNeither {
+  id   String @id @db.Uuid
+  name String
+
+  @@schema("alpha")
+}
+
+/// @tenant-scope none: violation, a scoped model that also claims the exemption.
+model AlphaBoth {
+  id       String @id @db.Uuid
+  tenantId String @map("tenant_id")
+
+  @@schema("alpha")
+}
+
+/// Violations: keys of a scoped model without tenantId (a field @unique, a @@unique and a
+/// compound @@id).
+model AlphaBadKeys {
+  tenantId String @map("tenant_id")
+  kind     String
+  code     String
+  ref      String @unique
+
+  @@id([kind, code])
+  @@unique([kind, ref])
+  @@schema("alpha")
+}
+
+/// Violation: a single-column @id that is not a UUID.
+model AlphaIntId {
+  id       Int    @id
+  tenantId String @map("tenant_id")
+
+  @@schema("alpha")
+}
+
+/// Allowed (control): keys and an index that lead with tenantId, a `name:`-named selector and
+/// an index field with a sort modifier.
+model AlphaParent {
+  id         String                 @id @db.Uuid
+  tenantId   String                 @map("tenant_id")
+  kind       String
+  code       String
+  orphans    AlphaChildNoTenant[]
+  misaligned AlphaChildMisaligned[]
+  exemptRefs AlphaExemptChild[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code], name: "byCode")
+  @@index([tenantId, kind(sort: Desc)])
+  @@schema("alpha")
+}
+
+/// Violations: tenantId is in a key and an index but does not lead them, an index has no
+/// tenantId at all, and the tenant field maps to a column other than "tenant_id".
+model AlphaTrailingTenant {
+  id       String @id @db.Uuid
+  tenantId String @map("tenant")
+  kind     String
+  code     String
+
+  @@unique([id, tenantId])
+  @@unique([kind, tenantId])
+  @@index([code])
+  @@index(fields: [kind, tenantId])
+  @@schema("alpha")
+}
+
+/// Violation: a compound @@id with tenantId in second place.
+model AlphaTrailingId {
+  tenantId String @map("tenant_id")
+  kind     String
+
+  @@id([kind, tenantId])
+  @@schema("alpha")
+}
+
+/// Violation: a foreign key between scoped models without tenantId.
+model AlphaChildNoTenant {
+  id       String      @id @db.Uuid
+  tenantId String      @map("tenant_id")
+  parentId String      @map("parent_id")
+  parent   AlphaParent @relation(fields: [parentId], references: [id])
+
+  @@schema("alpha")
+}
+
+/// Violation: tenantId paired with another column (different positions in the two lists).
+model AlphaChildMisaligned {
+  id       String      @id @db.Uuid
+  tenantId String      @map("tenant_id")
+  parentId String      @map("parent_id")
+  parent   AlphaParent @relation(fields: [tenantId, parentId], references: [id, tenantId])
+
+  @@schema("alpha")
+}
+
+/// Violation: declared in schema "beta" from alpha's file.
+model AlphaWrongSchema {
+  id       String @id @db.Uuid
+  tenantId String @map("tenant_id")
+
+  @@schema("beta")
+}
+
+/// @tenant-scope none: allowed on its own; the two relations below are the violations.
+model AlphaExemptParent {
+  code           String             @id
+  scopedChildren AlphaScopedChild[]
+
+  @@schema("alpha")
+}
+
+/// Violation: a tenant-scoped model related to an exempt model.
+model AlphaScopedChild {
+  id         String            @id @db.Uuid
+  tenantId   String            @map("tenant_id")
+  parentCode String            @map("parent_code")
+  parent     AlphaExemptParent @relation(fields: [parentCode], references: [code])
+
+  @@schema("alpha")
+}
+
+/// @tenant-scope none: violation, an exempt model related to a tenant-scoped model.
+model AlphaExemptChild {
+  code     String      @id
+  parentId String      @map("parent_id") @db.Uuid
+  parent   AlphaParent @relation(fields: [parentId], references: [id])
+
+  @@schema("alpha")
+}
