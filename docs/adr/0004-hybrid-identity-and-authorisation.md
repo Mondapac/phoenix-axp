@@ -20,6 +20,7 @@ and transferable.
    role removal and disabling apply on the next request; `__Host-` cookies, `SameSite=Strict`
    for admin; CSRF = HMAC of the session token + Origin check; one host per panel. Separate
    sessions per population (platform-operator, tenant-staff, portal-user).
+   *(Amended by ADR-0019: an operator is an employee (tenant-staff) holding management roles, with one account per employee.)*
 3. **Upstream disable.** Disabling a user in LDAP or Keycloak ends core sessions through
    back-channel logout or synchronisation; proven in PoC 2.
 4. **Authorisation in the application layer:** every use case extends `UseCase` with a static
