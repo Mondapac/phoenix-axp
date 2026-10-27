@@ -1,0 +1,774 @@
+{
+  "rounds": 10,
+  "perRound": 100,
+  "warmup": 100,
+  "node": "v24.22.1",
+  "postgres": "PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+  "sequential": {
+    "read: item by id": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 0.959,
+          "p50": 0.858,
+          "p95": 1.368,
+          "p99": 2.837
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 2.975,
+          "p50": 2.655,
+          "p95": 4.427,
+          "p99": 8.31
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 3.207,
+          "p50": 2.923,
+          "p95": 4.674,
+          "p99": 9.738
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 2.308,
+          "p50": 2.099,
+          "p95": 3.283,
+          "p99": 6.447
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 1.233,
+          "p50": 1.101,
+          "p95": 1.894,
+          "p99": 3.934
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 3.938,
+          "p50": 3.703,
+          "p95": 5.452,
+          "p99": 9.14
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 240.7,
+        "p95": 241.7
+      },
+      "policyOnlyOverhead": {
+        "p50": 10.1,
+        "p95": 5.6
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 144.6,
+        "p95": 140
+      },
+      "overheadViaPgbouncer": {
+        "p50": 236.3,
+        "p95": 187.9
+      }
+    },
+    "read: latest 20 of a site": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 1.335,
+          "p50": 1.189,
+          "p95": 2.03,
+          "p99": 5.568
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 3.434,
+          "p50": 3.016,
+          "p95": 5.806,
+          "p99": 11.697
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 3.508,
+          "p50": 3.127,
+          "p95": 5.506,
+          "p99": 13.572
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 2.509,
+          "p50": 2.232,
+          "p95": 4.005,
+          "p99": 7.467
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 1.421,
+          "p50": 1.182,
+          "p95": 2.201,
+          "p99": 5.381
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 4.076,
+          "p50": 3.787,
+          "p95": 6.051,
+          "p99": 10.798
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 163,
+        "p95": 171.2
+      },
+      "policyOnlyOverhead": {
+        "p50": 3.7,
+        "p95": -5.2
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 87.7,
+        "p95": 97.3
+      },
+      "overheadViaPgbouncer": {
+        "p50": 220.4,
+        "p95": 174.9
+      }
+    },
+    "read: count published": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 1.088,
+          "p50": 0.952,
+          "p95": 1.559,
+          "p99": 4.451
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 3.03,
+          "p50": 2.843,
+          "p95": 4.192,
+          "p99": 6.624
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 2.833,
+          "p50": 2.588,
+          "p95": 4.047,
+          "p99": 8.171
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 1.867,
+          "p50": 1.709,
+          "p95": 2.642,
+          "p99": 4.729
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 1.144,
+          "p50": 1.069,
+          "p95": 1.564,
+          "p99": 2.414
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 3.581,
+          "p50": 3.328,
+          "p95": 5.599,
+          "p99": 8.597
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 171.8,
+        "p95": 159.6
+      },
+      "policyOnlyOverhead": {
+        "p50": -9,
+        "p95": -3.5
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 79.5,
+        "p95": 69.5
+      },
+      "overheadViaPgbouncer": {
+        "p50": 211.3,
+        "p95": 258
+      }
+    },
+    "write: insert submission": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 2.947,
+          "p50": 2.62,
+          "p95": 5.327,
+          "p99": 9.931
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 3.486,
+          "p50": 3.075,
+          "p95": 5.753,
+          "p99": 11.067
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 3.678,
+          "p50": 3.288,
+          "p95": 6.725,
+          "p99": 11.012
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 3.245,
+          "p50": 2.815,
+          "p95": 5.653,
+          "p99": 11.503
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 3.624,
+          "p50": 3.219,
+          "p95": 6.464,
+          "p99": 11.574
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 4.778,
+          "p50": 4.141,
+          "p95": 8.349,
+          "p99": 13.242
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 25.5,
+        "p95": 26.2
+      },
+      "policyOnlyOverhead": {
+        "p50": 6.9,
+        "p95": 16.9
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 7.4,
+        "p95": 6.1
+      },
+      "overheadViaPgbouncer": {
+        "p50": 28.6,
+        "p95": 29.2
+      }
+    },
+    "write: update item": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 2.464,
+          "p50": 2.112,
+          "p95": 4.51,
+          "p99": 8.299
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 3.392,
+          "p50": 2.987,
+          "p95": 5.997,
+          "p99": 12.181
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 3.409,
+          "p50": 2.959,
+          "p95": 6.34,
+          "p99": 11.557
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 2.709,
+          "p50": 2.357,
+          "p95": 4.812,
+          "p99": 8.577
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 3.124,
+          "p50": 2.723,
+          "p95": 5.353,
+          "p99": 12.976
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 4.191,
+          "p50": 3.673,
+          "p95": 7.73,
+          "p99": 14.44
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 40.1,
+        "p95": 40.6
+      },
+      "policyOnlyOverhead": {
+        "p50": -0.9,
+        "p95": 5.7
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 11.6,
+        "p95": 6.7
+      },
+      "overheadViaPgbouncer": {
+        "p50": 34.9,
+        "p95": 44.4
+      }
+    },
+    "ministry: subtree access check": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 1.015,
+          "p50": 0.894,
+          "p95": 1.528,
+          "p99": 2.446
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 3.055,
+          "p50": 2.884,
+          "p95": 4.245,
+          "p99": 6.88
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 3.538,
+          "p50": 3.105,
+          "p95": 5.169,
+          "p99": 14.171
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 2.662,
+          "p50": 2.367,
+          "p95": 4.189,
+          "p99": 9.899
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 1.321,
+          "p50": 1.101,
+          "p95": 2.167,
+          "p99": 4.311
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 4.593,
+          "p50": 4.262,
+          "p95": 6.669,
+          "p99": 12.086
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 247.3,
+        "p95": 238.3
+      },
+      "policyOnlyOverhead": {
+        "p50": 7.7,
+        "p95": 21.8
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 164.8,
+        "p95": 174.1
+      },
+      "overheadViaPgbouncer": {
+        "p50": 287.1,
+        "p95": 207.8
+      }
+    },
+    "ministry: subtree page, root (500 sites)": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 51.674,
+          "p50": 48.399,
+          "p95": 70.835,
+          "p99": 77.904
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 53.061,
+          "p50": 50.062,
+          "p95": 73.21,
+          "p99": 81.061
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 52.811,
+          "p50": 49.869,
+          "p95": 71.485,
+          "p99": 79.708
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 51.281,
+          "p50": 48.815,
+          "p95": 68.855,
+          "p99": 75.25
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 51.046,
+          "p50": 48.318,
+          "p95": 68.835,
+          "p99": 79.854
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 54.618,
+          "p50": 51.772,
+          "p95": 72.576,
+          "p99": 82.011
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 3,
+        "p95": 0.9
+      },
+      "policyOnlyOverhead": {
+        "p50": -0.4,
+        "p95": -2.4
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 0.9,
+        "p95": -2.8
+      },
+      "overheadViaPgbouncer": {
+        "p50": 7.1,
+        "p95": 5.4
+      }
+    },
+    "ministry: subtree page, province (17 sites)": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 12.485,
+          "p50": 11.904,
+          "p95": 16.907,
+          "p99": 20.809
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 14.441,
+          "p50": 13.882,
+          "p95": 19.249,
+          "p99": 24.557
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 15.216,
+          "p50": 14.628,
+          "p95": 19.976,
+          "p99": 23.978
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 13.678,
+          "p50": 13.128,
+          "p95": 18.28,
+          "p99": 22.026
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 11.827,
+          "p50": 11.119,
+          "p95": 15.927,
+          "p99": 19.904
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 15.431,
+          "p50": 14.474,
+          "p95": 21.886,
+          "p99": 28.284
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 22.9,
+        "p95": 18.2
+      },
+      "policyOnlyOverhead": {
+        "p50": 5.4,
+        "p95": 3.8
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 10.3,
+        "p95": 8.1
+      },
+      "overheadViaPgbouncer": {
+        "p50": 30.2,
+        "p95": 37.4
+      }
+    },
+    "ministry: subtree page, leaf (1 site)": {
+      "variants": {
+        "guard-only": {
+          "n": 1000,
+          "mean": 1.689,
+          "p50": 1.547,
+          "p95": 2.571,
+          "p99": 3.576
+        },
+        "guard+tx (policies off)": {
+          "n": 1000,
+          "mean": 3.539,
+          "p50": 3.284,
+          "p95": 4.994,
+          "p99": 8.619
+        },
+        "guard+RLS": {
+          "n": 1000,
+          "mean": 3.777,
+          "p50": 3.419,
+          "p95": 5.184,
+          "p99": 12.582
+        },
+        "guard+RLS, tenant set in adapter": {
+          "n": 1000,
+          "mean": 2.991,
+          "p50": 2.714,
+          "p95": 4.659,
+          "p99": 7.761
+        },
+        "guard-only via pgbouncer": {
+          "n": 1000,
+          "mean": 2.203,
+          "p50": 2.009,
+          "p95": 3.358,
+          "p99": 6.202
+        },
+        "guard+RLS via pgbouncer": {
+          "n": 1000,
+          "mean": 5.05,
+          "p50": 4.707,
+          "p95": 7.006,
+          "p99": 12.223
+        }
+      },
+      "overheadVsGuardOnly": {
+        "p50": 121,
+        "p95": 101.6
+      },
+      "policyOnlyOverhead": {
+        "p50": 4.1,
+        "p95": 3.8
+      },
+      "adapterSessionVsGuardOnly": {
+        "p50": 75.4,
+        "p95": 81.2
+      },
+      "overheadViaPgbouncer": {
+        "p50": 134.3,
+        "p95": 108.6
+      }
+    }
+  },
+  "concurrent": {
+    "guard-only": {
+      "runs": [
+        {
+          "n": 3000,
+          "mean": 34.027,
+          "p50": 29.407,
+          "p95": 67.5,
+          "p99": 87.099,
+          "unitsPerSecond": 933
+        },
+        {
+          "n": 3000,
+          "mean": 42.844,
+          "p50": 36.039,
+          "p95": 88.878,
+          "p99": 120.752,
+          "unitsPerSecond": 743
+        },
+        {
+          "n": 3000,
+          "mean": 34.022,
+          "p50": 30.208,
+          "p95": 66.03,
+          "p99": 88.558,
+          "unitsPerSecond": 934
+        }
+      ]
+    },
+    "guard+tx (policies off)": {
+      "runs": [
+        {
+          "n": 3000,
+          "mean": 67.644,
+          "p50": 64.375,
+          "p95": 97.339,
+          "p99": 113.994,
+          "unitsPerSecond": 470
+        },
+        {
+          "n": 3000,
+          "mean": 64.042,
+          "p50": 61.096,
+          "p95": 91.969,
+          "p99": 112.704,
+          "unitsPerSecond": 497
+        },
+        {
+          "n": 3000,
+          "mean": 65.783,
+          "p50": 63.738,
+          "p95": 90.995,
+          "p99": 106.758,
+          "unitsPerSecond": 484
+        }
+      ]
+    },
+    "guard+RLS": {
+      "runs": [
+        {
+          "n": 3000,
+          "mean": 68.4,
+          "p50": 66.342,
+          "p95": 96.57,
+          "p99": 112.407,
+          "unitsPerSecond": 466
+        },
+        {
+          "n": 3000,
+          "mean": 65.153,
+          "p50": 62.404,
+          "p95": 90.607,
+          "p99": 113.183,
+          "unitsPerSecond": 487
+        },
+        {
+          "n": 3000,
+          "mean": 70.076,
+          "p50": 66.631,
+          "p95": 104.656,
+          "p99": 133.064,
+          "unitsPerSecond": 454
+        }
+      ]
+    },
+    "guard+RLS, tenant set in adapter": {
+      "runs": [
+        {
+          "n": 3000,
+          "mean": 54.227,
+          "p50": 51.424,
+          "p95": 83.95,
+          "p99": 100.678,
+          "unitsPerSecond": 587
+        },
+        {
+          "n": 3000,
+          "mean": 45.674,
+          "p50": 43.652,
+          "p95": 65.246,
+          "p99": 77.428,
+          "unitsPerSecond": 697
+        },
+        {
+          "n": 3000,
+          "mean": 48.788,
+          "p50": 45.991,
+          "p95": 72.725,
+          "p99": 87.918,
+          "unitsPerSecond": 651
+        }
+      ]
+    },
+    "guard-only via pgbouncer": {
+      "runs": [
+        {
+          "n": 3000,
+          "mean": 39.774,
+          "p50": 33.97,
+          "p95": 78.649,
+          "p99": 119.006,
+          "unitsPerSecond": 799
+        },
+        {
+          "n": 3000,
+          "mean": 40.773,
+          "p50": 34.939,
+          "p95": 80.111,
+          "p99": 104.209,
+          "unitsPerSecond": 781
+        },
+        {
+          "n": 3000,
+          "mean": 37.228,
+          "p50": 32.374,
+          "p95": 73.625,
+          "p99": 88.413,
+          "unitsPerSecond": 853
+        }
+      ]
+    },
+    "guard+RLS via pgbouncer": {
+      "runs": [
+        {
+          "n": 3000,
+          "mean": 72.3,
+          "p50": 69.741,
+          "p95": 102.48,
+          "p99": 127.199,
+          "unitsPerSecond": 440
+        },
+        {
+          "n": 3000,
+          "mean": 87.468,
+          "p50": 84.889,
+          "p95": 125.721,
+          "p99": 153.65,
+          "unitsPerSecond": 364
+        },
+        {
+          "n": 3000,
+          "mean": 74.568,
+          "p50": 71.949,
+          "p95": 109.61,
+          "p99": 126.728,
+          "unitsPerSecond": 427
+        }
+      ]
+    }
+  },
+  "plans": {
+    "latest 20 of a site": [
+      "Limit (actual rows=20 loops=1)",
+      "  ->  Result (actual rows=20 loops=1)",
+      "        One-Time Filter: (NULLIF(current_setting('app.tenant_id'::text, true), ''::text) = 't0500'::text)",
+      "        ->  Index Scan using content_item_tenant_site_created_idx on content_item (actual rows=20 loops=1)",
+      "              Index Cond: (((tenant_id)::text = 't0500'::text) AND (owner_site_id = '509ab590-7c89-d992-8184-36eb9a2fbc90'::uuid))",
+      "Planning Time: 0.669 ms",
+      "Execution Time: 0.259 ms"
+    ],
+    "count published": [
+      "Aggregate (actual rows=1 loops=1)",
+      "  ->  Result (actual rows=140 loops=1)",
+      "        One-Time Filter: (NULLIF(current_setting('app.tenant_id'::text, true), ''::text) = 't0500'::text)",
+      "        ->  Index Only Scan using content_item_tenant_status_idx on content_item (actual rows=140 loops=1)",
+      "              Index Cond: ((tenant_id = 't0500'::text) AND (status = 'published'::text))",
+      "              Heap Fetches: 19",
+      "Planning Time: 0.136 ms",
+      "Execution Time: 0.293 ms"
+    ],
+    "subtree page, root": [
+      "Limit (actual rows=20 loops=1)",
+      "  ->  Sort (actual rows=20 loops=1)",
+      "        Sort Key: content_item.created_at DESC",
+      "        Sort Method: top-N heapsort  Memory: 26kB",
+      "        ->  Result (actual rows=60000 loops=1)",
+      "              One-Time Filter: (NULLIF(current_setting('app.tenant_id'::text, true), ''::text) = 'ministry'::text)",
+      "              ->  Nested Loop (actual rows=60000 loops=1)",
+      "                    ->  Index Only Scan using site_ancestry_pkey on site_ancestry (actual rows=500 loops=1)",
+      "                          Index Cond: ((tenant_id = 'ministry'::text) AND (ancestor_id = '2443e96a-c0ce-b5b7-9377-7b4e6df20275'::uuid))",
+      "                          Heap Fetches: 232",
+      "                    ->  Index Scan using content_item_tenant_site_created_idx on content_item (actual rows=120 loops=500)",
+      "                          Index Cond: (((tenant_id)::text = 'ministry'::text) AND (owner_site_id = site_ancestry.descendant_id))",
+      "Planning Time: 0.535 ms",
+      "Execution Time: 76.722 ms"
+    ]
+  }
+}

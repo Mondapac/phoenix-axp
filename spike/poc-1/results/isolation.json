@@ -1,0 +1,254 @@
+{
+  "guardRefusals": {
+    "site": {
+      "findMany, no where": "refused:where-missing",
+      "findMany, other tenant": "refused:where-tenant-mismatch",
+      "findMany, tenant in [own, other]": "refused:where-tenant-mismatch",
+      "findMany, tenant not own": "refused:where-tenant-mismatch",
+      "findFirst, OR with other tenant, no top-level tenant": "refused:where-tenant-missing",
+      "count, other tenant": "refused:where-tenant-mismatch",
+      "aggregate, no where": "refused:where-missing",
+      "groupBy, no where": "refused:where-missing",
+      "create, other tenant": "refused:data-tenant-mismatch",
+      "createMany, one row of other tenant": "refused:data-tenant-mismatch",
+      "updateMany, other tenant": "refused:where-tenant-mismatch",
+      "updateMany, moves rows to other tenant": "refused:data-changes-tenant",
+      "deleteMany, other tenant": "refused:where-tenant-mismatch",
+      "deleteMany, no where": "refused:where-missing"
+    },
+    "contentItem": {
+      "findMany, no where": "refused:where-missing",
+      "findMany, other tenant": "refused:where-tenant-mismatch",
+      "findMany, tenant in [own, other]": "refused:where-tenant-mismatch",
+      "findMany, tenant not own": "refused:where-tenant-mismatch",
+      "findFirst, OR with other tenant, no top-level tenant": "refused:where-tenant-missing",
+      "count, other tenant": "refused:where-tenant-mismatch",
+      "aggregate, no where": "refused:where-missing",
+      "groupBy, no where": "refused:where-missing",
+      "create, other tenant": "refused:data-tenant-mismatch",
+      "createMany, one row of other tenant": "refused:data-tenant-mismatch",
+      "updateMany, other tenant": "refused:where-tenant-mismatch",
+      "updateMany, moves rows to other tenant": "refused:data-changes-tenant",
+      "deleteMany, other tenant": "refused:where-tenant-mismatch",
+      "deleteMany, no where": "refused:where-missing"
+    },
+    "formSubmission": {
+      "findMany, no where": "refused:where-missing",
+      "findMany, other tenant": "refused:where-tenant-mismatch",
+      "findMany, tenant in [own, other]": "refused:where-tenant-mismatch",
+      "findMany, tenant not own": "refused:where-tenant-mismatch",
+      "findFirst, OR with other tenant, no top-level tenant": "refused:where-tenant-missing",
+      "count, other tenant": "refused:where-tenant-mismatch",
+      "aggregate, no where": "refused:where-missing",
+      "groupBy, no where": "refused:where-missing",
+      "create, other tenant": "refused:data-tenant-mismatch",
+      "createMany, one row of other tenant": "refused:data-tenant-mismatch",
+      "updateMany, other tenant": "refused:where-tenant-mismatch",
+      "updateMany, moves rows to other tenant": "refused:data-changes-tenant",
+      "deleteMany, other tenant": "refused:where-tenant-mismatch",
+      "deleteMany, no where": "refused:where-missing"
+    },
+    "role": {
+      "findMany, no where": "refused:where-missing",
+      "findMany, other tenant": "refused:where-tenant-mismatch",
+      "findMany, tenant in [own, other]": "refused:where-tenant-mismatch",
+      "findMany, tenant not own": "refused:where-tenant-mismatch",
+      "findFirst, OR with other tenant, no top-level tenant": "refused:where-tenant-missing",
+      "count, other tenant": "refused:where-tenant-mismatch",
+      "aggregate, no where": "refused:where-missing",
+      "groupBy, no where": "refused:where-missing",
+      "create, other tenant": "refused:data-tenant-mismatch",
+      "createMany, one row of other tenant": "refused:data-tenant-mismatch",
+      "updateMany, other tenant": "refused:where-tenant-mismatch",
+      "updateMany, moves rows to other tenant": "refused:data-changes-tenant",
+      "deleteMany, other tenant": "refused:where-tenant-mismatch",
+      "deleteMany, no where": "refused:where-missing"
+    },
+    "roleGrant": {
+      "findMany, no where": "refused:where-missing",
+      "findMany, other tenant": "refused:where-tenant-mismatch",
+      "findMany, tenant in [own, other]": "refused:where-tenant-mismatch",
+      "findMany, tenant not own": "refused:where-tenant-mismatch",
+      "findFirst, OR with other tenant, no top-level tenant": "refused:where-tenant-missing",
+      "count, other tenant": "refused:where-tenant-mismatch",
+      "aggregate, no where": "refused:where-missing",
+      "groupBy, no where": "refused:where-missing",
+      "create, other tenant": "refused:data-tenant-mismatch",
+      "createMany, one row of other tenant": "refused:data-tenant-mismatch",
+      "updateMany, other tenant": "refused:where-tenant-mismatch",
+      "updateMany, moves rows to other tenant": "refused:data-changes-tenant",
+      "deleteMany, other tenant": "refused:where-tenant-mismatch",
+      "deleteMany, no where": "refused:where-missing"
+    },
+    "staffAccount": {
+      "findMany, no where": "refused:where-missing",
+      "findMany, other tenant": "refused:where-tenant-mismatch",
+      "findMany, tenant in [own, other]": "refused:where-tenant-mismatch",
+      "findMany, tenant not own": "refused:where-tenant-mismatch",
+      "findFirst, OR with other tenant, no top-level tenant": "refused:where-tenant-missing",
+      "count, other tenant": "refused:where-tenant-mismatch",
+      "aggregate, no where": "refused:where-missing",
+      "groupBy, no where": "refused:where-missing",
+      "create, other tenant": "refused:data-tenant-mismatch",
+      "createMany, one row of other tenant": "refused:data-tenant-mismatch",
+      "updateMany, other tenant": "refused:where-tenant-mismatch",
+      "updateMany, moves rows to other tenant": "refused:data-changes-tenant",
+      "deleteMany, other tenant": "refused:where-tenant-mismatch",
+      "deleteMany, no where": "refused:where-missing"
+    },
+    "siteAncestry": {
+      "findMany, no where": "refused:where-missing",
+      "findMany, other tenant": "refused:where-tenant-mismatch",
+      "findMany, tenant in [own, other]": "refused:where-tenant-mismatch",
+      "findMany, tenant not own": "refused:where-tenant-mismatch",
+      "findFirst, OR with other tenant, no top-level tenant": "refused:where-tenant-missing",
+      "count, other tenant": "refused:where-tenant-mismatch",
+      "aggregate, no where": "refused:where-missing",
+      "groupBy, no where": "refused:where-missing",
+      "create, other tenant": "refused:data-tenant-mismatch",
+      "createMany, one row of other tenant": "refused:data-tenant-mismatch",
+      "updateMany, other tenant": "refused:where-tenant-mismatch",
+      "updateMany, moves rows to other tenant": "refused:data-changes-tenant",
+      "deleteMany, other tenant": "refused:where-tenant-mismatch",
+      "deleteMany, no where": "refused:where-missing"
+    }
+  },
+  "rawSqlAsAppRole": {
+    "noTenantCounts": {
+      "platform.isolation_probe": 0,
+      "site.site": 0,
+      "site.site_ancestry": 0,
+      "content.content_item": 0,
+      "forms.form_submission": 0,
+      "identity.staff_account": 0,
+      "identity.staff_session": 0,
+      "identity.role": 0,
+      "identity.role_grant": 0
+    },
+    "noTenantInsert": "42501",
+    "crossTenantUpdateRows": 0,
+    "crossTenantDeleteRows": 0,
+    "insertOtherTenant": "42501",
+    "moveRowToOtherTenant": "42501",
+    "sessionLevelSettingNegativeControl": 200,
+    "copyToStdoutRowsWithoutTenant": 0,
+    "privilegeEscapes": {
+      "ALTER TABLE ... DISABLE ROW LEVEL SECURITY": "42501",
+      "DROP POLICY": "42501",
+      "SET row_security = off, then SELECT": "42501",
+      "SET ROLE phoenix_migrator": "42501",
+      "TRUNCATE": "42501",
+      "CREATE FUNCTION in a schema": "42501",
+      "ALTER ROLE ... BYPASSRLS": "42501"
+    },
+    "pgStatsRowsVisible": 0,
+    "explainWholeTableEstimate": 1,
+    "catalog": [
+      {
+        "table_name": "content.content_item",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      },
+      {
+        "table_name": "forms.form_submission",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      },
+      {
+        "table_name": "identity.role",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      },
+      {
+        "table_name": "identity.role_grant",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      },
+      {
+        "table_name": "identity.staff_account",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      },
+      {
+        "table_name": "identity.staff_session",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      },
+      {
+        "table_name": "platform.isolation_probe",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      },
+      {
+        "table_name": "site.site",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      },
+      {
+        "table_name": "site.site_ancestry",
+        "rls": true,
+        "forced": false,
+        "policies": 1,
+        "good": 1
+      }
+    ]
+  },
+  "pooledConnectionSettings": ["", "", "", "", ""],
+  "concurrentProductionPath": {
+    "path": "postgres direct, production path",
+    "units": 20000,
+    "concurrency": 64,
+    "poolMax": 10,
+    "tenantsTouched": 1000,
+    "checks": 45000,
+    "leaks": 0,
+    "failures": 0,
+    "writes": 5000,
+    "seconds": 48.593,
+    "writesFound": 5000,
+    "misplaced": 0
+  },
+  "concurrentAdapterSessionCandidate": {
+    "path": "postgres direct, adapter-session candidate",
+    "units": 20000,
+    "concurrency": 64,
+    "poolMax": 10,
+    "tenantsTouched": 1000,
+    "checks": 45000,
+    "leaks": 0,
+    "failures": 0,
+    "writes": 5000,
+    "seconds": 37.77,
+    "writesFound": 5000,
+    "misplaced": 0,
+    "readOnlyRefusal": "25006"
+  },
+  "concurrentRawRls": {
+    "path": "postgres direct, raw SQL, RLS only",
+    "units": 20000,
+    "concurrency": 64,
+    "poolMax": 10,
+    "tenantsTouched": 1000,
+    "checks": 80000,
+    "leaks": 0,
+    "failures": 0,
+    "writes": 0,
+    "seconds": 9.361
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "shape": {
+    "sites": "500",
+    "max_depth": 8,
+    "ancestry": "1797",
+    "closureDifferences": 0
+  },
+  "exhaustive": {
+    "pairs": 500000,
+    "mismatches": 0,
+    "self": 1000,
+    "downAllowed": 1297,
+    "downDeniedThisSite": 1297,
+    "upDenied": 2594,
+    "sidewaysDenied": 493812
+  },
+  "namedCases": {
+    "province grant + descendants -> its county office (down 2)": true,
+    "root grant + descendants -> depth-8 leaf": true,
+    "county grant + descendants -> its province (up)": false,
+    "county grant + descendants -> the root (up)": false,
+    "county grant + descendants -> sibling county (sideways)": false,
+    "county grant + descendants -> other province (sideways)": false,
+    "province grant thisSite -> its county (down, not included)": false,
+    "province grant thisSite -> itself": true
+  },
+  "crossTenant": {
+    "ministryUnitSeesAncestorsOfOtherTenantSite": 0,
+    "otherTenantUnitSeesAncestorsOfMinistrySite": 0,
+    "tenantWideGrantCoversOtherTenantSite": false,
+    "rootGrantCoversOtherTenantSite": false
+  },
+  "move": {
+    "before": false,
+    "after": true,
+    "restored": false,
+    "moveMs": 15.250902,
+    "backMs": 9.286697,
+    "cycleRefused": true,
+    "exhaustiveAfterMove": {
+      "pairs": 500000,
+      "mismatches": 0,
+      "self": 1000,
+      "downAllowed": 1354,
+      "downDeniedThisSite": 1354,
+      "upDenied": 2708,
+      "sidewaysDenied": 493584
+    }
+  }
+}

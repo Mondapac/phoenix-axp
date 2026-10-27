@@ -1,0 +1,174 @@
+{
+  "signIn": {
+    "alice": {
+      "status": 200,
+      "body": {
+        "signedIn": true,
+        "accountId": "01a17dd2-0979-7a6e-a9f3-c8c63aa387f1"
+      }
+    },
+    "bahar": {
+      "status": 200,
+      "body": {
+        "signedIn": true,
+        "accountId": "01a17dd2-0a37-787a-9ce2-89462c0cedc5"
+      }
+    },
+    "sara": {
+      "status": 200,
+      "body": {
+        "signedIn": true,
+        "accountId": "01a17dd2-0a99-7493-9f7c-b05c780d104c"
+      }
+    },
+    "dariush": {
+      "status": 200,
+      "body": {
+        "signedIn": true,
+        "accountId": "01a17dd2-09dd-773b-879d-6db2544e46c8"
+      }
+    },
+    "emma": {
+      "status": 200,
+      "body": {
+        "signedIn": true,
+        "accountId": "01a17dd2-0aea-7852-a94b-623c05387053"
+      }
+    }
+  },
+  "sessionStorage": {
+    "rows": 1,
+    "hashBytes": 32,
+    "hashMatches": true,
+    "rawTokenInRow": false,
+    "idpSessionIdStored": true
+  },
+  "pkceRequired": {
+    "status": 302,
+    "refused": true
+  },
+  "sameRules": {
+    "alice": {
+      "county-1 (below the grant)": 200,
+      "province-1 (the grant site)": 200,
+      "province-2 (sideways)": 404,
+      "root (upward)": 404,
+      "unknown site": 404
+    },
+    "bahar": {
+      "county-1 (below the grant)": 200,
+      "province-1 (the grant site)": 200,
+      "province-2 (sideways)": 404,
+      "root (upward)": 404,
+      "unknown site": 404
+    },
+    "emma": {
+      "branch (demo-en, below the grant)": 200
+    },
+    "anonymous": {
+      "county-1": 401
+    },
+    "crossTenant": {
+      "alice cookie, demo-en header": 401
+    }
+  },
+  "revokeRole": {
+    "revokeResponse": {
+      "status": 200,
+      "json": {
+        "revoked": true
+      }
+    },
+    "requestsBeforeRevoke": 14,
+    "allowedBeforeRevoke": 14,
+    "requestsStartedAfterRevokeAnswered": 36,
+    "allowedAfterRevoke": 0,
+    "nextRequestStatus": 403
+  },
+  "ldapDisable": {
+    "coreSessionsBefore": 1,
+    "requestBeforeSync": 200,
+    "coreSessionsOneSecondAfterLdapChange": 1,
+    "keycloakRefusesNewLogin": true,
+    "syncReport": {
+      "ok": true,
+      "value": {
+        "checked": 4,
+        "disabled": 1,
+        "unavailable": 0
+      }
+    },
+    "syncMs": 84.36869,
+    "msFromLdapChangeToNextRequestRefused": 1260,
+    "nextRequestAfterSync": 401,
+    "accountStatus": "disabled"
+  },
+  "localDisable": {
+    "disableResponse": {
+      "status": 200,
+      "json": {
+        "sessionsEnded": 1,
+        "idpDisabled": true
+      }
+    },
+    "nextRequest": 401,
+    "keycloakUserEnabled": false,
+    "keycloakRefusesNewLogin": true,
+    "disableDirectoryAccountFromStudio": {
+      "status": 409,
+      "json": {
+        "statusCode": 409,
+        "code": "account.not-local"
+      }
+    },
+    "disableWithoutPermission": {
+      "status": 403,
+      "json": {
+        "statusCode": 403,
+        "code": "access.denied"
+      }
+    }
+  },
+  "backchannel": {
+    "consoleLogoutStatus": 204,
+    "nextRequestAfterConsoleLogout": 401,
+    "nextRequestAfterConsoleDisable": 200,
+    "syncReport": {
+      "ok": true,
+      "value": {
+        "checked": 1,
+        "disabled": 1,
+        "unavailable": 0
+      }
+    },
+    "nextRequestAfterSync": 401,
+    "forgedLogoutTokenStatus": 400
+  },
+  "provisioning": {
+    "nimaSignIn": 200,
+    "nimaSource": "directory",
+    "nimaStudio": 403,
+    "lenaSignIn": 403,
+    "lenaBody": {
+      "statusCode": 403,
+      "code": "sign-in.no-staff-account"
+    }
+  },
+  "perRequestCost": {
+    "authenticatedListSiteContent": {
+      "n": 400,
+      "mean": 18.479,
+      "p50": 16.969,
+      "p95": 28.973,
+      "p99": 42.92
+    },
+    "anonymousRefusedAtGate": {
+      "n": 400,
+      "mean": 1.773,
+      "p50": 1.599,
+      "p95": 2.996,
+      "p99": 5.319
+    },
+    "unitsPerAuthenticatedRequest": 5
+  }
+}

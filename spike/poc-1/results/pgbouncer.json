@@ -1,0 +1,34 @@
+{
+  "multiplexing": {
+    "clientConnections": 40,
+    "distinctServerBackends": 1
+  },
+  "sessionLevelSettingLeaksAcrossClients": 200,
+  "transactionLocalSettingSeenByOtherClient": 0,
+  "concurrentProductionPath": {
+    "path": "pgbouncer transaction mode, production path",
+    "units": 20000,
+    "concurrency": 64,
+    "poolMax": 20,
+    "tenantsTouched": 1000,
+    "checks": 45000,
+    "leaks": 0,
+    "failures": 0,
+    "writes": 5000,
+    "seconds": 51.819,
+    "writesFound": 5000,
+    "misplaced": 0
+  },
+  "concurrentRawRls": {
+    "path": "pgbouncer transaction mode, raw SQL, RLS only",
+    "units": 20000,
+    "concurrency": 64,
+    "poolMax": 64,
+    "tenantsTouched": 1000,
+    "checks": 80000,
+    "leaks": 0,
+    "failures": 0,
+    "writes": 0,
+    "seconds": 13.244
+  }
+}
