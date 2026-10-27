@@ -132,8 +132,8 @@ change one only through a new ADR or an "Amended by" note.
   `apps/api/test/boundary-fixtures/` proves every rule fires. `check-panel-boundaries` comes
   with the first panel (frontend track).
 - `pnpm licences` = the dependency licence gate (ADR-0009); `pnpm db:check-reversible` runs
-  every migration up -> down -> up; `pnpm db:bootstrap` recreates the dev DB roles on an
-  existing volume.
+  every migration up -> down -> up; `pnpm db:bootstrap` recreates the dev DB roles (and Flowable's
+  database) on an existing volume; `pnpm flowable:check` probes the Flowable image (CI runs it).
 - `pnpm lint` also runs `packages/ui/lint/check-css.mjs` (logical CSS, tokens only); the UI ESLint
   rules are in `packages/ui/lint/ui-rules.mjs`. `pnpm --filter @phoenix/ui tokens` regenerates
   `tokens.css` from `panel-tokens.ts`.

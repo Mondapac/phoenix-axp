@@ -36,6 +36,13 @@ The database roles (`phoenix_migrator`, `phoenix_api` in group `phoenix_app`) co
 volume created before that file, or after it changes, run `pnpm db:bootstrap`; a migration or
 start-up error about a missing role means exactly this.
 
+Flowable (the process engine, slice 2.1) runs from Phoenix's image in `infra/flowable/` on its
+own database and login `flowable`, created by `scripts/db/bootstrap-flowable-dev.sql`; on an
+older volume `pnpm db:bootstrap` creates them. `docker compose up -d flowable` builds the image;
+`FLOWABLE_PASSWORD=phoenix-dev-flowable pnpm flowable:check` probes it (health, a timer, the
+tenant on history). Flowable creates its admin user on the first start only: changing
+`FLOWABLE_REST_APP_ADMIN_PASSWORD` later does not change the stored password.
+
 `.env.example` sets `NODE_ENV=development`. Keep it set: while a port is bound to a fail-closed
 placeholder (ADR-0010; today identity's authorisation check and tenancy's site-ancestry
 reader), the API and the worker start only when `NODE_ENV` is explicitly `development` or
