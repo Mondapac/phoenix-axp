@@ -15,6 +15,7 @@ import type { AppConfig } from '../../platform/config/app-config';
 import { APP_CONFIG } from '../../platform/config/config.module';
 import { ID_GENERATOR } from '../../platform/ids/ids.module';
 import { PersistenceModule } from '../../platform/persistence/persistence.module';
+import { registerCommandsFrom } from '../../platform/commands/command-registry';
 import { registerJobsFrom } from '../../platform/scheduler/job-registry';
 import { UNIT_OF_WORK, type UnitOfWork } from '../../platform/unit-of-work/unit-of-work';
 import { ACCOUNT_REPOSITORY, type AccountRepository } from './application/account.repository';
@@ -34,6 +35,7 @@ import {
 } from './application/staff-identity-provider';
 import { STAFF_DIRECTORY, type StaffDirectory } from './application/staff-directory';
 import { AssignRole } from './application/use-cases/assign-role.use-case';
+import { BootstrapTenantAdministrator } from './application/use-cases/bootstrap-tenant-administrator.use-case';
 import { ChangeRolePermissions } from './application/use-cases/change-role-permissions.use-case';
 import { CreateRole } from './application/use-cases/create-role.use-case';
 import { ListAccountRoleAssignments } from './application/use-cases/list-account-role-assignments.use-case';
@@ -62,6 +64,7 @@ import { PrismaSessionRepository } from './infrastructure/prisma-session.reposit
 import { DirectorySyncController } from './presentation/directory-sync.controller';
 import { RoleAssignmentsController } from './presentation/role-assignments.controller';
 import { RolesController } from './presentation/roles.controller';
+import { bootstrapTenantAdminCommand } from './presentation/commands/bootstrap-tenant-admin.command';
 import { syncDirectoryAccountsJob } from './presentation/jobs/sync-directory-accounts.job';
 import { StaffAccountsController } from './presentation/staff-accounts.controller';
 import { StaffSignInController } from './presentation/staff-sign-in.controller';
@@ -116,7 +119,8 @@ const CATALOGUE = PermissionRegistry;
 /**
  * The identity module (Phase 1 slice 1.5): staff sign-in through the tenant's Keycloak realm,
  * opaque sessions, local staff accounts, and the per-tenant directory sync with its "sync now",
- * behind the studio API; and (slice 1.6) custom roles and the grants of roles to accounts. Its
+ * behind the studio API; and (slice 1.6) custom roles, the grants of roles to accounts and the
+ * operator command for a tenant's first administrator. Its
  * audit writer stays inside the module.
  */
 @Module({
@@ -230,6 +234,14 @@ const CATALOGUE = PermissionRegistry;
       SITE_ANCESTRY_READER,
       AUDIT_WRITER,
     ]),
+    useCase(BootstrapTenantAdministrator, [
+      UNIT_OF_WORK,
+      ACCOUNTS,
+      ROLES,
+      AUDIT_WRITER,
+      CLOCK,
+      ID_GENERATOR,
+    ]),
     useCase(SyncDirectoryAccounts, [DirectorySyncRunner]),
     useCase(RunDirectorySyncNow, [DirectorySyncRunner]),
     useCase(ViewDirectorySync, [UNIT_OF_WORK, DIRECTORY_SYNC_REPOSITORY]),
@@ -242,6 +254,11 @@ const CATALOGUE = PermissionRegistry;
     registerJobsFrom('identity', [SyncDirectoryAccounts], (sync: SyncDirectoryAccounts) => [
       syncDirectoryAccountsJob(sync),
     ]),
+    registerCommandsFrom(
+      'identity',
+      [BootstrapTenantAdministrator],
+      (bootstrap: BootstrapTenantAdministrator) => [bootstrapTenantAdminCommand(bootstrap)],
+    ),
   ],
 })
 export class IdentityModule {}

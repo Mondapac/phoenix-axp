@@ -5,6 +5,7 @@ import { AuditModule } from './platform/audit/audit.module';
 import { AuthzModule } from './platform/authz/authz.module';
 import { ActorGuard } from './platform/call-context/actor.guard';
 import { ClockModule } from './platform/clock/clock.module';
+import { CommandsModule } from './platform/commands/commands.module';
 import type { AppConfig } from './platform/config/app-config';
 import { ConfigModule } from './platform/config/config.module';
 import { HealthModule } from './platform/health/health.module';
@@ -55,6 +56,7 @@ export class AppModule {
         TenantContextModule,
         EventsModule,
         SchedulerModule,
+        CommandsModule,
         PersistenceModule,
         AuditModule,
         // Identity authenticates sessions and answers the gate; tenancy answers subtree

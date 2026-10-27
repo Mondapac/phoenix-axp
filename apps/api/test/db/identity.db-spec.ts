@@ -39,6 +39,7 @@ import { UpdateDirectorySyncInterval } from '../../src/modules/identity/applicat
 import { ViewDirectorySync } from '../../src/modules/identity/application/use-cases/view-directory-sync.use-case';
 import { ViewOwnAccount } from '../../src/modules/identity/application/use-cases/view-own-account.use-case';
 import { AssignRole } from '../../src/modules/identity/application/use-cases/assign-role.use-case';
+import { BootstrapTenantAdministrator } from '../../src/modules/identity/application/use-cases/bootstrap-tenant-administrator.use-case';
 import { ChangeRolePermissions } from '../../src/modules/identity/application/use-cases/change-role-permissions.use-case';
 import { CreateRole } from '../../src/modules/identity/application/use-cases/create-role.use-case';
 import { ListAccountRoleAssignments } from '../../src/modules/identity/application/use-cases/list-account-role-assignments.use-case';
@@ -184,6 +185,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       listGrants: new ListAccountRoleAssignments(gate, uow, accounts, roles),
       assign: new AssignRole(gate, uow, accounts, roles, permissions, ancestry, audit, clock, ids),
       revoke: new RevokeRoleAssignment(gate, uow, accounts, roles, permissions, ancestry, audit),
+      bootstrap: new BootstrapTenantAdministrator(gate, uow, accounts, roles, audit, clock, ids),
       sync: new SyncDirectoryAccounts(gate, runner),
       syncNow: new RunDirectorySyncNow(gate, runner),
       viewSync: new ViewDirectorySync(gate, uow, syncs),
@@ -411,6 +413,136 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
     expect(await signIn({ username: unique('stranger'), directory: false })).toEqual({
       ok: false,
       error: { code: 'sign-in.no-staff-account' },
+    });
+  });
+
+  describe("the tenant's first administrator (owner card of slice 1.6)", () => {
+    const system = testCallContext(tenant, 'system');
+
+    it('creates the local account, then grants the system role once it has signed in', async () => {
+      const username = unique('founder');
+      const first = await identity.bootstrap.execute(system, { username: ` ${username} ` });
+      if (!first.ok || first.value.outcome !== 'sign-in-needed') throw new Error('not created');
+      expect(first.value.created).toBe(true);
+      expect(audit.entries.at(-1)).toMatchObject({
+        action: 'identity.account.created',
+        targetId: first.value.accountId,
+      });
+      // Not linked yet: no grant, whatever the number of runs.
+      expect(await identity.bootstrap.execute(system, { username })).toEqual({
+        ok: true,
+        value: { outcome: 'sign-in-needed', accountId: first.value.accountId, created: false },
+      });
+
+      const session = await signedIn({ username, directory: false });
+      expect(session.accountId).toBe(first.value.accountId);
+      // Linked: the operator confirms the account with the person, then names it (review M1).
+      const accountId = first.value.accountId;
+      expect(await identity.bootstrap.execute(system, { username })).toEqual({
+        ok: true,
+        value: { outcome: 'confirm-needed', accountId },
+      });
+      expect(
+        await identity.bootstrap.execute(system, { username, accountId: ids.next<'Account'>() }),
+      ).toEqual({ ok: false, error: { code: 'identity.account.not-found' } });
+      expect(
+        await identity.bootstrap.execute(system, { username: unique('nobody'), accountId }),
+      ).toEqual({ ok: false, error: { code: 'identity.account.not-found' } });
+      const before = audit.entries.length;
+      expect(await identity.bootstrap.execute(system, { username, accountId })).toEqual({
+        ok: true,
+        value: { outcome: 'granted', accountId },
+      });
+      expect(audit.entries.slice(before).map((e) => e.action)).toEqual([
+        'identity.role.system-seeded',
+        'identity.role.founding-assigned',
+      ]);
+
+      // The founder now holds every key of the tenant.
+      const founder = await contextOf(session.sessionToken);
+      expect((await identity.list.execute(founder, undefined)).ok).toBe(true);
+      const roles = await identity.listRoles.execute(founder, undefined);
+      expect(roles.ok && roles.value.filter((r) => r.kind === 'system')).toEqual([
+        expect.objectContaining({ key: 'tenant-administrator', scope: 'tenant' }),
+      ]);
+      // A custom role cannot take the seed key.
+      expect(
+        await identity.createRole.execute(founder, {
+          key: 'Tenant-Administrator',
+          scope: 'tenant',
+          permissionKeys: ['identity.accounts.view'],
+        }),
+      ).toEqual({ ok: false, error: { code: 'identity.role.key-taken' } });
+
+      // From here on, grants go through studio.
+      expect(await identity.bootstrap.execute(system, { username: unique('second') })).toEqual({
+        ok: false,
+        error: { code: 'identity.tenant.has-administrator' },
+      });
+
+      // Every holder disabled (here, by hand): the command recovers the tenant, reusing the role.
+      await sql(tenant, 'UPDATE identity.account SET status = $2 WHERE id = $1', [
+        first.value.accountId,
+        'disabled',
+      ]);
+      expect(await identity.bootstrap.execute(system, { username, accountId })).toEqual({
+        ok: false,
+        error: { code: 'identity.account.disabled' },
+      });
+      const successor = unique('successor');
+      await identity.bootstrap.execute(system, { username: successor });
+      const linked = await signedIn({ username: successor, directory: false });
+      const recovered = audit.entries.length;
+      expect(
+        await identity.bootstrap.execute(system, {
+          username: successor,
+          accountId: linked.accountId,
+        }),
+      ).toMatchObject({ ok: true, value: { outcome: 'granted' } });
+      expect(audit.entries.slice(recovered).map((e) => e.action)).toEqual([
+        'identity.role.founding-assigned',
+      ]);
+    });
+
+    it('grants once when two runs for two accounts race (review L4)', async () => {
+      // The tenant has an administrator by now: disable every holder, so it has none again.
+      await sql(
+        tenant,
+        `UPDATE identity.account SET status = 'disabled'
+          WHERE id IN (SELECT account_id FROM identity.role_assignment WHERE level = 'tenant')`,
+        [],
+      );
+      const linked = [];
+      for (const name of [unique('race-a'), unique('race-b')]) {
+        await identity.bootstrap.execute(system, { username: name });
+        const session = await signedIn({ username: name, directory: false });
+        linked.push({ username: name, accountId: session.accountId });
+      }
+      const results = await Promise.all(
+        linked.map((input) => identity.bootstrap.execute(system, input)),
+      );
+      expect(results.filter((r) => r.ok)).toHaveLength(1);
+      expect(results.filter((r) => !r.ok)).toEqual([
+        { ok: false, error: { code: 'identity.tenant.has-administrator' } },
+      ]);
+    });
+
+    it('refuses an invalid username, and any actor but the system', async () => {
+      expect(await identity.bootstrap.execute(system, { username: 'bad name' })).toEqual({
+        ok: false,
+        error: { code: 'identity.value.invalid', field: 'username' },
+      });
+      const session = await signedIn({ username: unique('dir'), directory: true });
+      expect(
+        await identity.bootstrap.execute(await contextOf(session.sessionToken), {
+          username: unique('x'),
+        }),
+      ).toEqual({ ok: false, error: { code: 'access.denied' } });
+      expect(
+        await identity.bootstrap.execute(testCallContext(tenant, 'anonymous'), {
+          username: unique('x'),
+        }),
+      ).toMatchObject({ ok: false });
     });
   });
 

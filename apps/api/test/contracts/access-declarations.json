@@ -1,5 +1,6 @@
 [
   { "name": "identity.begin-staff-sign-in", "rule": "anonymous" },
+  { "name": "identity.bootstrap-tenant-administrator", "rule": "system" },
   { "name": "identity.complete-staff-sign-in", "rule": "anonymous" },
   { "name": "identity.sign-out", "rule": "own-resources" },
   { "name": "identity.sync-directory-accounts", "rule": "system" },

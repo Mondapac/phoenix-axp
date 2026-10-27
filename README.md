@@ -68,6 +68,19 @@ To verify a tenant's audit chain by hand (after `pnpm build`; exit 0 clean, 1 re
 APP_ROLE=api node apps/api/dist/audit-verify.js --tenant <id> [--full]
 ```
 
+Operator commands run one use case as the tenant's system actor (exit 0 success, 1 refused, 3
+failed; a command adds its own codes). The first administrator of a new tenant (refused once the
+tenant has an active administrator; exit 0 granted, 2 pending):
+
+1. Run it with `--username`. An unknown username gets a local account; it prints the account id.
+   A directory (AD/LDAP) administrator signs in once before this step, so the account is theirs.
+2. The person signs in to studio. Confirm with them that they did (the realm must not allow
+   self-registration), then run it again with `--account <id>` from step 1 to grant.
+
+```sh
+APP_ROLE=api node apps/api/dist/run-command.js identity.bootstrap-tenant-admin --tenant <id> --username <name> [--account <id>]
+```
+
 ## Layout
 
 - `apps/api/src/platform/`: the platform layer; `apps/api/src/modules/`: business modules
