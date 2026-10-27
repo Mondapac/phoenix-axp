@@ -20,7 +20,7 @@ that wait for their first consumer are listed in [docs/platform-deferred.md](doc
 
 ```sh
 cp .env.example .env
-docker compose up -d postgres     # or `docker compose up -d` for every local service
+docker compose up -d postgres seaweedfs   # or `docker compose up -d` for every service
 pnpm install
 pnpm db:migrate
 pnpm dev                          # API on http://localhost:3000, GET /health/ready
@@ -43,6 +43,7 @@ English/Gregorian in America/Toronto).
 | `pnpm licences`           | Licence gate on production dependencies                         |
 | `pnpm test`               | Unit and HTTP tests                                             |
 | `pnpm test:db`            | Database tests (needs PostgreSQL and `MIGRATION_DATABASE_URL`)  |
+| `pnpm test:storage`       | Object storage tests (needs SeaweedFS and the `S3_*` key)       |
 | `pnpm db:check-reversible`| Every migration goes up, down and up again                      |
 | `pnpm build`              | Builds the kernel and the API, then checks the built kernel     |
 | `pnpm db:migrate:dev`     | Creates a migration from the schema; add its `down.sql` by hand |

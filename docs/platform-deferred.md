@@ -14,7 +14,6 @@ trigger that brings each one in. When a trigger fires, port the component from t
 | identity integration (ADR-03) | The `Authenticator` building `AuthenticatedActor` from a Keycloak session; `ActorGuard` accepts no session until then and answers 401 `session.invalid` to any `Authorization` header | The identity module, Phase 1 |
 | `scheduler` (ADR-05) | Fixed-interval jobs under `pg_try_advisory_xact_lock` in the worker | The first periodic job (the outbox relay or the audit sealer) |
 | worker jobs | The worker today starts, logs a heartbeat and stops cleanly on SIGTERM | The first job or consumer (outbox relay, scheduler) |
-| `storage` (ADR-11) | The `ObjectStore` port and its SeaweedFS S3 adapter (SeaweedFS is already in `docker-compose.yml`) | The first feature that stores a file |
 | `subject-keys` | Per-subject encryption keys for personal data fields, the key wrapper and its port | The first personal data field that must be erasable (identity or forms) |
 | `ai` (ADR-10) | `platform/ai/model-gateway`, the only caller of a model, with the provider SDK confined to that folder | Phase 5, the first AI feature |
 | `mail` | The mail port and its SMTP adapter (Mailpit locally) | The first message sent to a person (identity verification) |
@@ -35,5 +34,9 @@ trigger that brings each one in. When a trigger fires, port the component from t
 - **Market became Tenant.** `tenant_id` is mandatory in every scoped table, key and foreign
   key, with no default tenant and no fallback; the `x-tenant-id` header names it on every
   tenant-scoped request; `HOSTED_TENANTS` lists the tenants of a deployment.
+- **Storage arrived ahead of its consumer.** The Phase 1 review lists `platform/storage` as its
+  own slice (1.7), so it landed before the first module that stores a file. The first such
+  module declares its `IntakePolicy`, keeps the file metadata in its own schema and issues
+  signed URLs from a use case that checked permission and ownership (ADR-0012).
 - **Market and vertical literal bans** became one tenant-literal ban, built from
   `config/tenants/*.json` (ids, locales, time zones).
