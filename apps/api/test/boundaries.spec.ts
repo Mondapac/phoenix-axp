@@ -262,7 +262,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ).toEqual({ status: 0, problems: [] });
     });
 
-    it('accepts the passing fixture: keys with tenantId (also not leading and name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, and raw SQL and the driver in the platform files', () => {
+    it('accepts the passing fixture: keys and indexes led by tenantId (also name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, and raw SQL and the driver in the platform files', () => {
       expect(
         checkPrisma(
           path.join(PRISMA_FIXTURES, 'passing/schema'),
@@ -284,10 +284,16 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'beta.prisma: enum BetaKind is in schema "alpha", but this file owns "beta"',
           'alpha.prisma: AlphaNeither is neither tenant-scoped (tenantId) nor exempt ("/// @tenant-scope none: <reason>")',
           'alpha.prisma: AlphaBoth has tenantId and also an exemption line',
-          'alpha.prisma: AlphaBadKeys @unique on ref does not contain tenantId',
-          'alpha.prisma: AlphaBadKeys @@id([kind, code]) does not contain tenantId',
-          'alpha.prisma: AlphaBadKeys @@unique([kind, ref]) does not contain tenantId',
-          'alpha.prisma: AlphaIntId @id on id does not contain tenantId',
+          'alpha.prisma: AlphaBadKeys @unique on ref does not lead with tenantId',
+          'alpha.prisma: AlphaBadKeys @@id([kind, code]) does not lead with tenantId',
+          'alpha.prisma: AlphaBadKeys @@unique([kind, ref]) does not lead with tenantId',
+          'alpha.prisma: AlphaIntId @id on id does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant.tenantId maps to column "tenant", expected "tenant_id"',
+          'alpha.prisma: AlphaTrailingTenant @@unique([id, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@unique([kind, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@index([code]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@index([kind, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingId @@id([kind, tenantId]) does not lead with tenantId',
           'alpha.prisma: AlphaChildNoTenant.parent relates two tenant-scoped models without tenantId in both fields and references',
           'alpha.prisma: AlphaChildMisaligned.parent pairs tenantId with another column (tenantId is at different positions in fields and references)',
           'alpha.prisma: AlphaScopedChild.parent relates a tenant-scoped model to the exempt model AlphaExemptParent; exempt and tenant-scoped models may not relate',

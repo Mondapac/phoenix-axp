@@ -220,6 +220,17 @@ function parseModel(block, modelNames) {
     });
   }
 
+  // Plain indexes (`@@index`), which are no selectors: kept apart from the keys.
+  const indexes = [];
+  for (const attribute of blockAttributes) {
+    if (attribute.name !== 'index') continue;
+    const indexFields = attribute.args.named.fields ?? attribute.args.positional[0] ?? [];
+    indexes.push({
+      kind: 'index',
+      fields: Array.isArray(indexFields) ? indexFields : [indexFields],
+    });
+  }
+
   const relations = [];
   for (const field of fields.filter((f) => f.relation)) {
     const relation = field.attributes.find((a) => a.name === 'relation');
@@ -246,6 +257,7 @@ function parseModel(block, modelNames) {
     hasTenantId: has('tenantId'),
     fields,
     keys,
+    indexes,
     relations,
     blockAttributes,
   };
