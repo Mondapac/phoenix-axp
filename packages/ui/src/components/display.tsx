@@ -67,7 +67,9 @@ export function Avatar({
       )}
     >
       {src ? <BaseAvatar.Image src={src} alt={name} className="size-full object-cover" /> : null}
-      <BaseAvatar.Fallback aria-label={name}>{initials}</BaseAvatar.Fallback>
+      <BaseAvatar.Fallback role="img" aria-label={name}>
+        {initials}
+      </BaseAvatar.Fallback>
     </BaseAvatar.Root>
   );
 }

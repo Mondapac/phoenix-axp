@@ -179,6 +179,19 @@ describe.each(TENANTS)('components for tenant $code', (tenant) => {
               <EmptyState title="Empty" />
               <Avatar name="Ali" initials="A" />
               <Alert title="x" />
+              <Field label="F" error="E" invalid>
+                <TextInput />
+              </Field>
+              <Checkbox label="C" />
+              <Switch label="S" defaultChecked />
+              <Select aria-label="L" options={[{ value: 'a', label: 'A' }]} />
+              <Table>
+                <TableBody>
+                  <TableRow>
+                    <TableCell numeric>1</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
               <Pagination
                 page={2}
                 pageCount={9}
