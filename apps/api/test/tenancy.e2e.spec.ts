@@ -24,10 +24,10 @@ describe('the tenancy studio API (HTTP)', () => {
     await app.close();
   });
 
-  it('binds its closure-table reader as the site-ancestry port, leaving only identity a placeholder', () => {
+  it('binds its closure-table reader as the site-ancestry port, leaving no authz placeholder', () => {
     expect(app.get(SITE_ANCESTRY_READER)).toBeInstanceOf(ClosureSiteAncestryReader);
     const ports = containerPlaceholders(app.get(ModulesContainer)).map((p) => p.port);
-    expect([...new Set(ports)]).toEqual(['identity.authorisationCheck']);
+    expect([...new Set(ports)]).toEqual([]);
   });
 
   describe.each(TEST_TENANTS)('in tenant %s', (tenant) => {

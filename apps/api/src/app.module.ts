@@ -19,6 +19,7 @@ import { TenantConfigModule } from './platform/tenant-config/tenant-config.modul
 import { TenantContextGuard } from './platform/tenant-context/tenant-context.guard';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
 import { WorkerModule } from './platform/worker/worker.module';
+import { IdentityAccessModule, IdentityModule } from './modules/identity';
 import { TenancyModule, TenancySiteAncestryModule } from './modules/tenancy';
 
 /**
@@ -56,13 +57,18 @@ export class AppModule {
         SchedulerModule,
         PersistenceModule,
         AuditModule,
-        // No identity module yet: the authorisation check is a fail-closed placeholder
-        // (ADR-0010), so a production start is refused. Tenancy answers subtree questions.
-        AuthzModule.register({ siteAncestry: TenancySiteAncestryModule }),
+        // Identity authenticates sessions and answers the gate; tenancy answers subtree
+        // questions. No fail-closed placeholder of platform/authz stays bound (ADR-0010).
+        AuthzModule.register({
+          authentication: IdentityAccessModule,
+          authorisation: IdentityAccessModule,
+          siteAncestry: TenancySiteAncestryModule,
+        }),
         StorageModule,
         WorkerModule,
         HealthModule,
         TenancyModule,
+        IdentityModule,
       ],
       providers: [
         ...GLOBAL_GUARDS.map((guard) => ({ provide: APP_GUARD, useClass: guard })),

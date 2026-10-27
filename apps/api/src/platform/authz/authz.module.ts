@@ -5,9 +5,11 @@
 // (ADR-0010 decision 2).
 import { Module, type DynamicModule, type Provider, type Type } from '@nestjs/common';
 import { TenantRegistry } from '../tenant-config/tenant-registry';
+import { AUTHENTICATOR } from './authenticator';
 import { AUTHORISATION_CHECK, type AuthorisationCheck } from './authorisation-check';
 import { PERMISSION_KEY_LOOKUP } from './permission-key-lookup';
 import { PermissionRegistry } from './permission-registry';
+import { FailClosedAuthenticator } from './placeholders/fail-closed-authenticator';
 import { FailClosedAuthorisationCheck } from './placeholders/fail-closed-authorisation-check';
 import { FailClosedSiteAncestryReader } from './placeholders/fail-closed-site-ancestry-reader';
 import { SITE_ANCESTRY_READER } from './site-scope';
@@ -15,12 +17,14 @@ import { createUseCaseGate } from './use-case-gate';
 import { USE_CASE_GATE } from './use-case-gate.token';
 
 /**
- * Where the two ports of `platform/authz` come from. Each is a Nest module that provides and
- * exports the token (`AUTHORISATION_CHECK` from identity, `SITE_ANCESTRY_READER` from tenancy),
+ * Where the three ports of `platform/authz` come from. Each is a Nest module that provides and
+ * exports the token (`AUTHENTICATOR` and `AUTHORISATION_CHECK` from identity,
+ * `SITE_ANCESTRY_READER` from tenancy),
  * passed by `app.module.ts`, so `platform/` imports no module. Absent, the fail-closed
  * placeholder is bound, and a production start is refused (ADR-0010 decision 4).
  */
 export interface AuthzBindings {
+  readonly authentication?: Type;
   readonly authorisation?: Type;
   readonly siteAncestry?: Type;
 }
@@ -42,9 +46,17 @@ export class AuthzModule {
     // A bound port is re-exported through its module (Nest exports only its own providers or
     // an imported module), a placeholder through its token.
     const reexported: (Type | symbol)[] = [];
+    // The ActorGuard (a global guard) injects the authenticator, so it is exported either way.
+    if (bindings.authentication === undefined) {
+      placeholders.push({ provide: AUTHENTICATOR, useClass: FailClosedAuthenticator });
+      reexported.push(AUTHENTICATOR);
+    } else {
+      imports.push(bindings.authentication);
+      reexported.push(bindings.authentication);
+    }
     if (bindings.authorisation === undefined) {
       placeholders.push({ provide: AUTHORISATION_CHECK, useClass: FailClosedAuthorisationCheck });
-    } else {
+    } else if (bindings.authorisation !== bindings.authentication) {
       imports.push(bindings.authorisation);
     }
     if (bindings.siteAncestry === undefined) {

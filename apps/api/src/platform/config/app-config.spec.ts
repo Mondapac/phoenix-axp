@@ -17,6 +17,18 @@ function issuesOf(env: Record<string, string | undefined>): readonly string[] {
   throw new Error('expected InvalidConfigError');
 }
 
+/** The session and Keycloak settings a production start needs besides object storage. */
+const PRODUCTION_SESSION = {
+  SESSION_SECRET: Buffer.alloc(32, 1).toString('base64url'),
+  KEYCLOAK_URL: 'https://sso.example.test',
+  KEYCLOAK_STUDIO_CLIENT_SECRET: 'client-secret',
+  STUDIO_SIGN_IN_CALLBACK_URL: 'https://studio.example.test/auth/callback',
+};
+
+/** The object storage issues only: production also requires the session settings. */
+const storageIssuesOf = (env: Record<string, string | undefined>): readonly string[] =>
+  issuesOf(env).filter((issue) => issue.startsWith('S3_'));
+
 describe('loadAppConfig', () => {
   it('applies defaults and parses the hosted tenants list', () => {
     const config = loadAppConfig({ HOSTED_TENANTS: 'demo-fa, demo-en' });
@@ -26,6 +38,7 @@ describe('loadAppConfig', () => {
       nodeEnv: 'development',
       nodeEnvExplicit: false,
       port: 3000,
+      host: null,
       logLevel: 'info',
       hostedTenants: ['demo-fa', 'demo-en'],
       apiDocsEnabled: false,
@@ -33,7 +46,10 @@ describe('loadAppConfig', () => {
       databaseUrl: DATABASE_URL,
       databasePoolMax: 10,
       storage: null,
+      session: { secret: config.session.secret, panelOrigins: [], staffSessionHours: 8 },
+      keycloak: null,
     });
+    expect(config.session.secret).toHaveLength(32);
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.hostedTenants)).toBe(true);
   });
@@ -136,7 +152,7 @@ describe('loadAppConfig', () => {
 
     it('needs the four variables together', () => {
       expect(
-        issuesOf({ HOSTED_TENANTS: 'acme-gov', S3_ENDPOINT: 'http://localhost:8333' }),
+        storageIssuesOf({ HOSTED_TENANTS: 'acme-gov', S3_ENDPOINT: 'http://localhost:8333' }),
       ).toEqual([
         expect.stringMatching(/^S3_BUCKET: .* are set together/),
         expect.stringMatching(/^S3_ACCESS_KEY_ID: /),
@@ -145,7 +161,7 @@ describe('loadAppConfig', () => {
     });
 
     it('requires object storage in production', () => {
-      expect(issuesOf({ HOSTED_TENANTS: 'acme-gov', NODE_ENV: 'production' })).toEqual([
+      expect(storageIssuesOf({ HOSTED_TENANTS: 'acme-gov', NODE_ENV: 'production' })).toEqual([
         'S3_ENDPOINT: required in production (object storage, ADR-0012)',
         'S3_BUCKET: required in production (object storage, ADR-0012)',
         'S3_ACCESS_KEY_ID: required in production (object storage, ADR-0012)',
@@ -158,13 +174,14 @@ describe('loadAppConfig', () => {
           ...STORAGE,
           S3_PUBLIC_ENDPOINT: 'https://files.example.test',
           S3_SECRET_ACCESS_KEY: 'a-real-secret',
+          ...PRODUCTION_SESSION,
         }).storage,
       ).not.toBeNull();
     });
 
     it('needs https signed URLs and a real key in production', () => {
       expect(
-        issuesOf({
+        storageIssuesOf({
           HOSTED_TENANTS: 'acme-gov',
           NODE_ENV: 'production',
           ...STORAGE,
@@ -175,7 +192,7 @@ describe('loadAppConfig', () => {
         'S3_SECRET_ACCESS_KEY: the local development key is refused in production',
       ]);
       expect(
-        issuesOf({
+        storageIssuesOf({
           HOSTED_TENANTS: 'acme-gov',
           NODE_ENV: 'production',
           ...STORAGE,
@@ -191,13 +208,13 @@ describe('loadAppConfig', () => {
       ['S3_BUCKET', 'Phoenix_Files'],
       ['S3_BUCKET', 'ab'],
     ])('refuses %s=%p', (name, value) => {
-      expect(issuesOf({ HOSTED_TENANTS: 'acme-gov', ...STORAGE, [name]: value })).toEqual([
+      expect(storageIssuesOf({ HOSTED_TENANTS: 'acme-gov', ...STORAGE, [name]: value })).toEqual([
         expect.stringMatching(new RegExp(`^${name}: `)),
       ]);
     });
 
     it('never puts the secret in an issue', () => {
-      const issues = issuesOf({
+      const issues = storageIssuesOf({
         HOSTED_TENANTS: 'acme-gov',
         ...STORAGE,
         S3_SECRET_ACCESS_KEY: 'super-secret-value',
@@ -205,6 +222,91 @@ describe('loadAppConfig', () => {
       });
 
       expect(issues.join('\n')).not.toContain('super-secret-value');
+    });
+  });
+  describe('sessions and Keycloak sign-in (ADR-0004)', () => {
+    const SECRET = Buffer.alloc(32, 7).toString('base64url');
+    const KEYCLOAK = {
+      KEYCLOAK_URL: 'https://sso.example.test/',
+      KEYCLOAK_STUDIO_CLIENT_SECRET: 'client-secret-value',
+      STUDIO_SIGN_IN_CALLBACK_URL: 'https://studio.example.test/auth/callback',
+    };
+
+    it('reads the secret, the panel origins and the Keycloak settings', () => {
+      const config = loadAppConfig({
+        HOSTED_TENANTS: 'demo-fa',
+        SESSION_SECRET: SECRET,
+        PANEL_ORIGINS: 'https://studio.example.test, http://localhost:3001',
+        STAFF_SESSION_HOURS: '4',
+        HOST: '127.0.0.1',
+        ...KEYCLOAK,
+      });
+      expect(config.host).toBe('127.0.0.1');
+      expect(config.session).toEqual({
+        secret: Buffer.alloc(32, 7),
+        panelOrigins: ['https://studio.example.test', 'http://localhost:3001'],
+        staffSessionHours: 4,
+      });
+      expect(config.keycloak).toEqual({
+        url: 'https://sso.example.test',
+        realmTemplate: 'phoenix-{tenant}',
+        studioClientId: 'phoenix-studio',
+        studioClientSecret: 'client-secret-value',
+        studioCallbackUrl: 'https://studio.example.test/auth/callback',
+        directoryClaim: 'ldap_id',
+      });
+    });
+
+    it('draws a random secret per process outside production', () => {
+      const a = loadAppConfig({ HOSTED_TENANTS: 'demo-fa' }).session.secret;
+      const b = loadAppConfig({ HOSTED_TENANTS: 'demo-fa' }).session.secret;
+      expect(a.equals(b)).toBe(false);
+    });
+
+    it('refuses a short secret, a path in an origin and a realm template without the tenant', () => {
+      expect(
+        issuesOf({
+          HOSTED_TENANTS: 'demo-fa',
+          SESSION_SECRET: 'short',
+          PANEL_ORIGINS: 'https://studio.example.test/path',
+          KEYCLOAK_REALM_TEMPLATE: 'shared',
+        }),
+      ).toEqual([
+        expect.stringContaining('SESSION_SECRET'),
+        expect.stringContaining('KEYCLOAK_REALM_TEMPLATE'),
+      ]);
+      expect(
+        issuesOf({ HOSTED_TENANTS: 'demo-fa', PANEL_ORIGINS: 'https://studio.example.test/path' }),
+      ).toEqual([expect.stringContaining('PANEL_ORIGINS')]);
+    });
+
+    it('takes the Keycloak variables together, and requires them and the secret in production', () => {
+      expect(
+        issuesOf({ HOSTED_TENANTS: 'demo-fa', KEYCLOAK_URL: 'https://sso.example.test' }),
+      ).toEqual([
+        expect.stringMatching(/^KEYCLOAK_STUDIO_CLIENT_SECRET: .*set together/),
+        expect.stringMatching(/^STUDIO_SIGN_IN_CALLBACK_URL: .*set together/),
+      ]);
+      const production = issuesOf({
+        HOSTED_TENANTS: 'demo-fa',
+        NODE_ENV: 'production',
+        PANEL_ORIGINS: 'http://studio.example.test',
+      }).filter((issue) => !issue.startsWith('S3_'));
+      expect(production).toEqual([
+        'SESSION_SECRET: required in production (sessions, ADR-0004)',
+        'PANEL_ORIGINS: "http://studio.example.test" must be an origin over https',
+        'KEYCLOAK_URL: required in production (staff sign-in, ADR-0004)',
+        'KEYCLOAK_STUDIO_CLIENT_SECRET: required in production (staff sign-in, ADR-0004)',
+        'STUDIO_SIGN_IN_CALLBACK_URL: required in production (staff sign-in, ADR-0004)',
+      ]);
+    });
+
+    it('never puts a secret in an issue', () => {
+      const issues = issuesOf({
+        HOSTED_TENANTS: 'demo-fa',
+        KEYCLOAK_STUDIO_CLIENT_SECRET: 'top-secret',
+      });
+      expect(issues.join('\n')).not.toContain('top-secret');
     });
   });
 });

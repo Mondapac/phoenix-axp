@@ -1,5 +1,64 @@
 [
   {
+    "action": "identity.account.created",
+    "targetType": "identity.account",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "source": "enumOf(directory|local)"
+    }
+  },
+  {
+    "action": "identity.account.disabled",
+    "targetType": "identity.account",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "sessionsEnded": "integer"
+    }
+  },
+  {
+    "action": "identity.account.linked",
+    "targetType": "identity.account",
+    "targetId": "id",
+    "actors": ["anonymous"],
+    "before": null,
+    "after": {
+      "boundSubjectId": "id"
+    }
+  },
+  {
+    "action": "identity.account.provisioned",
+    "targetType": "identity.account",
+    "targetId": "id",
+    "actors": ["anonymous"],
+    "before": null,
+    "after": {
+      "boundSubjectId": "id",
+      "source": "enumOf(directory|local)"
+    }
+  },
+  {
+    "action": "identity.session.ended",
+    "targetType": "identity.session",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": null
+  },
+  {
+    "action": "identity.session.started",
+    "targetType": "identity.session",
+    "targetId": "id",
+    "actors": ["anonymous"],
+    "before": null,
+    "after": {
+      "boundSubjectId": "id"
+    }
+  },
+  {
     "action": "tenancy.organization.created",
     "targetType": "tenancy.organization",
     "targetId": "id",

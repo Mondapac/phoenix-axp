@@ -45,6 +45,6 @@ export async function startApi(
     return undefined;
   }
 
-  await app.listen(config.port);
+  await (config.host === null ? app.listen(config.port) : app.listen(config.port, config.host));
   return app;
 }

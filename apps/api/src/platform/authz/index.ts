@@ -2,11 +2,18 @@
 // `platform/authz`: a module imports from this file only (dependency-cruiser
 // `modules-reach-authz-through-its-barrel`): the base class, the declaration types, the
 // permission helpers and registry, the answers, the gate's token and type, the authorisation
-// check's port and token (identity implements it), the site-ancestry port and token (tenancy
+// check's and the authenticator's ports and tokens (identity implements them), the site-ancestry port and token (tenancy
 // implements it) with the subtree helpers, and the role model with its policies. The gate's
 // factory, the declaration checks and the placeholders stay inside `platform/`.
 export { ACCESS_DENIED_STATUS, type AccessDenied } from './access-denied';
 export type { AccessDeclaration, AccessRule, PermissionKey } from './access-rule';
+export {
+  AUTHENTICATOR,
+  CSRF_HEADER,
+  STUDIO_SESSION_COOKIE,
+  type Authenticator,
+  type CredentialRejected,
+} from './authenticator';
 export {
   AUTHORISATION_CHECK,
   type AccessDecision,
