@@ -172,6 +172,16 @@
     }
   },
   {
+    "action": "process.revision.published",
+    "targetType": "process.revision",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "revision": "integer"
+    }
+  },
+  {
     "action": "tenancy.organization.created",
     "targetType": "tenancy.organization",
     "targetId": "id",

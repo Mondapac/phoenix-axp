@@ -1,0 +1,156 @@
+// The process module (schema "process"; Phase 2 slice 2.2): the bridge to Flowable (ADR-0005 as
+// amended by ADR-0020 decisions 6, 7 and 9). The core owns the published process revisions, the
+// instances it started, its mirror of the engine's user tasks, the commands it sends to the
+// engine, the observations it took from the engine and the incidents the bridge found. Flowable
+// owns execution, in its own database, never this one. Shape copied from the PoC 3 spike
+// (process.prisma). The CHECKs, the grants and the row-level security policies are hand-written
+// in the migration.
+
+/// V1 immutable revision: a BPMN process definition as the tenant published it. Never updated;
+/// deployed to the engine under the tenant, one deployment per revision.
+model ProcessRevision {
+  /// UUIDv7 from the IdGenerator.
+  id          String            @id @db.Uuid
+  tenantId    String            @map("tenant_id") @db.VarChar(32)
+  /// The BPMN process id, which is the engine's definition key.
+  processKey  String            @map("process_key") @db.VarChar(64)
+  /// 1, 2, ... per process key.
+  revision    Int
+  bpmnXml     String            @map("bpmn_xml")
+  /// `sha256:` and the hex SHA-256 of the XML.
+  contentHash String            @map("content_hash") @db.VarChar(71)
+  publishedAt DateTime          @map("published_at") @db.Timestamptz(3)
+  instances   ProcessInstance[]
+
+  @@unique([tenantId, id], map: "process_revision_tenant_id_id_key")
+  @@unique([tenantId, processKey, revision], map: "process_revision_tenant_id_process_key_revision_key")
+  @@map("process_revision")
+  @@schema("process")
+}
+
+/// V3 snapshot at reference: one run of exactly one process revision, as the core started it.
+/// Its id is the engine instance's business key: the idempotency key of the start.
+model ProcessInstance {
+  /// UUIDv7 from the IdGenerator.
+  id               String          @id @db.Uuid
+  tenantId         String          @map("tenant_id") @db.VarChar(32)
+  revisionId       String          @map("revision_id") @db.Uuid
+  /// starting | running | completed | cancelled
+  status           String          @db.VarChar(16)
+  /// The engine instance the core adopted: set once, first writer wins (ADR-0020 decision 9).
+  engineInstanceId String?         @map("engine_instance_id") @db.VarChar(64)
+  requestedAt      DateTime        @map("requested_at") @db.Timestamptz(3)
+  endedAt          DateTime?       @map("ended_at") @db.Timestamptz(3)
+  version          Int
+  revision         ProcessRevision @relation(fields: [tenantId, revisionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "process_instance_revision_fkey")
+  tasks            ProcessTask[]
+
+  @@unique([tenantId, id], map: "process_instance_tenant_id_id_key")
+  @@unique([tenantId, engineInstanceId], map: "process_instance_tenant_id_engine_instance_id_key")
+  @@index([tenantId, revisionId], map: "process_instance_tenant_id_revision_id_idx")
+  @@map("process_instance")
+  @@schema("process")
+}
+
+/// The core's mirror of one engine user task, ever (ADR-0005 decision 4). The engine decides that
+/// a task exists and when it ends; the core decides who may act on it (slice 2.3).
+model ProcessTask {
+  /// UUIDv7 from the IdGenerator.
+  id            String          @id @db.Uuid
+  tenantId      String          @map("tenant_id") @db.VarChar(32)
+  instanceId    String          @map("instance_id") @db.Uuid
+  engineTaskId  String          @map("engine_task_id") @db.VarChar(64)
+  /// The BPMN user task id.
+  taskKey       String          @map("task_key") @db.VarChar(255)
+  /// The BPMN form key, when the model names one.
+  formKey       String?         @map("form_key") @db.VarChar(255)
+  /// open | completing | completed | superseded | escalated | cancelled
+  status        String          @db.VarChar(16)
+  /// The engine command of the completion: the key stored on the engine task (PoC 3 R4).
+  completionKey String?         @map("completion_key") @db.Uuid
+  openedAt      DateTime        @map("opened_at") @db.Timestamptz(3)
+  closedAt      DateTime?       @map("closed_at") @db.Timestamptz(3)
+  version       Int
+  instance      ProcessInstance @relation(fields: [tenantId, instanceId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "process_task_instance_fkey")
+
+  @@unique([tenantId, engineTaskId], map: "process_task_tenant_id_engine_task_id_key")
+  @@index([tenantId, instanceId], map: "process_task_tenant_id_instance_id_idx")
+  @@map("process_task")
+  @@schema("process")
+}
+
+/// Core -> engine commands (ADR-0005 decision 3; ADR-0020 decision 7). Written in the unit of
+/// the state change; the relay claims a row with a lease, calls the engine outside any unit,
+/// then acks it in another unit. Not the module's in-process event outbox.
+model EngineCommand {
+  /// UUIDv7 from the IdGenerator; also the completion key of a `complete-task`.
+  id            String    @id @db.Uuid
+  tenantId      String    @map("tenant_id") @db.VarChar(32)
+  /// deploy-revision | start-instance | complete-task | delete-orphan
+  kind          String    @db.VarChar(32)
+  /// The revision, instance or task the command is about.
+  subjectId     String    @map("subject_id") @db.Uuid
+  /// Ids, codes and numbers only (ADR-0005 decision 7): never personal data.
+  payload       Json
+  correlationId String    @map("correlation_id") @db.VarChar(128)
+  /// Claims so far; the claim is a compare-and-set on it.
+  attempts      Int
+  /// Not claimable before: the lease of a claim, or the retry time after a failed call.
+  notBefore     DateTime  @map("not_before") @db.Timestamptz(3)
+  /// The code of the last failure, never a message.
+  lastError     String?   @map("last_error") @db.VarChar(64)
+  createdAt     DateTime  @map("created_at") @db.Timestamptz(3)
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+  /// Set when the engine refused the command for good; an incident says why.
+  deadAt        DateTime? @map("dead_at") @db.Timestamptz(3)
+
+  @@index([tenantId, subjectId], map: "engine_command_tenant_id_subject_id_idx")
+  @@map("engine_command")
+  @@schema("process")
+}
+
+/// Engine -> core observations already applied, per handler (ADR-0020 decision 8): the inbox of
+/// the bridge. The event id is derived from what was observed, so a repeated poll finds its row.
+model EngineObservation {
+  tenantId   String   @map("tenant_id") @db.VarChar(32)
+  eventId    String   @map("event_id") @db.Uuid
+  handler    String   @db.VarChar(64)
+  observedAt DateTime @map("observed_at") @db.Timestamptz(3)
+
+  @@id([tenantId, eventId, handler], map: "engine_observation_pkey")
+  @@map("engine_observation")
+  @@schema("process")
+}
+
+/// The engine sync's watermarks of one tenant (PoC 3 R5): the latest end time, on the engine's
+/// clock, of the ended tasks and the ended instances already read.
+model EngineSyncState {
+  tenantId            String    @id @map("tenant_id") @db.VarChar(32)
+  tasksEndedAfter     DateTime? @map("tasks_ended_after") @db.Timestamptz(3)
+  instancesEndedAfter DateTime? @map("instances_ended_after") @db.Timestamptz(3)
+  version             Int
+  updatedAt           DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  @@map("engine_sync_state")
+  @@schema("process")
+}
+
+/// V4 append-only: what the bridge found that should not happen (an orphan engine instance, a
+/// task completed outside the core, a command the engine refused). For operators; one row per
+/// kind and engine object.
+model ProcessIncident {
+  /// UUIDv7 from the IdGenerator.
+  id         String   @id @db.Uuid
+  tenantId   String   @map("tenant_id") @db.VarChar(32)
+  kind       String   @db.VarChar(48)
+  /// The engine object concerned (instance or task id), or the core id of a refused command.
+  engineRef  String   @map("engine_ref") @db.VarChar(64)
+  /// The core instance, when known.
+  instanceId String?  @map("instance_id") @db.Uuid
+  detectedAt DateTime @map("detected_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, kind, engineRef], map: "process_incident_tenant_id_kind_engine_ref_key")
+  @@index([tenantId, detectedAt], map: "process_incident_tenant_id_detected_at_idx")
+  @@map("process_incident")
+  @@schema("process")
+}

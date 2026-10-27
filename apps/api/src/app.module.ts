@@ -21,6 +21,7 @@ import { TenantContextGuard } from './platform/tenant-context/tenant-context.gua
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
 import { WorkerModule } from './platform/worker/worker.module';
 import { IdentityAccessModule, IdentityModule } from './modules/identity';
+import { ProcessModule } from './modules/process';
 import { TenancyModule, TenancySiteAncestryModule } from './modules/tenancy';
 
 /**
@@ -71,6 +72,7 @@ export class AppModule {
         HealthModule,
         TenancyModule,
         IdentityModule,
+        ProcessModule,
       ],
       providers: [
         ...GLOBAL_GUARDS.map((guard) => ({ provide: APP_GUARD, useClass: guard })),
