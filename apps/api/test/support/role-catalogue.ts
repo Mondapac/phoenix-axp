@@ -11,6 +11,14 @@ import type {
 
 const declare = (key: string, scope: PermissionScope, isProtected: boolean) =>
   definePermission(key.split('.')[0]!, { key, scope, protected: isProtected });
+/** A key over run-time definitions (ADR-0024 decision 2). */
+const qualified = (key: string) =>
+  definePermission(key.split('.')[0]!, {
+    key,
+    scope: 'site',
+    protected: false,
+    qualifier: 'definition',
+  });
 
 const DECLARATIONS = [
   declare('identity.accounts.view', 'tenant', false),
@@ -20,6 +28,8 @@ const DECLARATIONS = [
   declare('content.items.edit', 'site', false),
   declare('content.items.publish', 'site', false),
   declare('platform.tenants.manage', 'platform', true),
+  qualified('records.item.read'),
+  qualified('records.item.update'),
 ];
 
 export const testCatalogue: KeyCatalogue = {

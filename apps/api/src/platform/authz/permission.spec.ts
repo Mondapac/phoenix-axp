@@ -93,3 +93,39 @@ describe('populationOfScope: a scope names who may hold the key (ADR-0004 decisi
     ).toBe('site');
   });
 });
+
+describe('the definition qualifier of a key (ADR-0024 decision 2)', () => {
+  it('keeps the qualifier of a key over run-time definitions, and none otherwise', () => {
+    expect(
+      definePermission('objects', {
+        key: 'objects.record.read',
+        scope: 'site',
+        protected: false,
+        qualifier: 'definition',
+      }).qualifier,
+    ).toBe('definition');
+    expect(
+      'qualifier' in
+        definePermission('content', { key: 'content.page.edit', scope: 'site', protected: false }),
+    ).toBe(false);
+  });
+
+  it('refuses an unknown qualifier and a qualified platform key', () => {
+    expect(() =>
+      definePermission('objects', {
+        key: 'objects.record.read',
+        scope: 'site',
+        protected: false,
+        qualifier: 'site' as never,
+      }),
+    ).toThrow('unknown qualifier');
+    expect(() =>
+      definePermission('objects', {
+        key: 'objects.record.read',
+        scope: 'platform',
+        protected: false,
+        qualifier: 'definition',
+      }),
+    ).toThrow('cannot be qualified');
+  });
+});

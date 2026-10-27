@@ -55,7 +55,17 @@ export interface PermissionDeclaration {
   readonly scope: PermissionScope;
   /** Granted only by the holder of a system role (ADR-0004 decision 7); always written out. */
   readonly protected: boolean;
+  /**
+   * `definition` for a key over run-time definitions (`objects.record.*`,
+   * `forms.submission.*`): a role holds it with a definition qualifier, and the use case checks
+   * `grantCoversDefinition` (ADR-0024 decision 2). Absent for every other key.
+   */
+  readonly qualifier?: PermissionQualifier;
 }
+
+/** The closed list of key qualifiers (ADR-0024 decision 2). */
+export const PERMISSION_QUALIFIERS = ['definition'] as const;
+export type PermissionQualifier = (typeof PERMISSION_QUALIFIERS)[number];
 
 /** Every permission one module declares, as the CI check and the registry read it. */
 export interface PermissionCatalogue {
@@ -80,6 +90,7 @@ export function definePermission(
     readonly key: string;
     readonly scope: PermissionScope;
     readonly protected: boolean;
+    readonly qualifier?: PermissionQualifier;
   },
 ): PermissionDeclaration {
   const { key, scope } = declaration;
@@ -97,7 +108,23 @@ export function definePermission(
   if (typeof declaration.protected !== 'boolean') {
     throw new PermissionDeclarationError(`Permission "${key}" must state protected`);
   }
-  return Object.freeze({ key: key as PermissionKey, scope, protected: declaration.protected });
+  const { qualifier } = declaration;
+  if (qualifier === undefined) {
+    return Object.freeze({ key: key as PermissionKey, scope, protected: declaration.protected });
+  }
+  if (!(PERMISSION_QUALIFIERS as readonly unknown[]).includes(qualifier)) {
+    throw new PermissionDeclarationError(`Permission "${key}" has an unknown qualifier`);
+  }
+  // Definitions belong to a tenant's sites: a platform key has none to qualify.
+  if (scope === 'platform') {
+    throw new PermissionDeclarationError(`Platform permission "${key}" cannot be qualified`);
+  }
+  return Object.freeze({
+    key: key as PermissionKey,
+    scope,
+    protected: declaration.protected,
+    qualifier,
+  });
 }
 
 /**

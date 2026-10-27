@@ -5,6 +5,7 @@ import { AUDIT_WRITER, type AuditWriter } from '../../platform/audit/audit-write
 import {
   AUTHENTICATOR,
   AUTHORISATION_CHECK,
+  FIELD_RULE_READER,
   PermissionRegistry,
   registerPermissions,
   SITE_ANCESTRY_READER,
@@ -20,13 +21,14 @@ import { registerJobsFrom } from '../../platform/scheduler/job-registry';
 import { UNIT_OF_WORK, type UnitOfWork } from '../../platform/unit-of-work/unit-of-work';
 import { ACCOUNT_REPOSITORY, type AccountRepository } from './application/account.repository';
 import { IdentityAuthorisationCheck } from './application/access/identity-authorisation-check';
+import { IdentityFieldRuleReader } from './application/access/identity-field-rule-reader';
 import { SessionAuthenticator } from './application/access/session-authenticator';
 import { DirectorySyncRunner } from './application/directory-sync-runner';
 import {
   DIRECTORY_SYNC_REPOSITORY,
   type DirectorySyncRepository,
 } from './application/directory-sync.repository';
-import { ROLE_REPOSITORY } from './application/roles/role.repository';
+import { ROLE_REPOSITORY, type RoleRepository } from './application/roles/role.repository';
 import { SESSION_REPOSITORY, type SessionRepository } from './application/session.repository';
 import { SIGN_IN_FLOWS, SignInFlows } from './application/sign-in-flow';
 import {
@@ -36,6 +38,8 @@ import {
 import { STAFF_DIRECTORY, type StaffDirectory } from './application/staff-directory';
 import { AssignRole } from './application/use-cases/assign-role.use-case';
 import { BootstrapTenantAdministrator } from './application/use-cases/bootstrap-tenant-administrator.use-case';
+import { ChangeRoleDefinitionScope } from './application/use-cases/change-role-definition-scope.use-case';
+import { ChangeRoleFieldRules } from './application/use-cases/change-role-field-rules.use-case';
 import { ChangeRolePermissions } from './application/use-cases/change-role-permissions.use-case';
 import { CreateRole } from './application/use-cases/create-role.use-case';
 import { ListAccountRoleAssignments } from './application/use-cases/list-account-role-assignments.use-case';
@@ -53,6 +57,7 @@ import { SyncDirectoryAccounts } from './application/use-cases/sync-directory-ac
 import { UpdateDirectorySyncInterval } from './application/use-cases/update-directory-sync-interval.use-case';
 import { ViewDirectorySync } from './application/use-cases/view-directory-sync.use-case';
 import { ViewOwnAccount } from './application/use-cases/view-own-account.use-case';
+import { ViewRoleFieldRules } from './application/use-cases/view-role-field-rules.use-case';
 import { IDENTITY_PERMISSIONS } from './contracts/permissions';
 import { IDENTITY_AUDIT_ACTIONS } from './domain/audit-actions';
 import { KeycloakDirectory, UnconfiguredDirectory } from './infrastructure/keycloak-directory';
@@ -70,10 +75,11 @@ import { StaffAccountsController } from './presentation/staff-accounts.controlle
 import { StaffSignInController } from './presentation/staff-sign-in.controller';
 
 const SESSIONS = { provide: SESSION_REPOSITORY, useClass: PrismaSessionRepository };
+const ROLE_RECORDS = { provide: ROLE_REPOSITORY, useClass: PrismaRoleRepository };
 
 /**
- * The identity module's answers to platform/authz: the `AUTHENTICATOR` of the ActorGuard and the
- * `AUTHORISATION_CHECK` of the UseCaseGate. Passed to `AuthzModule.register` by app.module.ts,
+ * The identity module's answers to platform/authz: the `AUTHENTICATOR` of the ActorGuard, the
+ * `AUTHORISATION_CHECK` of the UseCaseGate and the `FIELD_RULE_READER` of the FieldPolicy. Passed to `AuthzModule.register` by app.module.ts,
  * so platform/ imports no module; it needs only the global persistence, clock and permission
  * registry providers.
  */
@@ -96,8 +102,20 @@ const SESSIONS = { provide: SESSION_REPOSITORY, useClass: PrismaSessionRepositor
         clock: Clock,
       ) => new IdentityAuthorisationCheck(unitOfWork, sessions, permissions, clock),
     },
+    ROLE_RECORDS,
+    {
+      provide: FIELD_RULE_READER,
+      inject: [UNIT_OF_WORK, SESSION_REPOSITORY, ROLE_REPOSITORY, PermissionRegistry, CLOCK],
+      useFactory: (
+        unitOfWork: UnitOfWork,
+        sessions: SessionRepository,
+        roles: RoleRepository,
+        permissions: PermissionRegistry,
+        clock: Clock,
+      ) => new IdentityFieldRuleReader(unitOfWork, sessions, roles, permissions, clock),
+    },
   ],
-  exports: [AUTHENTICATOR, AUTHORISATION_CHECK],
+  exports: [AUTHENTICATOR, AUTHORISATION_CHECK, FIELD_RULE_READER],
 })
 export class IdentityAccessModule {}
 
@@ -138,7 +156,7 @@ const CATALOGUE = PermissionRegistry;
     SESSIONS,
     { provide: ACCOUNTS, useClass: PrismaAccountRepository },
     { provide: DIRECTORY_SYNC_REPOSITORY, useClass: PrismaDirectorySyncRepository },
-    { provide: ROLES, useClass: PrismaRoleRepository },
+    ROLE_RECORDS,
     {
       provide: SIGN_IN_FLOWS,
       inject: [APP_CONFIG],
@@ -215,6 +233,9 @@ const CATALOGUE = PermissionRegistry;
     useCase(ListPermissions, [CATALOGUE]),
     useCase(CreateRole, [UNIT_OF_WORK, ROLES, CATALOGUE, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
     useCase(ChangeRolePermissions, [UNIT_OF_WORK, ROLES, CATALOGUE, AUDIT_WRITER, CLOCK]),
+    useCase(ChangeRoleDefinitionScope, [UNIT_OF_WORK, ROLES, CATALOGUE, AUDIT_WRITER, CLOCK]),
+    useCase(ViewRoleFieldRules, [UNIT_OF_WORK, ROLES]),
+    useCase(ChangeRoleFieldRules, [UNIT_OF_WORK, ROLES, CATALOGUE, AUDIT_WRITER, CLOCK]),
     useCase(ListAccountRoleAssignments, [UNIT_OF_WORK, ACCOUNTS, ROLES]),
     useCase(AssignRole, [
       UNIT_OF_WORK,

@@ -24,8 +24,10 @@ import {
   type SiteNotFound,
 } from '../failures';
 import {
+  definitionAccessOf,
   effectiveKeysOf,
   grantingActorsOf,
+  heldDefinitionGrantsOf,
   heldKeysOf,
   type KeyCatalogue,
 } from '../roles/acting-assignments';
@@ -136,6 +138,7 @@ export class AssignRole extends UseCase<
         const role = await this.roles.find(tenant, input.roleId);
         if (role === null) return err(ROLE_NOT_FOUND);
 
+        const targetGrants = await this.roles.assignmentsOf(tenant, account.id);
         const decided = decideGrant(
           grantingActorsOf(
             actor.accountId,
@@ -149,12 +152,14 @@ export class AssignRole extends UseCase<
             scope: role.scope,
             kind: role.kind,
             effectiveKeys: effectiveKeysOf(role, this.catalogue),
+            definitionAccess: definitionAccessOf(role, this.catalogue),
           },
           {
             accountId: account.id,
             population: account.population,
-            effectiveKeys: heldKeysOf(
-              await this.roles.assignmentsOf(tenant, account.id),
+            effectiveKeys: heldKeysOf(targetGrants, account.population, this.catalogue),
+            definitionGrants: heldDefinitionGrantsOf(
+              targetGrants,
               account.population,
               this.catalogue,
             ),

@@ -7,19 +7,21 @@ import { Module, type DynamicModule, type Provider, type Type } from '@nestjs/co
 import { TenantRegistry } from '../tenant-config/tenant-registry';
 import { AUTHENTICATOR } from './authenticator';
 import { AUTHORISATION_CHECK, type AuthorisationCheck } from './authorisation-check';
+import { FIELD_RULE_READER } from './field-policy';
 import { PERMISSION_KEY_LOOKUP } from './permission-key-lookup';
 import { PermissionRegistry } from './permission-registry';
 import { FailClosedAuthenticator } from './placeholders/fail-closed-authenticator';
 import { FailClosedAuthorisationCheck } from './placeholders/fail-closed-authorisation-check';
+import { FailClosedFieldRuleReader } from './placeholders/fail-closed-field-rule-reader';
 import { FailClosedSiteAncestryReader } from './placeholders/fail-closed-site-ancestry-reader';
 import { SITE_ANCESTRY_READER } from './site-scope';
 import { createUseCaseGate } from './use-case-gate';
 import { USE_CASE_GATE } from './use-case-gate.token';
 
 /**
- * Where the three ports of `platform/authz` come from. Each is a Nest module that provides and
- * exports the token (`AUTHENTICATOR` and `AUTHORISATION_CHECK` from identity,
- * `SITE_ANCESTRY_READER` from tenancy),
+ * Where the four ports of `platform/authz` come from. Each is a Nest module that provides and
+ * exports the token (`AUTHENTICATOR`, `AUTHORISATION_CHECK` and `FIELD_RULE_READER` from
+ * identity, `SITE_ANCESTRY_READER` from tenancy),
  * passed by `app.module.ts`, so `platform/` imports no module. Absent, the fail-closed
  * placeholder is bound, and a production start is refused (ADR-0010 decision 4).
  */
@@ -27,6 +29,7 @@ export interface AuthzBindings {
   readonly authentication?: Type;
   readonly authorisation?: Type;
   readonly siteAncestry?: Type;
+  readonly fieldRules?: Type;
 }
 
 /**
@@ -58,6 +61,14 @@ export class AuthzModule {
       placeholders.push({ provide: AUTHORISATION_CHECK, useClass: FailClosedAuthorisationCheck });
     } else if (bindings.authorisation !== bindings.authentication) {
       imports.push(bindings.authorisation);
+    }
+    // Read by the use cases of definition modules (ADR-0024), so exported either way.
+    if (bindings.fieldRules === undefined) {
+      placeholders.push({ provide: FIELD_RULE_READER, useClass: FailClosedFieldRuleReader });
+      reexported.push(FIELD_RULE_READER);
+    } else {
+      if (!imports.includes(bindings.fieldRules)) imports.push(bindings.fieldRules);
+      if (!reexported.includes(bindings.fieldRules)) reexported.push(bindings.fieldRules);
     }
     if (bindings.siteAncestry === undefined) {
       placeholders.push({ provide: SITE_ANCESTRY_READER, useClass: FailClosedSiteAncestryReader });
