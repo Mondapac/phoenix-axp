@@ -9,8 +9,10 @@ Phase 0 holds the skeleton and the platform foundations: tenant and call context
 ids, configuration, logging and HTTP hardening, health, and persistence with three tenant
 isolation layers (a Prisma tenant guard, PostgreSQL row-level security set by the unit of work,
 and silo deployments through `HOSTED_TENANTS`). Phase 1 adds use-case authorisation
-(`platform/authz`), domain events with a per-module outbox and inbox, and the scheduler; the
-worker role runs the outbox relay, the event dispatcher and the scheduled jobs. Business modules come later; the platform pieces
+(`platform/authz`), domain events with a per-module outbox and inbox, the scheduler, and an
+append-only audit log with a per-tenant hash chain (`platform/audit`); the worker role runs
+the outbox relay, the event dispatcher and the scheduled jobs, the audit sealer and verifier
+among them. Business modules come later; the platform pieces
 that wait for their first consumer are listed in [docs/platform-deferred.md](docs/platform-deferred.md).
 
 ## Requirements
@@ -53,6 +55,12 @@ English/Gregorian in America/Toronto).
 | `pnpm db:check-reversible`| Every migration goes up, down and up again                      |
 | `pnpm build`              | Builds the kernel and the API, then checks the built kernel     |
 | `pnpm db:migrate:dev`     | Creates a migration from the schema; add its `down.sql` by hand |
+
+To verify a tenant's audit chain by hand (after `pnpm build`; exit 0 clean, 1 refused, 2 findings):
+
+```sh
+APP_ROLE=api node apps/api/dist/audit-verify.js --tenant <id> [--full]
+```
 
 ## Layout
 

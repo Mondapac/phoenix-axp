@@ -8,7 +8,8 @@ trigger that brings each one in. When a trigger fires, port the component from t
 
 | Component | What it is | Trigger |
 | --- | --- | --- |
-| `audit` (ADR-09) | `platform.audit_log` (append-only by trigger), `AuditWriter` in the use-case transaction with a closed action catalogue, the hash-chain sealer in the worker, `audit-verify` | The first state-changing use case of a business module (and before any customer pilot) |
+| audit trail reader | Mondapac's `AuditTrailReader` (`platform/audit/audit-trail-reader.ts` and its Prisma reader): a paged, permission-checked read of a target's audit rows for an admin screen | The first screen or API that shows an audit trail |
+| first `AUDIT_WRITER` binding | `PersistenceModule.auditWriterFor('<module>')` in a module's providers, its actions registered with `AuditActionCatalogue`, and the checked-in `test/contracts/audit-action-catalogue.snapshot.json` | The first state-changing use case of a business module (identity's role seed and grants) |
 | identity integration (ADR-03) | The `Authenticator` building `AuthenticatedActor` from a Keycloak session; `ActorGuard` accepts no session until then and answers 401 `session.invalid` to any `Authorization` header | The identity module, Phase 1 |
 | `storage` (ADR-11) | The `ObjectStore` port and its SeaweedFS S3 adapter (SeaweedFS is already in `docker-compose.yml`) | The first feature that stores a file |
 | `subject-keys` | Per-subject encryption keys for personal data fields, the key wrapper and its port | The first personal data field that must be erasable (identity or forms) |
@@ -86,3 +87,28 @@ trigger that brings each one in. When a trigger fires, port the component from t
     the change that adds the first module outbox, together with its migration's tables.
   - `outbox` and `inbox` tables are reserved to `platform/persistence/outbox/` (the Prisma
     boundary check), and every module outbox must have the same columns.
+- **`audit` (slice 1.3).** Ported from Mondapac `platform/audit`, `platform/persistence/audit`
+  and the kernel's `canonical-json`, `content-hash` and `audit-action`, Market adapted to
+  Tenant, with these changes:
+  - `platform.audit_log`, `audit_log_seal` and `audit_chain_checkpoint` are under row-level
+    security like every tenant table: the application login sees and writes only the rows of
+    `app.tenant_id`. It holds `SELECT, INSERT` only, and a trigger refuses every `UPDATE`,
+    `DELETE` and `TRUNCATE` (the owner too, unless it turns the user triggers off).
+  - The chain is per tenant: one chain, one watermark and one checkpoint series per tenant;
+    the sealer and the verifier run per hosted tenant in a unit of that tenant.
+  - A row carries one `tenant_id` and no market or "acting as" column (Mondapac's
+    `market_id` and `acting_as_id`); neither is hashed. The hash tags are `PHOENIX-AUDIT-*-v1`,
+    so no Mondapac golden hash applies; the golden values were computed independently.
+  - No `money` value kind (no money in Phoenix yet). Personal data stays out of the row: the
+    closed value kinds hold ids, enums, counts, instants, booleans and permission keys only,
+    and the actor is an id with its type.
+  - Timestamps are `timestamptz(3)`, so the column itself keeps whole milliseconds and
+    Mondapac's `occurred_at` precision CHECK is not ported; the writer cuts the clock to
+    milliseconds.
+  - `audit-verify` does not check for bound placeholders (two are bound until identity and
+    tenancy exist, and the command only reads).
+  - The writer is bound by no module yet (no business module exists), so the action-catalogue
+    contract test holds an empty snapshot and checks the catalogue mechanism only.
+  - `audit_log`, `audit_log_seal` and `audit_chain_checkpoint` are reserved to
+    `platform/persistence/audit/` (the Prisma boundary check), and a module reaches the writer
+    only through the `AUDIT_WRITER` port, never the Prisma writer (dependency-cruiser).

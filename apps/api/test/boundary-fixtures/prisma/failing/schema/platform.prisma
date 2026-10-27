@@ -5,3 +5,14 @@ model PlatformProbe {
 
   @@schema("platform")
 }
+
+// Allowed: an audit model, reserved to platform/persistence/audit/ by the source check.
+model AuditLog {
+  tenantId String @map("tenant_id")
+  id       String @db.Uuid
+  action   String
+
+  @@id([tenantId, id])
+  @@map("audit_log")
+  @@schema("platform")
+}

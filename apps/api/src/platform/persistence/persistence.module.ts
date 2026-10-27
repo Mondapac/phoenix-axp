@@ -1,6 +1,9 @@
 import { Global, Module, type FactoryProvider } from '@nestjs/common';
 import type { Clock, IdGenerator } from '@phoenix/shared-kernel';
 import { MODEL_MAP } from '../../generated/model-map';
+import { AuditActionCatalogue } from '../audit/audit-action-catalogue';
+import { AUDIT_CHAIN_STORE, type AuditChainStore } from '../audit/audit-chain-store';
+import { AUDIT_WRITER, type AuditWriter } from '../audit/audit-writer';
 import { PERMISSION_KEY_LOOKUP, type PermissionKeyLookup } from '../authz/permission-key-lookup';
 import { CLOCK } from '../clock/clock.module';
 import type { AppConfig } from '../config/app-config';
@@ -16,6 +19,8 @@ import { TenantRegistry } from '../tenant-config/tenant-registry';
 import { TenantContextFactory } from '../tenant-context/tenant-context.factory';
 import { UNIT_OF_WORK } from '../unit-of-work/unit-of-work';
 import { AdvisoryJobLock } from './advisory-job-lock';
+import { PrismaAuditChainStore } from './audit/prisma-audit-chain-store';
+import { createAuditWriter } from './audit/prisma-audit-writer';
 import { DatabaseProbe } from './database-probe';
 import { createGuardedClient, GUARDED_CLIENT, type GuardedClient } from './guarded-client';
 import type { ModelMap } from './model-map';
@@ -131,5 +136,34 @@ export class PersistenceModule {
           module,
         ),
     };
+  }
+
+  /**
+   * Ported from Mondapac. The one line of a module's Nest module that binds its own audit
+   * writer (Phoenix ADR-0015 decision 2): `providers: [PersistenceModule.auditWriterFor('content')]`.
+   * Like the outbox writer, there is no injectable factory, so a module reaches only its own
+   * writer and records only the actions of its own catalogue entries. A module never exports
+   * `AUDIT_WRITER`.
+   */
+  static auditWriterFor(owner: string): FactoryProvider<AuditWriter> {
+    return {
+      provide: AUDIT_WRITER,
+      inject: [AuditActionCatalogue, ID_GENERATOR, CLOCK, PERMISSION_KEY_LOOKUP],
+      useFactory: (
+        catalogue: AuditActionCatalogue,
+        ids: IdGenerator,
+        clock: Clock,
+        permissionKeys: PermissionKeyLookup,
+      ) => createAuditWriter(owner, { catalogue, ids, clock, permissionKeys }),
+    };
+  }
+
+  /**
+   * The chain tables of the audit, bound only by `AuditModule` for the sealer and the verifier:
+   * the store is not exported, so no module reads the chain tables. It writes through the open
+   * unit's audit view (`auditTx`), like the writer.
+   */
+  static auditChainStore(): FactoryProvider<AuditChainStore> {
+    return { provide: AUDIT_CHAIN_STORE, useFactory: () => new PrismaAuditChainStore() };
   }
 }

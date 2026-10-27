@@ -5,6 +5,7 @@ export default async function globalTeardown(): Promise<void> {
   const names = [
     process.env.TEST_LOCKING_DATABASE_NAME,
     process.env.TEST_DELIVERY_DATABASE_NAME,
+    process.env.TEST_AUDIT_DATABASE_NAME,
     process.env.TEST_DATABASE_NAME,
   ].filter((name): name is string => name !== undefined && name !== '');
   if (names.length === 0) return;

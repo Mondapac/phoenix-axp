@@ -53,6 +53,7 @@ export default async function globalSetup(): Promise<void> {
 
   await createCopy(name, 'LOCKING');
   await createCopy(name, 'DELIVERY');
+  await createCopy(name, 'AUDIT');
 }
 
 /**
@@ -60,10 +61,12 @@ export default async function globalSetup(): Promise<void> {
  * - `locking`: unit-of-work.db-spec.ts adds test-only triggers that raise serialisation
  *   failures, so no other file meets them.
  * - `delivery`: event-path.db-spec.ts relays and dispatches every pending row of a tenant, so
- *   no other file's outbox or delivery rows live there (ported from Mondapac's `delivery` copy). Copied before any test connects, since a template
- * must have no other session.
+ *   no other file's outbox or delivery rows live there (ported from Mondapac's `delivery` copy).
+ * - `audit`: platform-audit-chain.db-spec.ts seals every unsealed audit row of a tenant and
+ *   writes rows the verifier must find, so no other file's audit rows live there.
+ * Copied before any test connects, since a template must have no other session.
  */
-async function createCopy(template: string, kind: 'LOCKING' | 'DELIVERY'): Promise<void> {
+async function createCopy(template: string, kind: 'LOCKING' | 'DELIVERY' | 'AUDIT'): Promise<void> {
   const name = `${template}_${kind.toLowerCase()}`;
   const admin = new Client({ connectionString: migrationDatabaseUrl() });
   await admin.connect();

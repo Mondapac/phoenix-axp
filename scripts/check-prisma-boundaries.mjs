@@ -24,6 +24,8 @@
 // models mapped to the tables in OUTBOX_TABLES of any module, and those models are reserved to
 // that folder: a module writes its outbox through the OutboxWriter and its inbox through
 // UnitOfWork.runOnce, never by name.
+// Likewise (ported from Mondapac) the platform models mapped to AUDIT_TABLES are reserved to
+// platform/persistence/audit/: the AuditWriter and the chain store, through `auditTx(tenant)`.
 // Raw SQL: raw SQL members (`$queryRaw`, `$executeRaw` and their Unsafe/Typed forms) and the
 // `pg` driver are used only by the files in RAW_SQL_FILES and DRIVER_FILES. A reviewed raw-read
 // port for modules (Mondapac ADR-0030) is deferred; see docs/platform-deferred.md.
@@ -34,12 +36,16 @@ import path from 'node:path';
 import ts from 'typescript';
 import { readPrismaSchema } from './prisma-schema.mjs';
 
-/** The calls whose result is a model view: `PrismaService.tx(tenant)`. */
-const VIEW_CALLS = ['tx'];
+/** The calls whose result is a model view: `PrismaService.tx(tenant)` and `auditTx(tenant)`. */
+const VIEW_CALLS = ['tx', 'auditTx'];
 
 /** The tables reserved to platform/persistence/outbox/ (the named exception). */
 const OUTBOX_TABLES = ['outbox', 'inbox'];
 const OUTBOX_FOLDER = 'platform/persistence/outbox/';
+
+/** The platform tables reserved to platform/persistence/audit/ (Phoenix ADR-0015). */
+const AUDIT_TABLES = ['audit_log', 'audit_log_seal', 'audit_chain_checkpoint'];
+const AUDIT_FOLDER = 'platform/persistence/audit/';
 
 /** The only files (relative to the source root) that may run raw SQL. */
 const RAW_SQL_FILES = new Set([
@@ -228,19 +234,24 @@ function checkModelOwnership(root) {
     const owner = moduleOfFile(relative);
     if (owner === undefined) continue;
     const inOutboxFolder = relative.startsWith(OUTBOX_FOLDER);
+    const inAuditFolder = relative.startsWith(AUDIT_FOLDER);
     const source = parse(file);
     const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
 
     const report = (node, model, how) => {
       const reserved = OUTBOX_TABLES.includes(model.table);
-      if (reserved ? inOutboxFolder : model.module === owner) return;
+      const audit = model.module === 'platform' && AUDIT_TABLES.includes(model.table);
+      const allowed = reserved ? inOutboxFolder : audit ? inAuditFolder : model.module === owner;
+      if (allowed) return;
       const why = reserved
         ? `is reserved to ${OUTBOX_FOLDER} (write it through OutboxWriter)`
-        : `belongs to module "${model.module}"`;
+        : audit
+          ? `is reserved to ${AUDIT_FOLDER} (write it through AuditWriter)`
+          : `belongs to module "${model.module}"`;
       found.push(`${relative}:${lineOf(node)}: ${how} names model ${model.name}, which ${why}`);
     };
 
-    /** Whether `node` is a `tx(...)` call, under any parentheses. */
+    /** Whether `node` is a `tx(...)` or `auditTx(...)` call, under any parentheses. */
     const isViewCall = (node) => {
       while (node && ts.isParenthesizedExpression(node)) node = node.expression;
       if (!node || !ts.isCallExpression(node)) return false;

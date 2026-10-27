@@ -61,3 +61,98 @@ model EventDelivery {
   @@map("event_delivery")
   @@schema("platform")
 }
+
+/// One audited action (Phoenix ADR-0015; ported from Mondapac platform.prisma, its
+/// platform-audit design 3 and data design 11). Append-only: a trigger refuses UPDATE, DELETE
+/// and TRUNCATE for every role, and the application role has INSERT and SELECT only. Written
+/// only by the AuditWriter of platform/persistence/audit/, inside the use case's transaction.
+/// Values are ids and closed codes only: no personal data (ADR-0015 decision 2). The CHECKs,
+/// the triggers, the grants and the row-level security policy are hand-written in the migration.
+model AuditLog {
+  /// The tenant (ADR-0002): mandatory, no default, first in every key.
+  tenantId      String         @map("tenant_id") @db.VarChar(32)
+  /// UUIDv7 from the IdGenerator.
+  id            String         @db.Uuid
+  /// Instant of the audited action, from the injected Clock, UTC, in whole milliseconds.
+  occurredAt    DateTime       @map("occurred_at") @db.Timestamptz(3)
+  /// USER = an authenticated actor (actor_id required); SYSTEM = a job, a worker or a consumed
+  /// event; ANONYMOUS = a request with no session, naming its bound subject in after.boundSubjectId.
+  actorType     String         @map("actor_type") @db.VarChar(16)
+  /// The account id of an authenticated actor. A plain id, no foreign key across schemas.
+  actorId       String?        @map("actor_id") @db.Uuid
+  /// `<module>.<subject>.<verb>` or `platform.<component>[.<subject>].<verb>`, from a closed catalogue.
+  action        String         @db.VarChar(128)
+  /// `<owner>.<type>`: the aggregate or record that changed.
+  targetType    String         @map("target_type") @db.VarChar(128)
+  /// The target's id as text: a UUID or a declared natural key.
+  targetId      String         @map("target_id") @db.VarChar(128)
+  /// State before the change (null for a creation): declared fields only.
+  before        Json?          @db.JsonB
+  /// State after the change (null for a deletion): declared fields only.
+  after         Json?          @db.JsonB
+  /// Correlation id of the request, job run or event that caused the action.
+  correlationId String         @map("correlation_id") @db.VarChar(128)
+  /// The seals of this row, at most one per chain epoch.
+  seals         AuditLogSeal[]
+
+  @@id([tenantId, id], map: "audit_log_pkey")
+  /// The sealer's keyset on (occurred_at, id); referenced by the seal's foreign key.
+  @@unique([tenantId, occurredAt, id], map: "audit_log_tenant_id_occurred_at_id_key")
+  /// The audit history of one target, newest first.
+  @@index([tenantId, targetType, targetId, occurredAt], map: "audit_log_tenant_id_target_type_target_id_occurred_at_idx")
+  /// What one actor did.
+  @@index([tenantId, actorId, occurredAt], map: "audit_log_tenant_id_actor_id_occurred_at_idx")
+  @@map("audit_log")
+  @@schema("platform")
+}
+
+/// The seal of one audit row in its tenant's hash chain (Phoenix ADR-0015 decision 4; ported
+/// from Mondapac). Append-only like the log. One chain per tenant and epoch. No personal data.
+model AuditLogSeal {
+  /// The tenant (ADR-0002): mandatory, no default, first in every key.
+  tenantId        String   @map("tenant_id") @db.VarChar(32)
+  /// Chain epoch, 1 from the first seal. No default.
+  epoch           Int
+  /// 1, 2, 3, ... per tenant and epoch.
+  chainSeq        BigInt   @map("chain_seq")
+  /// The sealed audit row.
+  auditLogId      String   @map("audit_log_id") @db.Uuid
+  /// Copy of the row's occurred_at, kept equal by the foreign key.
+  auditOccurredAt DateTime @map("audit_occurred_at") @db.Timestamptz(3)
+  /// 32 bytes: SHA-256 of the canonical row.
+  rowHash         Bytes    @map("row_hash")
+  /// 32 bytes: SHA-256 of the link, with hash_version and epoch in its input.
+  chainHash       Bytes    @map("chain_hash")
+  /// Sealed below the watermark; part of the chain hash.
+  late            Boolean
+  /// 1 today.
+  hashVersion     Int      @map("hash_version") @db.SmallInt
+  /// From the sealer's Clock; not part of any hash.
+  sealedAt        DateTime @map("sealed_at") @db.Timestamptz(3)
+  auditLog        AuditLog @relation(fields: [tenantId, auditOccurredAt, auditLogId], references: [tenantId, occurredAt, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([tenantId, epoch, chainSeq], map: "audit_log_seal_pkey")
+  @@unique([tenantId, epoch, auditOccurredAt, auditLogId], map: "audit_log_seal_tenant_id_epoch_occurred_at_id_key")
+  @@map("audit_log_seal")
+  @@schema("platform")
+}
+
+/// A chain head at checkpoint time, also sent to the anchor (ported from Mondapac). Append-only
+/// like the seal; no foreign key to the seal. No personal data.
+model AuditChainCheckpoint {
+  /// The tenant (ADR-0002): mandatory, no default, first in every key.
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  /// The epoch of the checkpointed seal.
+  epoch       Int
+  /// The head at checkpoint time.
+  chainSeq    BigInt   @map("chain_seq")
+  /// 32 bytes: the chain_hash of that seal.
+  chainHash   Bytes    @map("chain_hash")
+  hashVersion Int      @map("hash_version") @db.SmallInt
+  /// From the sealer's Clock.
+  createdAt   DateTime @map("created_at") @db.Timestamptz(3)
+
+  @@id([tenantId, epoch, chainSeq], map: "audit_chain_checkpoint_pkey")
+  @@map("audit_chain_checkpoint")
+  @@schema("platform")
+}

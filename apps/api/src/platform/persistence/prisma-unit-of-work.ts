@@ -20,7 +20,12 @@ import {
   type UnitOfWorkOptions,
 } from '../unit-of-work/unit-of-work';
 import { classifyConflict } from './conflict-classifier';
-import { modelDelegatesOf, type GuardedClient, type TenantTransaction } from './guarded-client';
+import {
+  auditDelegatesOf,
+  modelDelegatesOf,
+  type GuardedClient,
+  type TenantTransaction,
+} from './guarded-client';
 import type { ModelMap } from './model-map';
 import {
   lockTimeoutStatement,
@@ -139,7 +144,12 @@ export class PrismaUnitOfWork implements UnitOfWork {
       let unit: OpenUnit | undefined;
       try {
         return await this.client.$transaction(async (transaction) => {
-          unit = new OpenUnit(tenant, readOnly, modelDelegatesOf(transaction, this.map));
+          unit = new OpenUnit(
+            tenant,
+            readOnly,
+            modelDelegatesOf(transaction, this.map),
+            auditDelegatesOf(transaction, this.map),
+          );
           const current = unit;
           const raw = rawRunnerOf(transaction);
           try {

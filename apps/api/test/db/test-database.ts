@@ -38,7 +38,9 @@ function exported(
     | 'TEST_LOCKING_DATABASE_URL'
     | 'TEST_LOCKING_OWNER_DATABASE_URL'
     | 'TEST_DELIVERY_DATABASE_URL'
-    | 'TEST_DELIVERY_OWNER_DATABASE_URL',
+    | 'TEST_DELIVERY_OWNER_DATABASE_URL'
+    | 'TEST_AUDIT_DATABASE_URL'
+    | 'TEST_AUDIT_OWNER_DATABASE_URL',
 ): string {
   const url = process.env[name];
   if (!url) {
@@ -81,4 +83,16 @@ export function deliveryTestDatabaseUrl(): string {
 
 export function deliveryOwnerTestDatabaseUrl(): string {
   return exported('TEST_DELIVERY_OWNER_DATABASE_URL');
+}
+
+/**
+ * The copy of the run database that platform-audit-chain.db-spec.ts seals and verifies
+ * (global-setup.ts), as the application login and as its owner.
+ */
+export function auditTestDatabaseUrl(): string {
+  return exported('TEST_AUDIT_DATABASE_URL');
+}
+
+export function auditOwnerTestDatabaseUrl(): string {
+  return exported('TEST_AUDIT_OWNER_DATABASE_URL');
 }

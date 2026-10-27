@@ -175,8 +175,10 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'module-public-api-only: src/modules/alpha/application/reaches-into-module.ts',
         'modules-reach-authz-through-its-barrel: src/modules/alpha/application/reaches-use-case-gate.ts',
         'no-circular: src/modules/alpha/domain/circular-a.ts',
+        'persistence-internals-are-private: src/modules/alpha/application/reaches-audit-writer.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-service.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-via-barrel.ts',
+        'persistence-root-is-private: src/modules/alpha/infrastructure/reaches-audit-writer.ts',
         'persistence-root-is-private: src/modules/alpha/infrastructure/uses-prisma-root.ts',
         'platform-does-not-import-modules: src/platform/imports-module-index.ts',
         'platform-does-not-import-modules: src/platform/reaches-into-module.ts',
@@ -281,7 +283,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ).toEqual({ status: 0, problems: [] });
     });
 
-    it('accepts the passing fixture: keys with tenantId (also not leading and name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, raw SQL and the driver in the platform files, identical outboxes, an inbox and the outbox exception', () => {
+    it('accepts the passing fixture: keys with tenantId (also not leading and name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, raw SQL and the driver in the platform files, identical outboxes, an inbox, the outbox exception and the audit folder', () => {
       expect(
         checkPrisma(
           path.join(PRISMA_FIXTURES, 'passing/schema'),
@@ -317,6 +319,10 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'modules/alpha/infrastructure/hides-model.ts:10: destructured property "platformProbe" names model PlatformProbe, which belongs to module "platform"',
           'modules/alpha/infrastructure/hides-model.ts:11: a computed key on a tx(...) result hides the model it names; name the model as a property',
           'modules/alpha/infrastructure/hides-model.ts:12: a computed key on a tx(...) result hides the model it names; name the model as a property',
+          // The audit models are reserved to platform/persistence/audit/ (the AuditWriter).
+          'modules/alpha/infrastructure/hides-model.ts:13: destructured property "auditLog" names model AuditLog, which is reserved to platform/persistence/audit/ (write it through AuditWriter)',
+          'modules/alpha/infrastructure/hides-model.ts:14: property ".auditLog" names model AuditLog, which is reserved to platform/persistence/audit/ (write it through AuditWriter)',
+          'platform/persistence/reaches-module.ts:10: property ".auditLog" names model AuditLog, which is reserved to platform/persistence/audit/ (write it through AuditWriter)',
           'modules/alpha/infrastructure/reaches-beta.ts:2: import of "BetaThing" names model BetaThing, which belongs to module "beta"',
           'modules/alpha/infrastructure/reaches-beta.ts:3: import "../../../generated/prisma/models/BetaThing" names model BetaThing, which belongs to module "beta"',
           'modules/alpha/infrastructure/reaches-beta.ts:3: import of "BetaThingModel" names model BetaThing, which belongs to module "beta"',
@@ -324,7 +330,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'modules/alpha/infrastructure/reaches-beta.ts:8: property ["betaThing"] names model BetaThing, which belongs to module "beta"',
           'modules/alpha/infrastructure/reaches-beta.ts:9: property ".betaThing" names model BetaThing, which belongs to module "beta"',
           'modules/beta/infrastructure/reaches-alpha.ts:5: property ".alphaParent" names model AlphaParent, which belongs to module "alpha"',
-          'platform/persistence/reaches-module.ts:8: property ".alphaParent" names model AlphaParent, which belongs to module "alpha"',
+          'platform/persistence/reaches-module.ts:9: property ".alphaParent" names model AlphaParent, which belongs to module "alpha"',
           'modules/alpha/infrastructure/raw-forms.ts:7: raw SQL outside the files of RAW_SQL_FILES',
           'modules/alpha/infrastructure/raw-forms.ts:8: raw SQL outside the files of RAW_SQL_FILES',
           'modules/alpha/infrastructure/raw-forms.ts:9: raw SQL outside the files of RAW_SQL_FILES',
@@ -335,7 +341,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'modules/alpha/infrastructure/raw-forms.ts:14: require/import() needs a string literal specifier (a computed one could load the database driver)',
           'modules/alpha/infrastructure/raw-forms.ts:18: import of the database driver "postgres" outside the files of DRIVER_FILES',
           'modules/alpha/infrastructure/raw-forms.ts:19: import of the database driver "@prisma/adapter-pg" outside the files of DRIVER_FILES',
-          'platform/persistence/reaches-module.ts:9: raw SQL outside the files of RAW_SQL_FILES',
+          'platform/persistence/reaches-module.ts:11: raw SQL outside the files of RAW_SQL_FILES',
           // Every outbox has the same fields; outbox and inbox models are reserved to
           // platform/persistence/outbox/, which reaches nothing else of a module.
           'beta.prisma: BetaOutbox is an outbox whose fields differ from AlphaOutbox',
