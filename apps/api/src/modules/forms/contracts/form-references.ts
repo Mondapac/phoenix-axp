@@ -15,12 +15,15 @@ export const MAX_FORM_REFERENCES = 64;
  * The forms facade for references by key (ADR-0001; slice 2.6: a process revision pins the
  * forms its model names). An in-process read, as the caller: only the forms the caller's
  * `forms.forms.view` grants reach are answered; a key that names no reachable published form
- * is left out of the answer, as if it did not exist. Never call it inside a unit.
+ * is left out of the answer, as if it did not exist. `startKey`, the form that would start a
+ * process, is answered only where the caller also holds `forms.forms.publish`. Never call it
+ * inside a unit.
  */
 export interface FormReferences {
   published(
     context: CallContext,
     keys: readonly string[],
+    startKey?: string,
   ): Promise<Result<readonly PublishedFormReference[], AccessDenied>>;
 }
 

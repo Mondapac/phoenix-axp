@@ -1,5 +1,5 @@
 import type { Temporal } from '@phoenix/shared-kernel';
-import { durationSeconds, timerDurationAllowed } from './bpmn-guard';
+import { timerDurationAllowed } from './bpmn-guard';
 
 /**
  * A command of the core to the engine (ADR-0005 decision 3; ADR-0020 decision 7). Written in
@@ -59,6 +59,8 @@ export type EngineVariables = Readonly<Record<string, EngineVariableValue>>;
 const VARIABLE_NAME = /^[a-z][A-Za-z0-9]{0,63}$/;
 /** A code or an id: no spaces, no free text. */
 const VARIABLE_TEXT = /^[A-Za-z0-9._:-]{1,64}$/;
+/** A value the engine may read as a duration, signed or not: it must be one the guard allows. */
+const DURATION_SHAPED = /^[+-]?P(?:\d|T\d)/;
 /** The core's own variables, set by the bridge only. */
 export const RESERVED_VARIABLE_PREFIX = 'phoenix';
 export const MAX_VARIABLES = 32;
@@ -78,7 +80,7 @@ export function invalidVariable(variables: Readonly<Record<string, unknown>>): s
       (typeof value === 'number' && Number.isSafeInteger(value)) ||
       (typeof value === 'string' &&
         VARIABLE_TEXT.test(value) &&
-        (durationSeconds(value) === null || timerDurationAllowed(value)));
+        (!DURATION_SHAPED.test(value) || timerDurationAllowed(value)));
     if (!valid) return name;
   }
   return null;

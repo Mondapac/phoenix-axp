@@ -27,6 +27,8 @@ export interface InboxTask {
   readonly taskKey: string;
   readonly name: string | null;
   readonly formKey: string | null;
+  /** The form revision the task shows, pinned when its process revision was published. */
+  readonly formRevisionId: Id<'FormRevision'> | null;
   /** `open`, or `completing` while the engine applies the holder's decision. */
   readonly status: string;
   readonly siteId: Id<'Site'> | null;
@@ -45,6 +47,7 @@ export const inboxTaskOf = (task: TaskRecord, now: Temporal.Instant): InboxTask 
   taskKey: task.taskKey,
   name: task.name,
   formKey: task.formKey,
+  formRevisionId: task.formRevisionId,
   status: task.status,
   siteId: task.siteId,
   queueRoleId: task.candidateRoleId,

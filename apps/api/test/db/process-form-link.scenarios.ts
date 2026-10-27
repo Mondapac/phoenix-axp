@@ -91,10 +91,14 @@ export function formLinkScenarios(): void {
       function published(key: string): PublishedFormReference {
         return { key, formId: ids.next<'Form'>(), revisionId: ids.next<'FormRevision'>() };
       }
-      const facadeCalls: { context: CallContext; keys: readonly string[] }[] = [];
+      const facadeCalls: {
+        context: CallContext;
+        keys: readonly string[];
+        startKey: string | undefined;
+      }[] = [];
       const references: FormReferences = {
-        published: (context, keys) => {
-          facadeCalls.push({ context, keys });
+        published: (context, keys, startKey) => {
+          facadeCalls.push({ context, keys, startKey });
           return Promise.resolve(
             ok(Object.values(forms).filter((form) => keys.includes(form.key))),
           );
@@ -266,6 +270,8 @@ export function formLinkScenarios(): void {
         expect(facadeCalls.at(-1)).toEqual({
           context: publisher,
           keys: [forms.request.key, forms.review.key],
+          // The start form is answered only to a publisher of it (security review M2).
+          startKey: forms.request.key,
         });
         const bindings = await rowsOf<object>(
           tenant,
@@ -322,6 +328,27 @@ export function formLinkScenarios(): void {
             rivalKey,
           ]),
         ).toEqual([]);
+        // A later revision of the key may not drop or change its start form: submissions of the
+        // claimed one would start nothing.
+        expect(
+          await flow.publish.execute(publisher, {
+            processKey: key,
+            bpmnXml: model(key, forms.other.key),
+          }),
+        ).toEqual({
+          ok: false,
+          error: { code: 'process.form.start-form-changed', field: 'start' },
+        });
+        expect(
+          await rowsOf(tenant, 'SELECT 1 FROM process.process_start_form WHERE form_id = $1', [
+            forms.other.formId,
+          ]),
+        ).toEqual([]);
+        expect(
+          await rowsOf(tenant, 'SELECT 1 FROM process.process_revision WHERE process_key = $1', [
+            key,
+          ]),
+        ).toHaveLength(1);
         // A later revision of the same key keeps the claim.
         const next = await flow.publish.execute(publisher, {
           processKey: key,
@@ -374,6 +401,26 @@ export function formLinkScenarios(): void {
           { status: 'delivered' },
         ]);
         expect(await instancesOf(submissionId)).toHaveLength(1);
+      });
+
+      it('starts a submission of a form revision published after the process, with its own revision', async () => {
+        // The process starts on any revision of its start form; the submission's revision is
+        // the one it passes on (the task forms stay those the process revision pinned).
+        const republished = { ...forms.request, revisionId: ids.next<'FormRevision'>() };
+        const submissionId = await submitted(republished);
+        await deliver();
+        const [instance] = await instancesOf(submissionId);
+        const [command] = await rowsOf<{ payload: { variables: object } }>(
+          tenant,
+          `SELECT payload FROM process.engine_command WHERE kind = 'start-instance' AND subject_id = $1`,
+          [instance!.id],
+        );
+        expect(command!.payload.variables).toEqual({
+          submissionId,
+          formId: forms.request.formId,
+          formRevisionId: republished.revisionId,
+        });
+        expect(await flow.relay.runOnce(system)).toMatchObject({ delivered: 1 });
       });
 
       it('starts nothing for a form no process starts, or a site the tenant does not have', async () => {

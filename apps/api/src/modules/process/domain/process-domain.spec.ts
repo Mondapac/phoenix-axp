@@ -107,6 +107,11 @@ describe('engine commands (ADR-0020 decision 7)', () => {
     expect(invalidVariable({ escalateAfter: 'PT59S' })).toBe('escalateAfter');
     expect(invalidVariable({ escalateAfter: 'PT0S' })).toBe('escalateAfter');
     expect(invalidVariable({ escalateAfter: 'PT1M', dueIn: 'P2D' })).toBeNull();
+    // A sign the engine reads, which the guard's duration grammar does not.
+    expect(invalidVariable({ escalateAfter: '-PT1M' })).toBe('escalateAfter');
+    expect(invalidVariable({ escalateAfter: '+PT1S' })).toBe('escalateAfter');
+    // A code that only starts like one is not a duration.
+    expect(invalidVariable({ status: 'PENDING', grade: 'P' })).toBeNull();
     // Ids and dates are not durations.
     expect(
       invalidVariable({

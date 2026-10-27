@@ -20,6 +20,15 @@ export type FormStartsAnotherProcess = {
   readonly field: string;
 };
 
+/**
+ * A later revision of a process key would drop or change the start form the key claimed: every
+ * submission of that form would start nothing (no release of a claim yet); `field` as above.
+ */
+export type StartFormChanged = {
+  readonly code: 'process.form.start-form-changed';
+  readonly field: string;
+};
+
 export const REVISION_NOT_FOUND: RevisionNotFound = Object.freeze({
   code: 'process.revision.not-found',
 });

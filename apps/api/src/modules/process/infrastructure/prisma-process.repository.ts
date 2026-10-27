@@ -298,6 +298,17 @@ export class PrismaProcessRepository implements ProcessRepository {
     return row.processKey;
   }
 
+  async startFormOf(tenant: TenantContext, processKey: string): Promise<Id<'Form'> | null> {
+    const row = await this.prisma.tx(tenant).processStartForm.findUnique({
+      where: {
+        tenantId_processKey: { tenantId: tenant.tenantId, processKey },
+        tenantId: tenant.tenantId,
+      },
+      select: { formId: true },
+    });
+    return row === null ? null : (row.formId as Id<'Form'>);
+  }
+
   async startingRevision(
     tenant: TenantContext,
     formId: Id<'Form'>,

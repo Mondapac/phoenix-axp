@@ -10,7 +10,8 @@ export class FormReferencesFacade implements FormReferences {
   published(
     context: CallContext,
     keys: readonly string[],
+    startKey?: string,
   ): Promise<Result<readonly PublishedFormReference[], AccessDenied>> {
-    return this.resolve.execute(context, { keys });
+    return this.resolve.execute(context, startKey === undefined ? { keys } : { keys, startKey });
   }
 }

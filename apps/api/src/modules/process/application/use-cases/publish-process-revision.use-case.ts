@@ -9,11 +9,16 @@ import { checkBpmn, type FormReference } from '../../domain/bpmn-guard';
 import { attributesOf } from '../../domain/task-settings';
 import { MAX_FORM_REFERENCES, type FormReferences } from '../../../forms';
 import type { EngineCommands } from '../engine-commands';
-import type { BpmnRefusal, FormNotFound, FormStartsAnotherProcess } from '../failures';
+import type {
+  BpmnRefusal,
+  FormNotFound,
+  FormStartsAnotherProcess,
+  StartFormChanged,
+} from '../failures';
 import type { BridgeHashing } from '../ports/bridge-hashing';
 import type { FormBinding, ProcessRepository } from '../process.repository';
 
-type PublishFailure = BpmnRefusal | FormNotFound | FormStartsAnotherProcess;
+type PublishFailure = BpmnRefusal | FormNotFound | FormStartsAnotherProcess | StartFormChanged;
 
 export interface PublishProcessRevisionInput {
   /** The BPMN process id of the model. */
@@ -93,7 +98,15 @@ export class PublishProcessRevision extends UseCase<
         this.clock.now(),
       );
       await this.repository.insertFormBindings(tenant, id, bindings);
-      if (start !== undefined) {
+      // A key keeps the start form it claimed: without it, submissions would start nothing.
+      const claimed = await this.repository.startFormOf(tenant, input.processKey);
+      if (claimed !== null && claimed !== start?.formId) {
+        return err({
+          code: 'process.form.start-form-changed',
+          field: start?.elementId ?? 'formKey',
+        });
+      }
+      if (start !== undefined && claimed === null) {
         const holder = await this.repository.claimStartForm(
           tenant,
           start.formId,
@@ -123,7 +136,10 @@ export class PublishProcessRevision extends UseCase<
     if (keys.length > MAX_FORM_REFERENCES) {
       return err({ code: 'process.bpmn.forbidden-construct', field: 'formKey' });
     }
-    const resolved = await this.forms.published(context, keys);
+    // The start form routes every submission of it: the facade answers it only to a publisher
+    // of that form.
+    const startKey = references.find((reference) => reference.kind === 'start')?.formKey;
+    const resolved = await this.forms.published(context, keys, startKey);
     const byKey = new Map(resolved.ok ? resolved.value.map((form) => [form.key, form]) : []);
     const bindings: FormBinding[] = [];
     for (const reference of references) {

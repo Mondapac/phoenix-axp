@@ -212,7 +212,7 @@ model WorkingCalendar {
   @@schema("process")
 }
 
-/// V1, inserted with its process revision and never changed (slice 2.6; ADR-0005 decision 6):
+/// V1, inserted with its process revision and never changed (slice 2.6; ADR-0005 decision 5):
 /// the form a BPMN element names by its form key, pinned to the form revision that was published
 /// when the process revision was. `start` is the start event (a submission of the form starts
 /// the process); `task` is a user task (the task shows that revision). Form ids are plain ids
@@ -233,8 +233,11 @@ model ProcessFormBinding {
   @@schema("process")
 }
 
-/// Which process a form starts (slice 2.6): one process key per form, claimed by the first
-/// revision that binds the form to its start event; later revisions of the same key share it.
+/// Which process a form starts (slice 2.6): one process key per form and one form per key,
+/// claimed by the first revision that binds the form to its start event; later revisions of the
+/// key must keep that start form (no release yet). Publishing the claim needs
+/// `forms.forms.publish` on the form. A partial unique index (migration only) also keeps one
+/// start binding per revision.
 /// Versioning (ADR-0007): insert-only, no history needed (the bindings hold it).
 model ProcessStartForm {
   tenantId   String   @map("tenant_id") @db.VarChar(32)
@@ -243,6 +246,7 @@ model ProcessStartForm {
   claimedAt  DateTime @map("claimed_at") @db.Timestamptz(3)
 
   @@id([tenantId, formId], map: "process_start_form_pkey")
+  @@unique([tenantId, processKey], map: "process_start_form_tenant_id_process_key_key")
   @@map("process_start_form")
   @@schema("process")
 }

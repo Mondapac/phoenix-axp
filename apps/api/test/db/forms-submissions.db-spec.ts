@@ -559,6 +559,12 @@ describe.each(TEST_TENANTS)('form submissions in tenant %s (database integration
         problems: [{ pointer: '/extra', keyword: 'additionalProperties' }],
       },
     });
+    // Only the one accepted submission reported itself: a refused one writes no event.
+    expect(
+      await asApplication(`SELECT 1 FROM forms.outbox WHERE payload->>'formId' = $1`, [
+        form.formId,
+      ]),
+    ).toHaveLength(1);
   });
 
   it('limits submissions per client address, before anything else is checked', async () => {

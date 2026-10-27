@@ -17,6 +17,7 @@ const FAILURE_STATUS: Readonly<Record<string, number>> = Object.freeze({
   'process.bpmn.task-setting-invalid': 422,
   'process.form.not-found': 422,
   'process.form.starts-another-process': 409,
+  'process.form.start-form-changed': 409,
   'process.task.not-found': 404,
   'process.task.unavailable': 409,
   'process.task.outcome-invalid': 422,

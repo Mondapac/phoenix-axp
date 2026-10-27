@@ -29,6 +29,7 @@ const taskJson = (task: InboxTask) => ({
   taskKey: task.taskKey,
   name: task.name,
   formKey: task.formKey,
+  formRevisionId: task.formRevisionId,
   status: task.status,
   siteId: task.siteId,
   queueRoleId: task.queueRoleId,

@@ -44,6 +44,12 @@ CREATE TABLE "process"."inbox" (
 -- CreateIndex
 CREATE UNIQUE INDEX "process_instance_tenant_id_submission_id_key" ON "process"."process_instance"("tenant_id", "submission_id");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "process_start_form_tenant_id_process_key_key" ON "process"."process_start_form"("tenant_id", "process_key");
+
+-- One start form per revision, behind the guard (partial: not expressible in the Prisma schema).
+CREATE UNIQUE INDEX "process_form_binding_tenant_id_revision_id_start_key" ON "process"."process_form_binding" ("tenant_id", "revision_id") WHERE "kind" = 'start';
+
 -- AddForeignKey
 ALTER TABLE "process"."process_form_binding" ADD CONSTRAINT "process_form_binding_revision_fkey" FOREIGN KEY ("tenant_id", "revision_id") REFERENCES "process"."process_revision"("tenant_id", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 

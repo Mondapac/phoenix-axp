@@ -196,6 +196,11 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
         'on two start events',
         '<startEvent id="a" flowable:formKey="f"/><startEvent id="b" flowable:formKey="g"/>',
       ],
+      ['without a namespace, which the engine ignores', '<userTask id="u" formKey="f"/>'],
+      [
+        'in a process that does not run',
+        '<startEvent id="start"/></process><process id="other" isExecutable="false"><startEvent id="s2" flowable:formKey="f"/>',
+      ],
     ])('refuses a form key %s', (_label, body) => {
       expect(refusal(model(body))).toEqual({
         code: 'process.bpmn.forbidden-construct',

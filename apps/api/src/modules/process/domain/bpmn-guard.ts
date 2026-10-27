@@ -23,7 +23,8 @@ import {
  *   engine object; never in an attribute, a name or a form key;
  * - a timer duration is a literal ISO 8601 duration of at least MIN_TIMER_SECONDS, or one
  *   variable, whose value the core checks the same way (engine-command.ts);
- * - element ids and form keys of plain characters, sized for the core's columns;
+ * - element ids and form keys of plain characters, sized for the core's columns; a form key in
+ *   a namespace, on a start event or user task of the executable process, one start form;
  * - a flow the engine cannot spin in: at most MAX_FLOW_NODES nodes, every loop passes a user
  *   task (a boundary event of that task does not count as passing it), no repeating timer, at
  *   most MAX_TOKENS tokens reach a node between two waits for a person (gateways cannot
@@ -404,6 +405,7 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
   const flow: Flow = { nodes: new Map(), edges: [], attached: [] };
   const userTasks = new Map<string, TaskSettings>();
   const forms: FormReference[] = [];
+  let formOutsideRun = false;
   let rootSeen = false;
   let at = 0;
   const body = xml.replace(/^\uFEFF/, '');
@@ -495,6 +497,9 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
       if (HAS_EXPRESSION.test(value)) return forbidden('expression');
       if (local === 'id' && !ELEMENT_ID.test(value)) return forbidden('id');
       if (local === 'formKey' && !FORM_KEY.test(value)) return forbidden('formKey');
+      // The engine reads only its own namespace's formKey; an unprefixed one it ignores, and the
+      // core would bind a form the engine never shows.
+      if (local === 'formKey' && !attributeName.includes(':')) return forbidden('formKey');
       if (TASK_SETTING_ATTRIBUTES.has(local) && element !== 'userTask') return forbidden(local);
       // The BPMN schema admits a foreign attribute only in a namespace of its own: the engine
       // refuses an unprefixed one at deployment, so the publication refuses it first.
@@ -520,6 +525,7 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
       if (kind === 'start' && forms.some((form) => form.kind === 'start')) {
         return forbidden('formKey');
       }
+      if (processes.at(-1)?.executable !== true) formOutsideRun = true;
       forms.push({ elementId: id!, kind, formKey });
     }
     if (element === 'userTask') {
@@ -542,6 +548,8 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
   if (executable.length !== 1 || executable[0]!.id !== processKey) {
     return err({ code: 'process.bpmn.process-key-mismatch' });
   }
+  // Only the executable process runs: a form in another process would bind for nothing.
+  if (formOutsideRun) return forbidden('formKey');
   if (!flowBounded(flow)) return err({ code: 'process.bpmn.unbounded-flow' });
   return ok({ userTasks, forms });
 }

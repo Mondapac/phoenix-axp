@@ -181,6 +181,8 @@ export interface ProcessRepository {
     processKey: string,
     at: Temporal.Instant,
   ): Promise<string>;
+  /** The form a process key's start event claimed, if any. */
+  startFormOf(tenant: TenantContext, processKey: string): Promise<Id<'Form'> | null>;
   /**
    * The revision a submission of `formId` starts: the newest revision of the process that
    * claimed the form, if that revision still binds it to its start event; otherwise null.
