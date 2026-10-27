@@ -99,6 +99,7 @@ export class PermissionRegistry
           key: declaration.key,
           scope: declaration.scope,
           protected: declaration.protected,
+          ...(declaration.qualifier === undefined ? {} : { qualifier: declaration.qualifier }),
         });
       } catch (error) {
         throw new PermissionRegistryError(

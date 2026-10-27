@@ -4,7 +4,7 @@
 // author: under their tenant grants, since `identity.roles.manage` is a tenant key.
 import { err, ok } from '@phoenix/shared-kernel';
 import type { Population, Result } from '@phoenix/shared-kernel';
-import type { NotGrantable } from '../../../../platform/authz';
+import { GrantPolicy, type DefinitionAccess, type NotGrantable } from '../../../../platform/authz';
 import { grantingActorsOf, type KeyCatalogue } from './acting-assignments';
 import type { AssignmentRecord } from './role.repository';
 
@@ -14,7 +14,8 @@ import type { AssignmentRecord } from './role.repository';
  * that confers `manageKey`, and a protected key only under the system role. With
  * `systemRoleOnly` (a role that has holders, security review of slice 1.6, M1), only a system
  * role grant may act: changing such a role changes the access of its holders, who may outrank
- * the author.
+ * the author. With `definitionAccess` (the qualifiers and field rules the role will hold), they
+ * must be no wider than what that same grant holds (ADR-0024 decision 10).
  */
 export function canDefineRole(
   actor: { readonly accountId: AssignmentRecord['accountId']; readonly population: Population },
@@ -23,6 +24,7 @@ export function canDefineRole(
   keys: readonly string[],
   catalogue: KeyCatalogue,
   systemRoleOnly = false,
+  definitionAccess?: DefinitionAccess,
 ): Result<void, NotGrantable> {
   const tenantGrants = grantingActorsOf(
     actor.accountId,
@@ -41,6 +43,16 @@ export function canDefineRole(
     if (!grant.holdsSystemRole && keys.some((key) => catalogue.isProtected(key))) {
       refusal = { code: 'role.not-grantable', reason: 'protected-key' };
       continue;
+    }
+    if (definitionAccess !== undefined) {
+      const within = GrantPolicy.canGrantDefinitionAccess(grant, {
+        effectiveKeys: new Set(keys),
+        definitionAccess,
+      });
+      if (!within.ok) {
+        refusal = within.error;
+        continue;
+      }
     }
     return ok(undefined);
   }

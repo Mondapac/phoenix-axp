@@ -5,10 +5,12 @@
 // subtree, and access flows only downward (ADR-0018 decision 6).
 import { parseId } from '@phoenix/shared-kernel';
 import type { Id } from '@phoenix/shared-kernel';
+import type { FieldMode } from '../field-policy';
 import type { SiteRelation } from '../site-scope';
 import {
   GrantPolicy,
   type ActedOnAccount,
+  type DefinitionAccess,
   type GrantedRole,
   type GrantingActor,
   type GrantPlacement,
@@ -270,6 +272,128 @@ describe('GrantPolicy.canGrant', () => {
     expect(
       GrantPolicy.canGrant(holderWithoutSystemRole, inviter, staff, at(TENANT), catalogue),
     ).toEqual({ ok: false, error: { code: 'role.not-grantable', reason: 'protected-key' } });
+  });
+});
+
+// ADR-0024 decision 10: qualifiers and field modes are bounded like keys.
+describe('GrantPolicy: definition access (ADR-0024 decision 10)', () => {
+  const READ = 'objects.record.read';
+  const UPDATE = 'objects.record.update';
+  const DEF_A = id<'Definition'>(700);
+  const DEF_B = id<'Definition'>(701);
+  const NAME = id<'Field'>(710);
+  const NATIONAL_ID = id<'Field'>(711);
+  const all = { all: true } as const;
+  const only = (...ids: Id<'Definition'>[]) =>
+    ({ all: false, definitionIds: new Set(ids) }) as const;
+  const access = (
+    qualifiers: [string, ReturnType<typeof only> | typeof all][],
+    rules: [Id<'Definition'>, [Id<'Field'>, FieldMode][]][] = [],
+  ): DefinitionAccess => ({
+    qualifiers: new Map(qualifiers),
+    fieldRules: new Map(rules.map(([definition, fields]) => [definition, new Map(fields)])),
+  });
+  const keys = new Set([READ, UPDATE]);
+  const manager = (definitionAccess: DefinitionAccess, holdsSystemRole = false): GrantingActor => ({
+    ...tenantOwner,
+    roleId: EDITOR,
+    holdsSystemRole,
+    effectiveKeys: keys,
+    definitionAccess,
+  });
+  const recordsRole = (definitionAccess: DefinitionAccess): GrantedRole =>
+    role({ id: SITE_EDITOR, scope: 'site', kind: 'custom', effectiveKeys: keys, definitionAccess });
+  const grant = (actor: GrantingActor, granted: GrantedRole) =>
+    GrantPolicy.canGrant(actor, granted, staff, { scope: site(REGION) }, catalogue);
+  const refused = (reason: string) => ({
+    ok: false,
+    error: { code: 'role.not-grantable', reason },
+  });
+
+  it('grants a qualifier within its own, and refuses a wider one', () => {
+    const actor = manager(
+      access([
+        [READ, only(DEF_A, DEF_B)],
+        [UPDATE, only(DEF_A)],
+      ]),
+    );
+    expect(grant(actor, recordsRole(access([[READ, only(DEF_A)]]))).ok).toBe(true);
+    expect(grant(actor, recordsRole(access([[UPDATE, only(DEF_B)]])))).toEqual(
+      refused('definition'),
+    );
+    expect(grant(actor, recordsRole(access([[READ, all]])))).toEqual(refused('definition'));
+  });
+
+  it('refuses a qualifier of a key the actor holds without one', () => {
+    expect(grant(manager(access([])), recordsRole(access([[READ, only(DEF_A)]])))).toEqual(
+      refused('definition'),
+    );
+  });
+
+  it('refuses opening a field the actor holds no opening rule for', () => {
+    const actor = manager(access([[READ, all]]));
+    const opens = recordsRole(access([[READ, only(DEF_A)]], [[DEF_A, [[NATIONAL_ID, 'read']]]]));
+    expect(grant(actor, opens)).toEqual(refused('field-rules'));
+    const hides = recordsRole(access([[READ, only(DEF_A)]], [[DEF_A, [[NAME, 'hidden']]]]));
+    expect(grant(actor, hides).ok).toBe(true);
+  });
+
+  it('passes on an opening rule the actor holds at least as wide', () => {
+    const actor = manager(access([[READ, all]], [[DEF_A, [[NATIONAL_ID, 'edit']]]]));
+    const opens = recordsRole(access([[READ, only(DEF_A)]], [[DEF_A, [[NATIONAL_ID, 'read']]]]));
+    expect(grant(actor, opens).ok).toBe(true);
+    const narrower = manager(access([[READ, all]], [[DEF_A, [[NATIONAL_ID, 'read']]]]));
+    const wider = recordsRole(access([[READ, only(DEF_A)]], [[DEF_A, [[NATIONAL_ID, 'edit']]]]));
+    expect(grant(narrower, wider)).toEqual(refused('field-rules'));
+  });
+
+  it("requires the actor's narrowing on every definition the role covers, and only there", () => {
+    const actor = manager(access([[READ, all]], [[DEF_A, [[NAME, 'hidden']]]]));
+    expect(grant(actor, recordsRole(access([[READ, only(DEF_A)]])))).toEqual(
+      refused('field-rules'),
+    );
+    expect(grant(actor, recordsRole(access([[READ, only(DEF_B)]]))).ok).toBe(true);
+    const copied = recordsRole(access([[READ, only(DEF_A)]], [[DEF_A, [[NAME, 'hidden']]]]));
+    expect(grant(actor, copied).ok).toBe(true);
+  });
+
+  it('lets a system role holder grant any qualifier and field mode', () => {
+    const owner = manager(access([]), true);
+    const wide = recordsRole(access([[READ, all]], [[DEF_A, [[NATIONAL_ID, 'edit']]]]));
+    expect(grant(owner, wide).ok).toBe(true);
+    expect(GrantPolicy.canGrantDefinitionAccess(owner, wide).ok).toBe(true);
+  });
+
+  it('ignores a stored qualifier of a key the role no longer confers', () => {
+    const stale = role({
+      id: SITE_EDITOR,
+      scope: 'site',
+      kind: 'custom',
+      effectiveKeys: new Set([READ]),
+      definitionAccess: access([[UPDATE, all]]),
+    });
+    expect(grant(manager(access([[READ, all]])), stale).ok).toBe(true);
+  });
+
+  it('lets the actor act only on a peer whose definition access lies within its own (M2)', () => {
+    const actor = manager(access([[READ, only(DEF_A)]]));
+    const peer = (definitionAccess: DefinitionAccess): ActedOnAccount => ({
+      accountId: id<'Account'>(720),
+      population: 'tenant-staff',
+      effectiveKeys: new Set([READ]),
+      definitionGrants: [{ effectiveKeys: new Set([READ]), definitionAccess }],
+    });
+    expect(GrantPolicy.canActOn(actor, peer(access([[READ, only(DEF_A)]]))).ok).toBe(true);
+    expect(GrantPolicy.canActOn(actor, peer(access([[READ, all]])))).toEqual({
+      ok: false,
+      error: { code: 'member.outranks-actor' },
+    });
+  });
+
+  it('keeps roles without definition access unchanged', () => {
+    expect(
+      grant(manager(access([])), role({ id: SITE_EDITOR, scope: 'site', effectiveKeys: keys })).ok,
+    ).toBe(true);
   });
 });
 

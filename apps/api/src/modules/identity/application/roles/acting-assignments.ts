@@ -3,8 +3,12 @@
 // may act under. Tests first (CLAUDE.md working rule 4): acting-assignments.spec.ts.
 import type { Id, Population } from '@phoenix/shared-kernel';
 import {
+  ALL_DEFINITIONS,
   permissionScopesOfRole,
   roleScopesOf,
+  type DefinitionAccess,
+  type DefinitionQualifier,
+  type FieldMode,
   type GrantingActor,
   type GrantScope,
   type PermissionDeclaration,
@@ -13,7 +17,7 @@ import {
   type RoleKind,
   type RoleScope,
 } from '../../../../platform/authz';
-import type { AssignmentRecord } from './role.repository';
+import type { AssignmentRecord, RoleRecord } from './role.repository';
 
 /** The part of the permission registry the role rules read. */
 export interface KeyCatalogue extends ProtectedKeyCatalogue {
@@ -44,6 +48,39 @@ export function effectiveKeysOf(
       return scope !== undefined && scopes.includes(scope);
     }),
   );
+}
+
+/**
+ * What a role holds over run-time definitions (ADR-0024 decisions 2 and 3): a system role
+ * every definition for each qualified key it confers, and no rule; another role its stored
+ * qualifiers of keys it confers that are still declared as qualified, and its stored rules.
+ */
+export function definitionAccessOf(role: RoleRecord, catalogue: KeyCatalogue): DefinitionAccess {
+  const keys = effectiveKeysOf(role, catalogue);
+  const qualified = (key: string) =>
+    keys.has(key) && catalogue.get(key)?.qualifier === 'definition';
+  const qualifiers = new Map<string, DefinitionQualifier>();
+  if (role.kind === 'system') {
+    for (const key of keys) if (qualified(key)) qualifiers.set(key, ALL_DEFINITIONS);
+    return { qualifiers, fieldRules: new Map() };
+  }
+  for (const scope of role.definitionScopes ?? []) {
+    if (!qualified(scope.permissionKey)) continue;
+    qualifiers.set(
+      scope.permissionKey,
+      scope.allDefinitions
+        ? ALL_DEFINITIONS
+        : { all: false, definitionIds: new Set(scope.definitionIds) },
+    );
+  }
+  const fieldRules = new Map<Id<'Definition'>, Map<Id<'Field'>, FieldMode>>();
+  for (const rule of role.fieldRules ?? []) {
+    let rules = fieldRules.get(rule.definitionId);
+    if (rules === undefined)
+      fieldRules.set(rule.definitionId, (rules = new Map<Id<'Field'>, FieldMode>()));
+    rules.set(rule.fieldId, rule.mode);
+  }
+  return { qualifiers, fieldRules };
 }
 
 /** True when `key` fits a role of `scope`: declared, and of a permission scope it may hold. */
@@ -108,7 +145,25 @@ export function grantingActorsOf(
       holdsSystemRole: assignment.role.kind === 'system',
       scope: grantScopeOf(assignment),
       effectiveKeys: effectiveKeysOf(assignment.role, catalogue),
+      definitionAccess: definitionAccessOf(assignment.role, catalogue),
     }))
     .filter((actor) => actor.effectiveKeys.has(key))
     .sort((a, b) => Number(b.holdsSystemRole) - Number(a.holdsSystemRole));
+}
+
+/**
+ * What each counting grant of an account holds over definitions, for `GrantPolicy.canActOn`
+ * (security review of slice 2.0, M2).
+ */
+export function heldDefinitionGrantsOf(
+  assignments: readonly AssignmentRecord[],
+  population: Population,
+  catalogue: KeyCatalogue,
+): { effectiveKeys: ReadonlySet<string>; definitionAccess: DefinitionAccess }[] {
+  return assignments
+    .filter((assignment) => counts(assignment, population))
+    .map((assignment) => ({
+      effectiveKeys: effectiveKeysOf(assignment.role, catalogue),
+      definitionAccess: definitionAccessOf(assignment.role, catalogue),
+    }));
 }
