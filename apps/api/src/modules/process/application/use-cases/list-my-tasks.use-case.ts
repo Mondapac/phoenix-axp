@@ -12,7 +12,10 @@ export interface ListMyTasksInput {
 }
 
 export const MAX_INBOX_TASKS = 100;
-/** Candidates read per call before the site check; the inbox shows the first that pass. */
+/**
+ * Candidates read per call, already narrowed to the sites where the caller holds the work key;
+ * the rules then check each against its own site, and the inbox shows the first that pass.
+ */
 const CANDIDATES = 500;
 
 /**
@@ -41,11 +44,13 @@ export class ListMyTasks extends UseCase<ListMyTasksInput, InboxTask[]> {
     const actor = staffOf(context);
     const limit = Math.min(Math.max(Math.trunc(input.limit), 1), MAX_INBOX_TASKS);
     const holdings = await this.inbox.holdingsOf(context, actor.accountId);
+    const sites = await holdings.sitesHolding(INBOX_KEYS.work);
     const candidates = await this.inbox.read(context.tenant, () =>
       this.repository.inboxCandidates(
         context.tenant,
         actor.accountId,
         holdings.roleIds,
+        sites,
         CANDIDATES,
       ),
     );

@@ -227,7 +227,19 @@ export class CommandRelay {
     const task = await this.read(tenant, () => this.repository.findTask(tenant, command.subjectId));
     let end: EngineTaskEnd | null = null;
     if (task !== null && task.status === 'completing' && task.completionKey === command.id) {
-      if (deadlinePassed(task, this.clock.now())) return this.supersede(context, command);
+      if (deadlinePassed(task, this.clock.now())) {
+        // An earlier attempt may have reached the engine although its answer was lost: the
+        // engine's record decides, and only a decision it never applied is superseded.
+        end = (await this.engine.findTask(tenant, task.engineTaskId))?.end ?? null;
+        if (end === null) return this.supersede(context, command);
+      }
+    }
+    if (
+      end === null &&
+      task !== null &&
+      task.status === 'completing' &&
+      task.completionKey === command.id
+    ) {
       const outcome = await this.engine.completeTask(
         tenant,
         task.engineTaskId,
@@ -264,16 +276,15 @@ export class CommandRelay {
    */
   private async supersede(context: CallContext, command: CommandRecord): Promise<void> {
     const { tenant } = context;
-    await this.unitOfWork.run<void, never>(tenant, async () => {
+    const raced = await this.unitOfWork.run<boolean, never>(tenant, async () => {
       const now = this.clock.now();
       const fresh = await this.repository.findTask(tenant, command.subjectId);
-      if (
+      const pending =
         fresh !== null &&
         fresh.status === 'completing' &&
         fresh.completionKey === command.id &&
-        fresh.escalationRoleId !== null &&
-        (await this.repository.escalateTask(tenant, fresh, now))
-      ) {
+        fresh.escalationRoleId !== null;
+      if (pending && (await this.repository.escalateTask(tenant, fresh, now))) {
         await this.incident(tenant, 'completion-superseded', fresh.engineTaskId, fresh.instanceId);
         await this.audit.record(
           context,
@@ -281,10 +292,15 @@ export class CommandRelay {
             after: { role: fresh.escalationRoleId },
           }),
         );
+      } else if (pending) {
+        // Another write moved the row first: the command stays, so the task never sits in
+        // `completing` with no command to end it.
+        return ok(true);
       }
       await this.repository.killCommand(tenant, command.id, now, 'task.superseded');
-      return ok(undefined);
+      return ok(false);
     });
+    if (raced.ok && raced.value) await this.release(tenant, command, 'task.version-race');
   }
 
   private async deleteOrphan(tenant: TenantContext, command: CommandRecord): Promise<void> {

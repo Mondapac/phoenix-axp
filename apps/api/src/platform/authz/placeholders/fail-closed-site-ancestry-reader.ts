@@ -8,7 +8,7 @@ import type { SiteAncestryReader } from '../site-scope';
 /**
  * Always "not within": no site-scope grant reaches a descendant, so access stays at the
  * granted site itself and a subtree grant can never be handed down; and no site exists, so
- * no site grant is made. Constant: it reads no configuration and no environment.
+ * no site grant is made and no subtree lists a site. Constant: it reads no configuration and no environment.
  */
 @FailClosedPlaceholder('tenancy.isWithinSubtree')
 @Injectable()
@@ -19,5 +19,9 @@ export class FailClosedSiteAncestryReader implements SiteAncestryReader {
 
   isWithinSubtree(): Promise<false> {
     return Promise.resolve(false);
+  }
+
+  sitesWithin(): Promise<never[]> {
+    return Promise.resolve([]);
   }
 }

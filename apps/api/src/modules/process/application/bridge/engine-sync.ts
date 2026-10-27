@@ -231,10 +231,16 @@ export class EngineSync {
       let due: Temporal.Instant | null = null;
       if (settings.deadline !== null) {
         const calendar = await this.repository.readWorkingCalendar(tenant);
-        due = dueAt(now, this.tenants.get(tenant.tenantId).timeZone, settings.deadline, {
-          weekendDays: new Set(calendar.weekendDays),
-          holidays: new Set(calendar.holidays),
-        });
+        try {
+          due = dueAt(now, this.tenants.get(tenant.tenantId).timeZone, settings.deadline, {
+            weekendDays: new Set(calendar.weekendDays),
+            holidays: new Set(calendar.holidays),
+          });
+        } catch (error) {
+          // A calendar with no working day (the table's CHECKs refuse one): the task waits in
+          // its queue with no deadline rather than stopping the tenant's sync on every pass.
+          if (!(error instanceof RangeError)) throw error;
+        }
       }
       await this.repository.insertTask(
         tenant,
@@ -250,7 +256,7 @@ export class EngineSync {
           candidateRoleId: settings.candidateRoleId,
           assigneeAccountId: settings.assigneeAccountId,
           dueAt: due,
-          escalationRoleId: settings.escalationRoleId,
+          escalationRoleId: due === null ? null : settings.escalationRoleId,
           outcomes: settings.outcomes,
         },
         now,

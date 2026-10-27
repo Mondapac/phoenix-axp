@@ -74,6 +74,7 @@ describe.each(TEST_TENANTS)('the authz placeholders in tenant %s', (code) => {
     const reader: SiteAncestryReader = new FailClosedSiteAncestryReader();
     await expect(reader.isWithinSubtree(staff, id(3), id(4))).resolves.toBe(false);
     await expect(reader.siteExists(staff, id(3))).resolves.toBe(false);
+    await expect(reader.sitesWithin(staff, id(3))).resolves.toEqual([]);
   });
 });
 

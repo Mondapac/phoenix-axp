@@ -64,6 +64,14 @@ describe('claiming and completing from a queue', () => {
     expect(canRelease(held, 'a-2')).toBe(false);
   });
 
+  it('takes a held queued task back once its holder lost the queue role', () => {
+    const held = { ...queued, assigneeAccountId: 'a-1' };
+    const clerkOnly = [holding('clerk', [WORK])];
+    expect(canComplete(held, 'a-1', clerkOnly, WORK, now)).toBe(false);
+    expect(inInbox(held, 'a-1', clerkOnly, WORK, now)).toBe(false);
+    expect(eligibleAssignee(held, clerkOnly, WORK)).toBe(false);
+  });
+
   it('never releases a task sent straight to a person', () => {
     const direct = { ...queued, candidateRoleId: null, assigneeAccountId: 'a-1' };
     expect(canRelease(direct, 'a-1')).toBe(false);

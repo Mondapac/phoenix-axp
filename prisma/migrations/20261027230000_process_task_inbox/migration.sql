@@ -1,7 +1,7 @@
 -- Phase 2 slice 2.3 (task inbox, ADR-0025): the site of a run, the core's settings of each
 -- user task of a revision, the inbox columns of a task (assignment, deadline, escalation,
 -- outcome) and the tenant's working calendar (owner decision D4). Prisma's diff, then the
--- hand-written CHECKs, partial index, grants and row-level security.
+-- hand-written CHECKs, partial indexes, grants and row-level security.
 
 -- AlterTable
 ALTER TABLE "process"."process_instance" ADD COLUMN     "site_id" UUID;
@@ -70,6 +70,9 @@ ALTER TABLE "process"."working_calendar"
 
 -- Invisible to Prisma: the escalation job reads open tasks whose deadline will escalate.
 CREATE INDEX "process_task_tenant_id_escalation_due_idx" ON "process"."process_task" ("tenant_id", "due_at") WHERE "status" = 'open' AND "escalation_role_id" IS NOT NULL AND "escalated_at" IS NULL;
+-- Invisible to Prisma: the inbox lists read the open tasks in their order, by tenant and by site.
+CREATE INDEX "process_task_tenant_id_open_due_idx" ON "process"."process_task" ("tenant_id", "due_at", "opened_at", "id") WHERE "status" IN ('open', 'completing');
+CREATE INDEX "process_task_tenant_id_site_open_due_idx" ON "process"."process_task" ("tenant_id", "site_id", "due_at", "opened_at", "id") WHERE "status" IN ('open', 'completing');
 
 -- Grants: the inbox changes a task's assignment, escalation and outcome; the calendar is one
 -- mutable row per tenant. Still no DELETE.

@@ -256,6 +256,7 @@ class Rules implements FieldRuleReader {
 const tree: SiteAncestryReader = {
   siteExists: () => Promise.resolve(true),
   isWithinSubtree: (_c, siteId, root) => Promise.resolve(siteId === CHILD_SITE && root === SITE),
+  sitesWithin: (_c, root) => Promise.resolve(root === SITE ? [SITE, CHILD_SITE] : [root]),
 };
 
 describe.each(TEST_TENANTS)('resolveFieldAccess in tenant %s', (code) => {

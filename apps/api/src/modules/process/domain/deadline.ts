@@ -128,7 +128,7 @@ export function dueAt(
   if (deadline.count === 'calendar') return opened.add({ days: deadline.amount }).toInstant();
   let day = opened;
   // Bounded: at least one weekday is worked and the holidays are at most MAX_HOLIDAYS.
-  const limit = (deadline.amount + MAX_HOLIDAYS) * 7;
+  const limit = (deadline.amount + MAX_HOLIDAYS + 1) * 7;
   for (let counted = 0, steps = 0; counted < deadline.amount; steps += 1) {
     if (steps > limit) throw new RangeError('the working calendar has no working day');
     day = day.add({ days: 1 });

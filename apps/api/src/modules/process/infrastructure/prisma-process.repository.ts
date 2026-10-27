@@ -15,6 +15,7 @@ import type {
   StoredTaskSettings,
   SyncState,
   TaskRecord,
+  TaskSites,
 } from '../application/process.repository';
 import type { CommandKind } from '../domain/engine-command';
 import type { IncidentKind } from '../domain/incident';
@@ -56,6 +57,9 @@ const INBOX_ORDER = [
 /** An ISO date as PostgreSQL `date` reads it through Prisma, and back. */
 const dayOf = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`);
 const isoOf = (day: Date): string => day.toISOString().slice(0, 10);
+
+/** Every site, or the listed ones (a task without a site matches no list). */
+const siteFilterOf = (sites: TaskSites) => (sites === 'all' ? {} : { siteId: { in: [...sites] } });
 
 /** The process module's tables in schema `process`, through the unit's guarded client. */
 @Injectable()
@@ -338,11 +342,14 @@ export class PrismaProcessRepository implements ProcessRepository {
     tenant: TenantContext,
     accountId: Id<'Account'>,
     roleIds: readonly Id<'Role'>[],
+    sites: TaskSites,
     limit: number,
   ): Promise<TaskRecord[]> {
+    if (sites !== 'all' && sites.length === 0) return [];
     const rows = await this.prisma.tx(tenant).processTask.findMany({
       where: {
         tenantId: tenant.tenantId,
+        ...siteFilterOf(sites),
         OR: [
           { assigneeAccountId: accountId, status: { in: [...OPEN_TASK_STATUSES] } },
           ...(roleIds.length === 0
@@ -357,9 +364,18 @@ export class PrismaProcessRepository implements ProcessRepository {
     return rows.map(taskOf);
   }
 
-  async openTasksByDue(tenant: TenantContext, limit: number): Promise<TaskRecord[]> {
+  async openTasksByDue(
+    tenant: TenantContext,
+    sites: TaskSites,
+    limit: number,
+  ): Promise<TaskRecord[]> {
+    if (sites !== 'all' && sites.length === 0) return [];
     const rows = await this.prisma.tx(tenant).processTask.findMany({
-      where: { tenantId: tenant.tenantId, status: { in: [...OPEN_TASK_STATUSES] } },
+      where: {
+        tenantId: tenant.tenantId,
+        ...siteFilterOf(sites),
+        status: { in: [...OPEN_TASK_STATUSES] },
+      },
       orderBy: [...INBOX_ORDER],
       take: limit,
       select: TASK_COLUMNS,

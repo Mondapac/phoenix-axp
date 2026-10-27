@@ -120,6 +120,55 @@ describe.each(TEST_TENANTS)('dueAt in the time zone of tenant %s', (code) => {
     expect(due.toPlainDate().toString()).toBe('2026-11-08');
   });
 
+  it('matches a holiday on the local date, not the UTC one', () => {
+    // 2026-11-05 00:30 local is still the 4th in UTC east of Greenwich, the 5th west of it.
+    const justAfterMidnight = Temporal.ZonedDateTime.from({
+      timeZone: zone,
+      year: 2026,
+      month: 11,
+      day: 3,
+      hour: 0,
+      minute: 30,
+    });
+    const due = dueAt(
+      justAfterMidnight.toInstant(),
+      zone,
+      { amount: 2, unit: 'days', count: 'working' },
+      { weekendDays: new Set(), holidays: new Set(['2026-11-05']) },
+    ).toZonedDateTimeISO(zone);
+    // Wednesday the 4th, the 5th off, then Friday the 6th, at 00:30 local.
+    expect(due.toPlainDate().toString()).toBe('2026-11-06');
+    expect([due.hour, due.minute]).toEqual([0, 30]);
+  });
+
+  it('crosses the year end and the last day a holiday may fall on', () => {
+    const lateDecember = Temporal.ZonedDateTime.from({
+      timeZone: zone,
+      year: 2100,
+      month: 12,
+      day: 30,
+      hour: 10,
+    });
+    const due = dueAt(
+      lateDecember.toInstant(),
+      zone,
+      { amount: 2, unit: 'days', count: 'working' },
+      { weekendDays: new Set(), holidays: new Set(['2100-12-31']) },
+    ).toZonedDateTimeISO(zone);
+    expect(due.toPlainDate().toString()).toBe('2101-01-02');
+  });
+
+  it('refuses a calendar with no working day instead of looping', () => {
+    expect(() =>
+      dueAt(
+        wednesday.toInstant(),
+        zone,
+        { amount: 1, unit: 'days', count: 'working' },
+        { weekendDays: new Set([1, 2, 3, 4, 5, 6, 7]), holidays: new Set() },
+      ),
+    ).toThrow(RangeError);
+  });
+
   it('works every day without a calendar', () => {
     expect(
       dueAt(
@@ -150,5 +199,38 @@ describe('dueAt across a daylight-saving change (America/Toronto, 2026-11-01)', 
     );
     expect(due.toZonedDateTimeISO(zone).hour).toBe(9);
     expect(due.since(before.toInstant()).total('hours')).toBe(25);
+  });
+
+  it('keeps the local time of day for working days across the change', () => {
+    const zone = 'America/Toronto';
+    const friday = Temporal.ZonedDateTime.from({
+      timeZone: zone,
+      year: 2026,
+      month: 10,
+      day: 30,
+      hour: 9,
+    });
+    const due = dueAt(
+      friday.toInstant(),
+      zone,
+      { amount: 1, unit: 'days', count: 'working' },
+      { weekendDays: new Set([6, 7]), holidays: new Set() },
+    ).toZonedDateTimeISO(zone);
+    expect(due.toPlainDate().toString()).toBe('2026-11-02');
+    expect(due.hour).toBe(9);
+  });
+
+  it('moves a start in the spring-forward gap to a real local time', () => {
+    const zone = 'America/Toronto';
+    // 2026-03-08 02:30 does not exist in Toronto; the start instant is 07:30Z, 03:30 local.
+    const start = Temporal.Instant.from('2026-03-08T07:30:00Z');
+    const due = dueAt(
+      start,
+      zone,
+      { amount: 1, unit: 'days', count: 'working' },
+      EMPTY_WORKING_CALENDAR,
+    ).toZonedDateTimeISO(zone);
+    expect(due.toPlainDate().toString()).toBe('2026-03-09');
+    expect(due.hour).toBe(3);
   });
 });

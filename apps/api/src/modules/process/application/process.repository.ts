@@ -91,6 +91,12 @@ export interface SyncState {
   readonly version: number;
 }
 
+/**
+ * The sites a task list reads (ADR-0025): `all`, tenant-level tasks (no site) included, or the
+ * listed sites only, never a task without a site.
+ */
+export type TaskSites = 'all' | readonly Id<'Site'>[];
+
 export interface ProcessRepository {
   latestRevisionNumber(tenant: TenantContext, processKey: string): Promise<number>;
   insertRevision(
@@ -164,16 +170,18 @@ export interface ProcessRepository {
   escalateTask(tenant: TenantContext, task: TaskRecord, at: Temporal.Instant): Promise<boolean>;
   /**
    * The inbox candidates of an account: open and completing tasks it holds, and open tasks
-   * nobody holds in the queues of `roleIds`; by due time (none last), then age, at most `limit`.
+   * nobody holds in the queues of `roleIds`, at `sites`; by due time (none last), then age, at
+   * most `limit`.
    */
   inboxCandidates(
     tenant: TenantContext,
     accountId: Id<'Account'>,
     roleIds: readonly Id<'Role'>[],
+    sites: TaskSites,
     limit: number,
   ): Promise<TaskRecord[]>;
-  /** Open and completing tasks by due time (none last), then age, at most `limit`. */
-  openTasksByDue(tenant: TenantContext, limit: number): Promise<TaskRecord[]>;
+  /** Open and completing tasks at `sites` by due time (none last), then age, at most `limit`. */
+  openTasksByDue(tenant: TenantContext, sites: TaskSites, limit: number): Promise<TaskRecord[]>;
   /** Open tasks whose deadline escalates and has passed at `now`, oldest due first. */
   tasksToEscalate(
     tenant: TenantContext,

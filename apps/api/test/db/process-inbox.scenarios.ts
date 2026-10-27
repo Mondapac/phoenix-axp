@@ -34,7 +34,7 @@ import {
 } from '../../src/modules/process/contracts/permissions';
 import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node-bridge-hashing';
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
-import { FakeProcessEngine } from '../support/fake-process-engine';
+import { CallLostError, FakeProcessEngine } from '../support/fake-process-engine';
 import { RecordingAuditWriter, testTenantRegistry } from '../support/process-test-support';
 import { TEST_TENANTS } from '../support/test-config';
 import {
@@ -85,7 +85,15 @@ export function taskInboxScenarios(): void {
         }
         return Promise.resolve(false);
       },
+      sitesWithin: (_context, rootId) =>
+        Promise.resolve(
+          Object.values(site).filter(
+            (siteId) => siteId === rootId || parentOf.get(siteId) === rootId,
+          ),
+        ),
     };
+    // A different weekend per tenant, so a calendar read across tenants would show.
+    const weekendDays = index === 0 ? [5] : [6];
     const role = { reviewer: ids.next<'Role'>(), manager: ids.next<'Role'>() };
     const holdings = new Map<string, RoleHolding[]>();
     const reader: RoleHoldingReader = {
@@ -213,11 +221,11 @@ export function taskInboxScenarios(): void {
       rows = new Client({ connectionString: testDatabaseUrl() });
       await rows.connect();
       flow = build(persistence);
-      // The calendar of this run: Fridays off, and Thursday 2026-11-05 a holiday.
+      // The calendar of this run: Fridays (or Saturdays) off, and Thursday 2026-11-05 a holiday.
       const current = await flow.calendar.execute(publisher, undefined);
       if (!current.ok) throw new Error('setup: calendar');
       const replaced = await flow.replaceCalendar.execute(publisher, {
-        weekendDays: [5],
+        weekendDays,
         holidays: ['2026-11-05'],
         version: current.value.version,
       });
@@ -313,8 +321,8 @@ export function taskInboxScenarios(): void {
       const row = await taskRow(id);
       expect(row.candidate_role_id).toBe(role.reviewer);
       expect(row.assignee_account_id).toBeNull();
-      // Wednesday + 2 working days: Thursday is a holiday and Friday the weekend, so Sunday,
-      // at the same time of day in the tenant's zone.
+      // Wednesday + 2 working days: Thursday is a holiday and Friday (or Saturday) the weekend,
+      // so Sunday either way, at the same time of day in the tenant's zone.
       const expected = opened.toZonedDateTimeISO(zone).add({ days: 4 });
       expect(expected.dayOfWeek).toBe(7);
       expect(row.due_at?.toISOString()).toBe(new Date(expected.epochMilliseconds).toISOString());
@@ -425,6 +433,31 @@ export function taskInboxScenarios(): void {
       });
     });
 
+    it('lets exactly one of two queue members claim the same task at once', async () => {
+      const id = await taskAt(site.fars);
+      const settled = await Promise.allSettled([
+        flow.claim.execute(farsReviewer, { taskId: id }),
+        flow.claim.execute(secondFarsReviewer, { taskId: id }),
+      ]);
+      const won = settled.filter(
+        (result) => result.status === 'fulfilled' && result.value.ok,
+      ).length;
+      // The loser reads the task taken (409 unavailable) or loses the version race (409 stale).
+      const lost = settled.filter(
+        (result) =>
+          (result.status === 'fulfilled' &&
+            !result.value.ok &&
+            result.value.error.code === 'process.task.unavailable') ||
+          (result.status === 'rejected' && result.reason instanceof StaleAggregateError),
+      ).length;
+      expect([won, lost]).toEqual([1, 1]);
+      expect(
+        audit.entries.filter(
+          (entry) => entry.action === 'process.task.claimed' && entry.targetId === id,
+        ),
+      ).toHaveLength(1);
+    });
+
     it('lets a supervisor of the site give a task to an eligible person only', async () => {
       const id = await taskAt(site.fars);
       expect(
@@ -466,8 +499,26 @@ export function taskInboxScenarios(): void {
           error: { code: 'process.task.unavailable' },
         },
       );
+      // Nor may a supervisor hand it to someone of the first queue.
+      expect(
+        await flow.assign.execute(farsSupervisor, {
+          taskId: id,
+          accountId: accountOf(secondFarsReviewer),
+        }),
+      ).toEqual({ ok: false, error: { code: 'process.task.unavailable' } });
       const pass = await flow.escalate.execute(system, undefined);
+      // Earlier scenarios' tasks are overdue too: this one is among them.
       expect(pass.ok && pass.value.escalated).toBeGreaterThanOrEqual(1);
+      // The job is safe to run twice: a second pass finds nothing left to escalate.
+      expect(await flow.escalate.execute(system, undefined)).toEqual({
+        ok: true,
+        value: { escalated: 0 },
+      });
+      expect(
+        audit.entries.filter(
+          (entry) => entry.action === 'process.task.escalated' && entry.targetId === id,
+        ),
+      ).toHaveLength(1);
       const row = await taskRow(id);
       expect(row).toMatchObject({
         status: 'open',
@@ -529,11 +580,37 @@ export function taskInboxScenarios(): void {
       expect(await inboxOf(manager)).toContain(id);
     });
 
+    it('closes a decision the engine applied although its answer was lost, never supersedes it', async () => {
+      const id = await taskAt(site.fars);
+      expect(
+        await flow.complete.execute(farsReviewer, { taskId: id, outcome: 'reject' }),
+      ).toMatchObject({ ok: true });
+      // The engine applies the completion and the worker dies before it hears so.
+      engine.loseAnswerOf = 'completeTask';
+      await expect(flow.relay.runOnce(system)).rejects.toBeInstanceOf(CallLostError);
+      // The deadline passes before the command's lease does.
+      clock.advance(Temporal.Duration.from({ hours: 5 * 24 }));
+      await flow.relay.runOnce(system);
+      const row = await taskRow(id);
+      expect(row.status).toBe('completed');
+      expect(
+        audit.entries.filter(
+          (entry) => entry.action === 'process.task.completion-superseded' && entry.targetId === id,
+        ),
+      ).toEqual([]);
+      const incidents = await rowsOf<{ kind: string }>(
+        tenant,
+        'SELECT kind FROM process.process_incident WHERE engine_ref = $1',
+        [row.engine_task_id],
+      );
+      expect(incidents).toEqual([]);
+    });
+
     it('keeps the working calendar per tenant, versioned and checked', async () => {
       const current = await flow.calendar.execute(publisher, undefined);
       expect(current).toMatchObject({
         ok: true,
-        value: { weekendDays: [5], holidays: ['2026-11-05'] },
+        value: { weekendDays, holidays: ['2026-11-05'] },
       });
       if (!current.ok) return;
       expect(

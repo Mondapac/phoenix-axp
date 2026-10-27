@@ -36,6 +36,18 @@ const holdsRole = (holdings: readonly HoldingAtSite[], roleId: string | null): b
   roleId !== null && holdings.some((holding) => holding.coversSite && holding.roleId === roleId);
 
 /**
+ * Whether the holder of a task still qualifies for it: the work key at the site and, for a
+ * queued task, the queue's role there. A revoked role takes the task back on the next request.
+ */
+const stillQualifies = (
+  task: TaskAssignment,
+  holdings: readonly HoldingAtSite[],
+  workKey: string,
+): boolean =>
+  holdsKey(holdings, workKey) &&
+  (task.candidateRoleId === null || holdsRole(holdings, task.candidateRoleId));
+
+/**
  * The deadline won (owner decision on PoC 3 R7): the task escalates and nobody of the first
  * queue may decide it any more. Only a task with an escalation role escalates; without one a
  * deadline only marks the task overdue.
@@ -77,7 +89,7 @@ export function canComplete(
   now: Temporal.Instant,
 ): boolean {
   if (task.status !== 'open' || deadlinePassed(task, now)) return false;
-  if (task.assigneeAccountId === accountId) return holdsKey(holdings, workKey);
+  if (task.assigneeAccountId === accountId) return stillQualifies(task, holdings, workKey);
   return canClaim(task, holdings, workKey, now);
 }
 
@@ -98,8 +110,7 @@ export function eligibleAssignee(
   holdings: readonly HoldingAtSite[],
   workKey: string,
 ): boolean {
-  if (!holdsKey(holdings, workKey)) return false;
-  return task.candidateRoleId === null || holdsRole(holdings, task.candidateRoleId);
+  return stillQualifies(task, holdings, workKey);
 }
 
 /** Whether the task shows in the account's own inbox: it holds the task, or may claim it. */
@@ -111,7 +122,10 @@ export function inInbox(
   now: Temporal.Instant,
 ): boolean {
   if (task.assigneeAccountId === accountId) {
-    return (task.status === 'open' || task.status === 'completing') && holdsKey(holdings, workKey);
+    return (
+      (task.status === 'open' || task.status === 'completing') &&
+      stillQualifies(task, holdings, workKey)
+    );
   }
   return canClaim(task, holdings, workKey, now);
 }

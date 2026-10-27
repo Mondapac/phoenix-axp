@@ -27,6 +27,11 @@ export interface SiteAncestryReader {
     siteId: Id<'Site'>,
     rootSiteId: Id<'Site'>,
   ): Promise<boolean>;
+  /**
+   * Every site of the subtree of `rootSiteId`, itself included (ADR-0025: a list filters by the
+   * sites a grant covers). A site of another tenant, or none, answers an empty list.
+   */
+  sitesWithin(context: CallContext, rootSiteId: Id<'Site'>): Promise<Id<'Site'>[]>;
 }
 
 /** Nest token of the {@link SiteAncestryReader}. */
@@ -75,4 +80,26 @@ export async function grantCoversSite(
       return (await siteRelation(reader, context, siteId, grant.siteId)) === 'descendant';
     }
   }
+}
+
+/**
+ * The sites a set of grants covers, for a list that filters by site in its query (ADR-0025):
+ * `all` when one grant is a tenant grant, else every granted site and, for a subtree grant,
+ * every site below it. A platform grant covers no site of a tenant. Asks the reader once per
+ * subtree grant, one after another.
+ */
+export async function sitesCoveredBy(
+  reader: SiteAncestryReader,
+  context: CallContext,
+  grants: readonly GrantScope[],
+): Promise<'all' | Id<'Site'>[]> {
+  if (grants.some((grant) => grant.level === 'tenant')) return 'all';
+  const covered = new Set<Id<'Site'>>();
+  for (const grant of grants) {
+    if (grant.level !== 'site') continue;
+    covered.add(grant.siteId);
+    if (!grant.includeDescendants) continue;
+    for (const siteId of await reader.sitesWithin(context, grant.siteId)) covered.add(siteId);
+  }
+  return [...covered];
 }

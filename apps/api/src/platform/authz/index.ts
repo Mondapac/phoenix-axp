@@ -67,6 +67,7 @@ export {
 export { ROLE_HOLDING_READER, type RoleHolding, type RoleHoldingReader } from './role-holdings';
 export {
   grantCoversSite,
+  sitesCoveredBy,
   SITE_ANCESTRY_READER,
   siteRelation,
   type SiteAncestryReader,

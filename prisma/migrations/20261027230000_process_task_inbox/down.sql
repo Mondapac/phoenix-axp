@@ -1,11 +1,13 @@
 -- Reverses 20261027230000_process_task_inbox: the policy and grants first, then the calendar
--- table, the partial index, the CHECKs and the added columns.
+-- table, the partial indexes, the CHECKs and the added columns.
 DROP POLICY "working_calendar_tenant_isolation" ON "process"."working_calendar";
 REVOKE ALL ON TABLE "process"."working_calendar" FROM "phoenix_app";
 REVOKE UPDATE ("candidate_role_id", "assignee_account_id", "escalated_at", "outcome") ON TABLE "process"."process_task" FROM "phoenix_app";
 
 DROP TABLE "process"."working_calendar";
 
+DROP INDEX "process"."process_task_tenant_id_site_open_due_idx";
+DROP INDEX "process"."process_task_tenant_id_open_due_idx";
 DROP INDEX "process"."process_task_tenant_id_escalation_due_idx";
 DROP INDEX "process"."process_task_tenant_id_candidate_role_id_idx";
 DROP INDEX "process"."process_task_tenant_id_assignee_account_id_idx";

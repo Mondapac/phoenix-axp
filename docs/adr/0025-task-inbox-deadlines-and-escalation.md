@@ -39,10 +39,13 @@ outbox, and would let the engine decide who holds a task, which the core owns.
    or complete (`409 process.task.unavailable`). A completion already accepted but still in the
    outbox when the deadline passes is not sent to the engine: the relay escalates the task,
    keeps the chosen outcome on the row, ends the command with `task.superseded`, records the
-   incident `completion-superseded` and audits `process.task.completion-superseded`.
+   incident `completion-superseded` and audits `process.task.completion-superseded`. Before it
+   supersedes, the relay asks the engine: a completion the engine applied although its answer was
+   lost is closed as completed, never superseded.
 5. **Who may act** is decided in the core from the actor's role holdings resolved per site
    (ADR-0018, a null site is covered by tenant grants only): `process.tasks.work` to claim,
-   release and complete, `process.tasks.assign` to see a site's tasks and assign them. A task the
+   release and complete (a held queued task also needs the queue's role, so a revoke takes it
+   back), `process.tasks.assign` to see a site's tasks and assign them. A task the
    actor may not see answers "not found". Holdings come through the `identity.roleHoldingReader`
    port of `platform/authz`, fail-closed until identity binds it.
 6. **Completion** goes only through the complete use case, which sends the chosen outcome to the

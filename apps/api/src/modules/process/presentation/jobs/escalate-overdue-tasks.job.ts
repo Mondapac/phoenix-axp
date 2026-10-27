@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Temporal } from '@phoenix/shared-kernel';
 import type { JobContext, JobDefinition } from '../../../../platform/scheduler/job-registry';
 import type { EscalateOverdueTasks } from '../../application/use-cases/escalate-overdue-tasks.use-case';
@@ -8,6 +9,7 @@ import type { EscalateOverdueTasks } from '../../application/use-cases/escalate-
  * a version-checked write.
  */
 export function escalateOverdueTasksJob(escalate: EscalateOverdueTasks): JobDefinition {
+  const logger = new Logger('EscalateOverdueTasks');
   return {
     name: 'process.escalate-overdue-tasks',
     every: Temporal.Duration.from({ seconds: 30 }),
@@ -15,6 +17,14 @@ export function escalateOverdueTasksJob(escalate: EscalateOverdueTasks): JobDefi
     async run(context: JobContext): Promise<void> {
       const result = await escalate.execute(context, undefined);
       if (!result.ok) throw new Error(`process.escalate-overdue-tasks: ${result.error.code}`);
+      if (result.value.escalated > 0) {
+        logger.log({
+          msg: 'process.tasks.escalated',
+          tenantId: context.tenant.tenantId,
+          correlationId: context.correlationId,
+          escalated: result.value.escalated,
+        });
+      }
     },
   };
 }
