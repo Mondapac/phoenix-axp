@@ -87,6 +87,11 @@ const envSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_]{1,64}$/)
     .default('ldap_id'),
+  KEYCLOAK_ADMIN_CLIENT_ID: z
+    .string()
+    .regex(/^[A-Za-z0-9_.-]{1,64}$/)
+    .default('phoenix-core-admin'),
+  KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
 });
 
 /** The variables that switch object storage on, together. */
@@ -183,6 +188,12 @@ export interface KeycloakConfig {
    * of `LDAP_ID`. A user without it is a local user (ADR-0019 decision 3).
    */
   readonly directoryClaim: string;
+  /**
+   * The service-account client the directory sync reads users with (realm-management
+   * `view-users`). The secret is a credential; null leaves the sync unavailable.
+   */
+  readonly adminClientId: string;
+  readonly adminClientSecret: string | null;
 }
 
 export interface StorageConfig {
@@ -266,6 +277,8 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
             studioClientSecret: data.KEYCLOAK_STUDIO_CLIENT_SECRET,
             studioCallbackUrl: data.STUDIO_SIGN_IN_CALLBACK_URL,
             directoryClaim: data.KEYCLOAK_DIRECTORY_CLAIM,
+            adminClientId: data.KEYCLOAK_ADMIN_CLIENT_ID,
+            adminClientSecret: data.KEYCLOAK_ADMIN_CLIENT_SECRET ?? null,
           })
         : null,
   });
@@ -282,7 +295,8 @@ function originsOf(value: string | undefined): string[] {
 const ORIGIN = /^https?:\/\/[a-z0-9.-]+(:[0-9]{1,5})?$/;
 
 /**
- * Keycloak's variables all or none, all in production; a session secret in production; panel
+ * Keycloak's variables all or none, all in production, with the directory sync's admin client
+ * secret; a session secret in production; panel
  * origins that are origins (scheme, host, port), https in production.
  */
 function sessionIssues(env: Record<string, string | undefined>, nodeEnv: string): string[] {
@@ -295,6 +309,10 @@ function sessionIssues(env: Record<string, string | undefined>, nodeEnv: string)
     if (!ORIGIN.test(origin) || (production && !origin.startsWith('https://'))) {
       issues.push(`PANEL_ORIGINS: "${origin}" must be an origin${production ? ' over https' : ''}`);
     }
+  }
+  // Without the admin client a directory disable never reaches the core (ADR-0022 decision 6).
+  if (production && !env.KEYCLOAK_ADMIN_CLIENT_SECRET) {
+    issues.push('KEYCLOAK_ADMIN_CLIENT_SECRET: required in production (directory sync, ADR-0022)');
   }
   const missing = KEYCLOAK_REQUIRED.filter((name) => !env[name]);
   if (missing.length === 0 || (missing.length === KEYCLOAK_REQUIRED.length && !production)) {

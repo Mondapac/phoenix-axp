@@ -1,5 +1,6 @@
 import { auditField, defineAuditAction } from '@phoenix/shared-kernel';
 import { ACCOUNT_SOURCES } from './account';
+import { SYNC_OUTCOMES } from './directory-sync';
 
 // Every audited action of the identity module (Phoenix ADR-0015 decision 2). Ids, sources and
 // counts only: usernames and subjects are personal data and stay out of the audit log.
@@ -50,6 +51,47 @@ export const SESSION_ENDED = defineAuditAction({
   actors: ['authenticated'],
 });
 
+/** The directory sync found the person disabled or gone in the directory (ADR-0022 decision 6). */
+export const ACCOUNT_DISABLED_BY_DIRECTORY = defineAuditAction({
+  action: 'identity.account.disabled-by-directory',
+  targetType: 'identity.account',
+  actors: ['authenticated', 'system'],
+  after: { sessionsEnded: auditField.integer() },
+});
+
+/** The directory sync found a person it had disabled enabled again in the directory. */
+export const ACCOUNT_ENABLED_BY_DIRECTORY = defineAuditAction({
+  action: 'identity.account.enabled-by-directory',
+  targetType: 'identity.account',
+  actors: ['authenticated', 'system'],
+});
+
+const tenantTarget = auditField.enumOf(['tenant'] as const);
+
+/** One row per tenant, so the target is the natural key `tenant`. */
+export const DIRECTORY_SYNC_INTERVAL_CHANGED = defineAuditAction({
+  action: 'identity.directory-sync.interval-changed',
+  targetType: 'identity.directory-sync',
+  targetId: tenantTarget,
+  actors: ['authenticated'],
+  before: { intervalMinutes: auditField.integer() },
+  after: { intervalMinutes: auditField.integer() },
+});
+
+/** A run that changed accounts, or that stopped without changing any (failed or halted). */
+export const DIRECTORY_SYNC_RAN = defineAuditAction({
+  action: 'identity.directory-sync.ran',
+  targetType: 'identity.directory-sync',
+  targetId: tenantTarget,
+  actors: ['authenticated', 'system'],
+  after: {
+    outcome: auditField.enumOf(SYNC_OUTCOMES),
+    accountsChecked: auditField.integer(),
+    accountsDisabled: auditField.integer(),
+    accountsEnabled: auditField.integer(),
+  },
+});
+
 export const IDENTITY_AUDIT_ACTIONS = [
   ACCOUNT_PROVISIONED,
   ACCOUNT_CREATED,
@@ -57,4 +99,8 @@ export const IDENTITY_AUDIT_ACTIONS = [
   ACCOUNT_DISABLED,
   SESSION_STARTED,
   SESSION_ENDED,
+  ACCOUNT_DISABLED_BY_DIRECTORY,
+  ACCOUNT_ENABLED_BY_DIRECTORY,
+  DIRECTORY_SYNC_INTERVAL_CHANGED,
+  DIRECTORY_SYNC_RAN,
 ] as const;

@@ -90,6 +90,8 @@ describe('the identity API (HTTP)', () => {
       ['post', '/identity/staff/sign-out'],
       ['get', '/identity/staff-accounts'],
       ['post', '/identity/staff-accounts'],
+      ['get', '/identity/directory-sync'],
+      ['post', '/identity/directory-sync/run'],
     ] as const)('refuses an anonymous %s %s with 401', async (method, path) => {
       const response = await call(method, path).send({ username: 'x' });
       expect(response.status).toBe(401);

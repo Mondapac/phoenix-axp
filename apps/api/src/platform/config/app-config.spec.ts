@@ -23,6 +23,7 @@ const PRODUCTION_SESSION = {
   KEYCLOAK_URL: 'https://sso.example.test',
   KEYCLOAK_STUDIO_CLIENT_SECRET: 'client-secret',
   STUDIO_SIGN_IN_CALLBACK_URL: 'https://studio.example.test/auth/callback',
+  KEYCLOAK_ADMIN_CLIENT_SECRET: 'admin-secret',
 };
 
 /** The object storage issues only: production also requires the session settings. */
@@ -254,6 +255,8 @@ describe('loadAppConfig', () => {
         studioClientSecret: 'client-secret-value',
         studioCallbackUrl: 'https://studio.example.test/auth/callback',
         directoryClaim: 'ldap_id',
+        adminClientId: 'phoenix-core-admin',
+        adminClientSecret: null,
       });
     });
 
@@ -280,7 +283,7 @@ describe('loadAppConfig', () => {
       ).toEqual([expect.stringContaining('PANEL_ORIGINS')]);
     });
 
-    it('takes the Keycloak variables together, and requires them and the secret in production', () => {
+    it('takes the Keycloak variables together, and requires them, the admin client and the secret in production', () => {
       expect(
         issuesOf({ HOSTED_TENANTS: 'demo-fa', KEYCLOAK_URL: 'https://sso.example.test' }),
       ).toEqual([
@@ -295,6 +298,7 @@ describe('loadAppConfig', () => {
       expect(production).toEqual([
         'SESSION_SECRET: required in production (sessions, ADR-0004)',
         'PANEL_ORIGINS: "http://studio.example.test" must be an origin over https',
+        'KEYCLOAK_ADMIN_CLIENT_SECRET: required in production (directory sync, ADR-0022)',
         'KEYCLOAK_URL: required in production (staff sign-in, ADR-0004)',
         'KEYCLOAK_STUDIO_CLIENT_SECRET: required in production (staff sign-in, ADR-0004)',
         'STUDIO_SIGN_IN_CALLBACK_URL: required in production (staff sign-in, ADR-0004)',

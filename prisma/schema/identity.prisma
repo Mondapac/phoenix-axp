@@ -105,3 +105,26 @@ model RoleAssignment {
   @@map("role_assignment")
   @@schema("identity")
 }
+
+/// The tenant's staff directory sync (ADR-0022 decision 6), one row per tenant, written on first
+/// need. Keycloak sends nothing when a user is disabled in AD, so this sync is what ends a
+/// directory account's access: the longest delay is the interval.
+model DirectorySync {
+  tenantId          String    @id @map("tenant_id") @db.VarChar(32)
+  /// Minutes between two runs, 1 to 60; 5 unless the tenant changed it.
+  intervalMinutes   Int       @map("interval_minutes") @db.SmallInt
+  /// When the last run started (claimed), whatever its outcome; null before the first run.
+  lastStartedAt     DateTime? @map("last_started_at") @db.Timestamptz(3)
+  /// completed | failed | halted; null before the first run ends.
+  lastOutcome       String?   @map("last_outcome") @db.VarChar(16)
+  lastFinishedAt    DateTime? @map("last_finished_at") @db.Timestamptz(3)
+  accountsChecked   Int       @map("accounts_checked")
+  accountsDisabled  Int       @map("accounts_disabled")
+  accountsEnabled   Int       @map("accounts_enabled")
+  /// Optimistic concurrency of the interval; a run claim bumps it too.
+  version           Int
+  updatedAt         DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  @@map("directory_sync")
+  @@schema("identity")
+}
