@@ -38,7 +38,7 @@ English/Gregorian in America/Toronto).
 | ------------------------- | --------------------------------------------------------------- |
 | `pnpm verify`             | Everything CI checks, in order (the commands below)             |
 | `pnpm typecheck`          | TypeScript, every package                                       |
-| `pnpm lint`               | ESLint (boundary rules included) and Prettier                   |
+| `pnpm lint`               | ESLint (boundary rules included), Prettier and the four-digit ADR reference check |
 | `pnpm boundaries`         | dependency-cruiser and the Prisma schema and model-owner checks |
 | `pnpm licences`           | Licence gate (ADR-0009) on the full dependency tree; reviewed exceptions in `config/licence-exceptions.json` |
 | `pnpm test`               | Unit and HTTP tests                                             |

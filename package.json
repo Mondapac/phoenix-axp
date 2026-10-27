@@ -14,7 +14,7 @@
     "dev:worker": "node scripts/dev-worker.mjs",
     "build": "pnpm db:generate && pnpm -r build && node scripts/check-built-kernel.mjs",
     "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
-    "lint": "eslint . && prettier --check .",
+    "lint": "eslint . && prettier --check . && node scripts/check-adr-references.mjs",
     "format": "prettier --write .",
     "test": "pnpm -r test",
     "test:db": "pnpm --filter @phoenix/api test:db",
