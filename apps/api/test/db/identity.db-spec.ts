@@ -245,7 +245,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
   }
 
   async function role(kind: 'system' | 'custom', scope: 'tenant' | 'site', keys: string[]) {
-    const id = randomUUID();
+    const id = ids.next();
     await sql(
       tenant,
       `INSERT INTO identity.role (id, tenant_id, key, kind, scope, permission_keys, version, created_at, updated_at)
@@ -256,7 +256,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
   }
 
   async function grant(accountId: string, roleId: string, siteId: string | null = null) {
-    const id = randomUUID();
+    const id = ids.next();
     await sql(
       tenant,
       `INSERT INTO identity.role_assignment (id, tenant_id, account_id, role_id, level, site_id, include_descendants, created_at)
@@ -827,14 +827,94 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
           siteId: sibling,
           includeDescendants: false,
         });
+        // Beyond its reach a grant is another owner's: not found (security review, M2).
         expect(await identity.revoke.execute(manager.context, { assignmentId: outside })).toEqual({
           ok: false,
-          error: { code: 'role.not-grantable', reason: 'subtree' },
+          error: { code: 'identity.role-assignment.not-found' },
         });
         if (!below.ok) throw new Error('grant failed');
         expect(
           await identity.revoke.execute(manager.context, { assignmentId: below.value.id }),
         ).toEqual({ ok: true, value: undefined });
+      });
+
+      it('lets only a system role holder change a role that has holders', async () => {
+        const delegate = await staffMember('shaper');
+        await assigned(
+          delegate.id,
+          await customRole('tenant', ['identity.roles.manage', 'identity.accounts.view']),
+        );
+        const shared = await customRole('tenant', ['identity.accounts.view'], delegate.context);
+        const change = () =>
+          identity.changeRole.execute(delegate.context, {
+            roleId: shared,
+            version: 1,
+            permissionKeys: ['identity.accounts.view'],
+          });
+        expect(await change()).toEqual({ ok: true, value: undefined });
+        await assigned((await staffMember('holder')).id, shared);
+        expect(
+          await identity.changeRole.execute(delegate.context, {
+            roleId: shared,
+            version: 2,
+            permissionKeys: ['identity.accounts.view'],
+          }),
+        ).toEqual({ ok: false, error: { code: 'role.not-grantable', reason: 'system-role' } });
+      });
+
+      it('refuses a role to a disabled account, and ids of another tenant', async () => {
+        const name = unique('gone');
+        const local = await identity.create.execute(admin, { username: name });
+        if (!local.ok) throw new Error(local.error.code);
+        await signedIn({ username: name, directory: false });
+        await identity.disable.execute(admin, { accountId: local.value.id, version: 2 });
+        const viewer = await customRole('tenant', ['identity.accounts.view']);
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: local.value.id,
+            roleId: viewer,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.account.disabled' } });
+
+        // The other tenant's account, role and grant are not found here (row-level security).
+        const member = await staffMember('here');
+        await assigned(member.id, viewer);
+        const foreign = await persistence.unitOfWork.run(
+          other,
+          async () => ok(await new PrismaRoleRepository(persistence.service).list(other)),
+          { readOnly: true },
+        );
+        expect(foreign.ok && foreign.value.some((r) => r.id === viewer)).toBe(false);
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: ids.next<'Account'>(),
+            roleId: viewer,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.account.not-found' } });
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: member.id,
+            roleId: ids.next<'Role'>(),
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.role.not-found' } });
+      });
+
+      it('keeps a system role holder when two holders revoke each other at once', async () => {
+        const system = await role('system', 'tenant', []);
+        const one = await staffMember('one');
+        const two = await staffMember('two');
+        const grantOne = await grant(one.id, system);
+        const grantTwo = await grant(two.id, system);
+        const results = await Promise.all([
+          identity.revoke.execute(one.context, { assignmentId: grantTwo as Id<'RoleAssignment'> }),
+          identity.revoke.execute(two.context, { assignmentId: grantOne as Id<'RoleAssignment'> }),
+        ]);
+        // The admin of the suite also holds a system role, so both may succeed only in turn:
+        // whichever runs second has lost its own system role and is refused.
+        expect(results.filter((r) => r.ok)).toHaveLength(1);
       });
 
       it('refuses disabling an account that outranks the actor', async () => {

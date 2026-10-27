@@ -11,7 +11,10 @@ import type { AssignmentRecord } from './role.repository';
 /**
  * Whether an actor with these grants may make a role confer `keys` (or, when changing a role,
  * may change one that conferred `previousKeys`): every key held under one of its tenant grants
- * that confers `manageKey`, and a protected key only under the system role.
+ * that confers `manageKey`, and a protected key only under the system role. With
+ * `systemRoleOnly` (a role that has holders, security review of slice 1.6, M1), only a system
+ * role grant may act: changing such a role changes the access of its holders, who may outrank
+ * the author.
  */
 export function canDefineRole(
   actor: { readonly accountId: AssignmentRecord['accountId']; readonly population: Population },
@@ -19,6 +22,7 @@ export function canDefineRole(
   manageKey: string,
   keys: readonly string[],
   catalogue: KeyCatalogue,
+  systemRoleOnly = false,
 ): Result<void, NotGrantable> {
   const tenantGrants = grantingActorsOf(
     actor.accountId,
@@ -29,6 +33,10 @@ export function canDefineRole(
   ).filter((grant) => grant.scope.level === 'tenant');
   let refusal: NotGrantable = { code: 'role.not-grantable', reason: 'keys-not-held' };
   for (const grant of tenantGrants) {
+    if (systemRoleOnly && !grant.holdsSystemRole) {
+      refusal = { code: 'role.not-grantable', reason: 'system-role' };
+      continue;
+    }
     if (!keys.every((key) => grant.effectiveKeys.has(key))) continue;
     if (!grant.holdsSystemRole && keys.some((key) => catalogue.isProtected(key))) {
       refusal = { code: 'role.not-grantable', reason: 'protected-key' };

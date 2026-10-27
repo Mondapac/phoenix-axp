@@ -117,7 +117,13 @@ export class RevokeRoleAssignment extends UseCase<
           relations,
           this.catalogue,
         );
-        if (!decided.ok) return decided;
+        // A grant beyond the actor's reach is another owner's: not found (CLAUDE.md, ADR-0004
+        // decision 5), never a hint that it exists.
+        if (!decided.ok) {
+          return decided.error.code === 'role.not-grantable' && decided.error.reason === 'subtree'
+            ? err(ASSIGNMENT_NOT_FOUND)
+            : decided;
+        }
 
         // Losing this grant loses the system role only when it is the account's last one.
         if (

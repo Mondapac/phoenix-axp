@@ -47,6 +47,8 @@ export interface RoleRepository {
     permissionKeys: readonly string[],
     at: Temporal.Instant,
   ): Promise<void>;
+  /** True when the role is granted to any account. */
+  hasAssignments(tenant: TenantContext, roleId: Id<'Role'>): Promise<boolean>;
   /** The grants of an account, oldest first. */
   assignmentsOf(tenant: TenantContext, accountId: Id<'Account'>): Promise<AssignmentRecord[]>;
   findAssignment(tenant: TenantContext, id: Id<'RoleAssignment'>): Promise<AssignmentRecord | null>;

@@ -102,6 +102,14 @@ export class PrismaRoleRepository implements RoleRepository {
     if (count === 0) throw new StaleAggregateError('identity.role', id);
   }
 
+  async hasAssignments(tenant: TenantContext, roleId: Id<'Role'>): Promise<boolean> {
+    const row = await this.prisma.tx(tenant).roleAssignment.findFirst({
+      where: { tenantId: tenant.tenantId, roleId },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
   async assignmentsOf(
     tenant: TenantContext,
     accountId: Id<'Account'>,

@@ -39,6 +39,9 @@ export type SiteNotFound = { readonly code: 'identity.site.not-found' };
  */
 export type AccountNotLinked = { readonly code: 'identity.account.not-linked' };
 
+/** A disabled account receives no role (security review of slice 1.6, L1). */
+export type AccountDisabled = { readonly code: 'identity.account.disabled' };
+
 export const ROLE_NOT_FOUND: RoleNotFound = Object.freeze({ code: 'identity.role.not-found' });
 export const ASSIGNMENT_NOT_FOUND: AssignmentNotFound = Object.freeze({
   code: 'identity.role-assignment.not-found',

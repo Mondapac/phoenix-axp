@@ -17,6 +17,7 @@ import {
   ACCOUNT_NOT_FOUND,
   ROLE_NOT_FOUND,
   type AccountNotFound,
+  type AccountDisabled,
   type AccountNotLinked,
   type AssignmentExists,
   type RoleNotFound,
@@ -50,6 +51,7 @@ export interface AssignRoleInput {
 export type AssignRoleFailure =
   | AccountNotFound
   | AccountNotLinked
+  | AccountDisabled
   | RoleNotFound
   | SiteNotFound
   | AssignmentExists
@@ -129,6 +131,8 @@ export class AssignRole extends UseCase<
           return err(ACCOUNT_NOT_FOUND);
         }
         if (account.subject === null) return err({ code: 'identity.account.not-linked' } as const);
+        // A disabled account gains no role: re-enabling it must not bring back unreviewed grants.
+        if (account.status !== 'active') return err({ code: 'identity.account.disabled' } as const);
         const role = await this.roles.find(tenant, input.roleId);
         if (role === null) return err(ROLE_NOT_FOUND);
 

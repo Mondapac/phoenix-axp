@@ -29,7 +29,8 @@ export type ChangeRolePermissionsFailure =
 /**
  * Replaces the keys a custom role confers. Every holder gains or loses them on their next
  * request (nothing is cached). The author must hold every key of the role, before and after:
- * nobody reshapes a role beyond their own reach.
+ * nobody reshapes a role beyond their own reach. A role that has holders is changed only by a
+ * system role holder, since its holders may outrank the author (security review, M1).
  */
 export class ChangeRolePermissions extends UseCase<
   ChangeRolePermissionsInput,
@@ -79,6 +80,7 @@ export class ChangeRolePermissions extends UseCase<
           IDENTITY_ROLES_MANAGE.key,
           [...new Set([...previous, ...keys.value])],
           this.catalogue,
+          await this.roles.hasAssignments(tenant, role.id),
         );
         if (!allowed.ok) return allowed;
         await this.roles.changePermissionKeys(

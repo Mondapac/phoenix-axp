@@ -38,6 +38,17 @@ describe.each(TEST_TENANTS)('canDefineRole (tenant %s)', () => {
     );
   });
 
+  it('changes a role that has holders only under the system role', () => {
+    const delegate = [testGrant(testRole({ permissionKeys: [MANAGE, 'identity.accounts.view'] }))];
+    expect(
+      canDefineRole(actor, delegate, MANAGE, ['identity.accounts.view'], testCatalogue, true),
+    ).toEqual({ ok: false, error: { code: 'role.not-grantable', reason: 'system-role' } });
+    const system = [testGrant(testRole({ kind: 'system' }))];
+    expect(
+      canDefineRole(actor, system, MANAGE, ['identity.accounts.view'], testCatalogue, true).ok,
+    ).toBe(true);
+  });
+
   it('acts only under a tenant grant that confers the manage key', () => {
     // The keys are held, but under a grant without the manage key.
     const grants = [

@@ -59,7 +59,9 @@ model Session {
 }
 
 /// A role of the tenant: a named set of permission keys (ADR-0004 decision 7). A system role
-/// holds every key of its scope by definition and stores none.
+/// holds every key of its scope by definition and stores none. Versioning (ADR-0007): a
+/// mutable aggregate with `version` (optimistic lock); its history is the audit log
+/// (`identity.role.created`, `identity.role.permissions-changed`).
 model Role {
   id             String           @id @db.Uuid
   tenantId       String           @map("tenant_id") @db.VarChar(32)
@@ -87,7 +89,8 @@ model Role {
 
 /// A role granted to an account, at the role's own level (ADR-0018 decision 6): tenant-wide, or
 /// at one site of the tenancy module (an id, not a foreign key: no relation crosses schemas),
-/// for that site only or for its subtree too.
+/// for that site only or for its subtree too. Versioning (ADR-0007): inserted and deleted,
+/// never updated; its history is the audit log (`identity.role.assigned`, `.revoked`).
 model RoleAssignment {
   id                 String   @id @db.Uuid
   tenantId           String   @map("tenant_id") @db.VarChar(32)
@@ -104,7 +107,8 @@ model RoleAssignment {
 
   @@unique([tenantId, id], map: "role_assignment_tenant_id_id_key")
   /// One grant of a role to an account per place. NULLS NOT DISTINCT in the migration, so a
-  /// tenant grant (no site) is unique too; Prisma cannot say so.
+  /// tenant grant (no site) is unique too; Prisma cannot say so, and a regenerated index would
+  /// drop the clause silently: test/db/identity.db-spec.ts proves it holds.
   @@unique([tenantId, accountId, roleId, siteId], map: "role_assignment_tenant_id_account_id_role_id_site_id_key")
   @@index([tenantId, roleId], map: "role_assignment_tenant_id_role_id_idx")
   @@map("role_assignment")
