@@ -27,6 +27,11 @@ pnpm dev                          # API on http://localhost:3000, GET /health/re
 pnpm dev:worker                   # the worker role, in a second terminal
 ```
 
+The database roles (`phoenix_migrator`, `phoenix_api` in group `phoenix_app`) come from
+`scripts/db/bootstrap-dev.sql`, which the Postgres container runs once on a fresh volume. On a
+volume created before that file, or after it changes, run `pnpm db:bootstrap`; a migration or
+start-up error about a missing role means exactly this.
+
 Every tenant-scoped request names its tenant in the `x-tenant-id` header. There is no default
 tenant: the tenants a deployment serves are `HOSTED_TENANTS`, each with a file in
 `config/tenants/` (two fixtures: `demo-fa`, Persian/Jalali in Asia/Tehran, and `demo-en`,
