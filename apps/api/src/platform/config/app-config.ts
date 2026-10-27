@@ -98,6 +98,11 @@ const envSchema = z.object({
     .regex(/^[A-Za-z0-9_.-]{1,64}$/)
     .default('phoenix-core-admin'),
   KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
+  // Flowable (ADR-0005; ADR-0020 decision 6): its REST base URL and the core's credential,
+  // together, or none.
+  FLOWABLE_URL: httpUrl.optional(),
+  FLOWABLE_USER: z.string().min(1).optional(),
+  FLOWABLE_PASSWORD: z.string().min(1).optional(),
 });
 
 /** The variables that switch object storage on, together. */
@@ -114,6 +119,9 @@ const KEYCLOAK_REQUIRED = [
   'KEYCLOAK_STUDIO_CLIENT_SECRET',
   'STUDIO_SIGN_IN_CALLBACK_URL',
 ] as const;
+
+/** The variables that switch the process engine on, together. */
+const FLOWABLE_REQUIRED = ['FLOWABLE_URL', 'FLOWABLE_USER', 'FLOWABLE_PASSWORD'] as const;
 
 /** The migration role's URL: read by the prisma CLI, the scripts and test setup only. */
 export const MIGRATION_DATABASE_URL = 'MIGRATION_DATABASE_URL';
@@ -165,6 +173,19 @@ export interface AppConfig {
    * it. Required in production.
    */
   readonly subjectKeyKek: Buffer | null;
+  /**
+   * The process engine (Flowable REST, ADR-0005), or `null` when `FLOWABLE_*` is unset: then
+   * every engine call fails as unavailable and process commands wait. Required in production.
+   */
+  readonly flowable: FlowableConfig | null;
+}
+
+export interface FlowableConfig {
+  /** The REST base URL, without a trailing slash: reachable from the core's network only. */
+  readonly url: string;
+  readonly user: string;
+  /** A credential: never log it. */
+  readonly password: string;
 }
 
 export interface SessionConfig {
@@ -246,6 +267,7 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
   if (parsed.success) {
     issues.push(...storageIssues(env, parsed.data.NODE_ENV));
     issues.push(...sessionIssues(env, parsed.data.NODE_ENV));
+    issues.push(...flowableIssues(env, parsed.data.NODE_ENV));
   }
   if (!parsed.success || issues.length > 0) throw new InvalidConfigError(issues);
   const data = parsed.data;
@@ -295,6 +317,14 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
         : null,
     subjectKeyKek:
       data.SUBJECT_KEY_KEK === undefined ? null : Buffer.from(data.SUBJECT_KEY_KEK, 'base64url'),
+    flowable:
+      data.FLOWABLE_URL && data.FLOWABLE_USER && data.FLOWABLE_PASSWORD
+        ? Object.freeze({
+            url: data.FLOWABLE_URL.replace(/\/+$/, ''),
+            user: data.FLOWABLE_USER,
+            password: data.FLOWABLE_PASSWORD,
+          })
+        : null,
   });
 }
 
@@ -343,6 +373,18 @@ function sessionIssues(env: Record<string, string | undefined>, nodeEnv: string)
     ? 'required in production (staff sign-in, ADR-0004)'
     : `${KEYCLOAK_REQUIRED.join(', ')} are set together (staff sign-in, ADR-0004)`;
   return [...issues, ...missing.map((name) => `${name}: ${reason}`)];
+}
+
+/** All of FLOWABLE_REQUIRED or none of them; all of them in production. */
+function flowableIssues(env: Record<string, string | undefined>, nodeEnv: string): string[] {
+  const missing = FLOWABLE_REQUIRED.filter((name) => !env[name]);
+  if (missing.length === 0) return [];
+  if (nodeEnv === 'production') {
+    return missing.map((name) => `${name}: required in production (process engine, ADR-0005)`);
+  }
+  if (missing.length === FLOWABLE_REQUIRED.length) return [];
+  const together = FLOWABLE_REQUIRED.join(', ');
+  return missing.map((name) => `${name}: ${together} are set together (process engine, ADR-0005)`);
 }
 
 /** All of STORAGE_REQUIRED or none of them; all of them in production. */
