@@ -41,7 +41,8 @@ trigger that brings each one in. When a trigger fires, port the component from t
   `FORCE ROW LEVEL SECURITY` and one policy to `phoenix_app` (migration 20261026120200,
   security review S2-1). The migration role owns the tables but matches no policy, so it sees
   and writes no tenant row; migrations are DDL only. A maintenance path that must cross
-  tenants gets its own reviewed policy or role in its own migration; none exists today.
+  tenants gets its own reviewed policy or role in its own migration; none exists today (see
+  the data migration requirement below).
 
 ## Forward requirements (gates on later slices)
 
@@ -52,3 +53,4 @@ it gates; that slice does not merge without it.
 | --- | --- | --- |
 | **Session tenant binding** (security review S2-3). Identity's `Authenticator` refuses a session whose tenant differs from the request's tenant (the one `TenantContextGuard` resolved from `x-tenant-id`), with a test on both tenant fixtures. Deployment (Helm, on-prem compose) keeps the API port reachable only from the BFFs; add a `HOST` setting so the API can bind a single interface (today `app.listen(port)` binds all). | `x-tenant-id` is trusted from any caller that reaches the API port (`tenant-context.guard.ts`). Today that only selects a tenant's anonymous surface; once sessions exist, user A of tenant X could send `x-tenant-id: Y` and act in Y. | The identity slice: no session is honoured before the check and its test exist. |
 | **Composite hand-written foreign keys** (security review S2-4). Every foreign key written by hand in a migration between tenant-scoped tables includes `tenant_id` on both sides, as the Prisma-declared ones must (`check-prisma-boundaries`). | PostgreSQL checks a foreign key without row-level security, so an id-only key could point at another tenant's row. | Every migration review. |
+| **Data migrations on tenant tables** (re-review N2-3). The first migration that reads or writes rows of a tenant-scoped table runs under its own reviewed role or policy, added in its own migration, and ADR-0020's per-tenant data migration line is amended to name it. | With `FORCE ROW LEVEL SECURITY` and every policy granted to `phoenix_app` only, the migration role matches no policy: a data migration under it silently reads and changes no row. | The first data migration on a tenant-scoped table. |

@@ -139,6 +139,16 @@ describe('the licence gate (scripts/check-licences.mjs, ADR-0009)', () => {
     'SSPL-1.0',
     'BUSL-1.1',
     'MIT AND GPL-3.0',
+    'GNU General Public License v3',
+    'GNU Lesser General Public License',
+    'GNU Affero General Public License v3.0',
+    'Business Source License 1.1',
+    'Server Side Public License',
+    'Sustainable Use License',
+    'MIT with Commons Clause',
+    'LicenseRef-GPL',
+    'LicenseRef-Custom-LGPL-2.1',
+    'MIT AND (0BSD OR Server Side Public License)',
   ])('always fails %s, even when listed as an exception', (licence) => {
     const result = gate({ [licence]: [pkg('x')] }, [approved('x', licence)]);
     expect(result.status).toBe(1);

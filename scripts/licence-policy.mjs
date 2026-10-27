@@ -4,7 +4,10 @@
 //   - ALLOWED licences (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC) pass silently
 //     (ADR-0009 decision 1).
 //   - DENIED families (GPL, LGPL, AGPL, SSPL, BUSL, the Sustainable Use and similar licences)
-//     always fail, even when listed as an exception (ADR-0009 decision 2).
+//     always fail, even when listed as an exception (ADR-0009 decision 2). They are recognised
+//     by their SPDX ids and by their names written out anywhere in the declared licence
+//     ("GNU General Public License v3", "Server Side Public License", "LicenseRef-GPL", ...),
+//     so a non-SPDX spelling cannot turn a denied licence into one that an exception passes.
 //   - Every other licence, the permissive variants (MIT-0, 0BSD, BlueOak, Unlicense, CC0, ...)
 //     included, fails unless config/licence-exceptions.json lists that package under that exact
 //     licence, with a reason, the approver `cto` and a date (ADR-0009 decision 2 and its
@@ -16,13 +19,21 @@
 //   - An exception that matches no package fails, so the reviewed list never outlives its use.
 //
 // An SPDX expression passes when one alternative of an OR passes, and an AND only when every
-// part passes; `WITH` and anything unparsed need an exception.
+// part passes; `WITH` and anything unparsed need an exception. An OR with an allowed choice
+// passes even when another choice is denied: "MIT OR GPL-3.0" is taken under MIT.
 
 export const ALLOWED = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC']);
 
 /** Refused whatever the exceptions file says: incompatible with a proprietary product. */
 export const DENIED =
   /^(A?GPL|LGPL|SSPL|BUSL|SUL|Sustainable|Elastic|CC-BY-NC|CC-BY-SA|EUPL|OSL|CPAL|RPL|Commons-Clause)/i;
+
+/**
+ * The denied families written out, matched anywhere in the declared licence (not only at the
+ * start of an id): free-text names and LicenseRef- ids that name a GPL variant.
+ */
+export const DENIED_WORDS =
+  /General\s+Public\s+Licen[cs]e|Lesser\s+General\s+Public|Affero|Business\s+Source|Server\s+Side\s+Public|Sustainable\s+Use|Commons[\s-]+Clause|LicenseRef-[\w.+-]*GPL/i;
 
 /** The reason that marks an exception as dev-only: such a package may never ship. */
 export const DEV_ONLY_REASON = 'dev-only, not shipped';
@@ -36,9 +47,12 @@ export function licenceIds(expression) {
     .filter((token) => token !== '' && !/^(AND|OR|WITH)$/i.test(token));
 }
 
-/** Whether any id of the expression is in a denied family. */
+/** Whether any id of the expression is in a denied family, or the expression names one. */
 export function mentionsDenied(expression) {
-  return licenceIds(expression).some((id) => DENIED.test(id.replace(/^\(+/, '')));
+  return (
+    DENIED_WORDS.test(expression) ||
+    licenceIds(expression).some((id) => DENIED.test(id.replace(/^\(+/, '')))
+  );
 }
 
 /** Splits `text` at a top-level binary operator (outside parentheses). */
