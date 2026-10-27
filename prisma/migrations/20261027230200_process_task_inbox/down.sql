@@ -1,4 +1,4 @@
--- Reverses 20261027230000_process_task_inbox: the policy and grants first, then the calendar
+-- Reverses 20261027230200_process_task_inbox: the policy and grants first, then the calendar
 -- table, the partial indexes, the CHECKs and the added columns.
 DROP POLICY "working_calendar_tenant_isolation" ON "process"."working_calendar";
 REVOKE ALL ON TABLE "process"."working_calendar" FROM "phoenix_app";

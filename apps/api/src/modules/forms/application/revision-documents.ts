@@ -30,18 +30,19 @@ function canonical(field: InvalidSchema['field'], value: unknown): Result<string
  * then the meta-schema and compilation through the checker; the UI Schema's scopes are
  * resolved against the checked data schema. The content hash is `sha256:` over the canonical
  * JSON of `{ jsonSchema, uiSchema }`, so equal documents hash equal whatever their key order.
- * CPU only: the caller runs it before its unit of work.
+ * CPU work (the compile runs in the checker's worker): the caller runs it before its unit of
+ * work.
  */
-export function checkRevisionDocuments(
+export async function checkRevisionDocuments(
   checker: FormSchemaChecker,
   jsonSchema: unknown,
   uiSchema: unknown,
-): Result<CheckedDocuments, InvalidSchema> {
+): Promise<Result<CheckedDocuments, InvalidSchema>> {
   const dataText = canonical('jsonSchema', jsonSchema);
   if (!dataText.ok) return dataText;
   const data = checkDataSchemaShape(jsonSchema);
   if (!data.ok) return data;
-  const compiled = checker.check(data.value);
+  const compiled = await checker.check(data.value);
   if (!compiled.ok) return compiled;
   const uiText = canonical('uiSchema', uiSchema);
   if (!uiText.ok) return uiText;

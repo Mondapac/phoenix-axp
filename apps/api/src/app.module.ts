@@ -15,7 +15,10 @@ import { IdsModule } from './platform/ids/ids.module';
 import { LoggingModule } from './platform/logging/logging.module';
 import { PersistenceModule } from './platform/persistence/persistence.module';
 import { SchedulerModule } from './platform/scheduler/scheduler.module';
+import { CaptchaModule } from './platform/captcha/captcha.module';
+import { RateLimitModule } from './platform/rate-limit/rate-limit.module';
 import { StorageModule } from './platform/storage/storage.module';
+import { SubjectKeysModule } from './platform/subject-keys/subject-keys.module';
 import { TenantConfigModule } from './platform/tenant-config/tenant-config.module';
 import { TenantContextGuard } from './platform/tenant-context/tenant-context.guard';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
@@ -69,9 +72,13 @@ export class AppModule {
           authorisation: IdentityAccessModule,
           fieldRules: IdentityAccessModule,
           roleHoldings: IdentityAccessModule,
+          actorGrants: IdentityAccessModule,
           siteAncestry: TenancySiteAncestryModule,
         }),
         StorageModule,
+        SubjectKeysModule,
+        RateLimitModule,
+        CaptchaModule,
         WorkerModule,
         HealthModule,
         TenancyModule,

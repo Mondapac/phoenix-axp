@@ -2,17 +2,14 @@
 // account holds and where, for a queue of a role at a site. No template file: Mondapac has no
 // role queues.
 import type { CallContext, Id } from '@phoenix/shared-kernel';
-import type { GrantScope } from './roles/role-model';
+import type { ActorGrant } from './actor-grants';
 
 /**
  * One role assignment of an account that counts (at its role's level, for a population that
- * may hold the role): the role, where the assignment applies, and every key the role confers.
+ * may hold the role): the same shape as the actor's own grants (ADR-0018 decision 6), read here
+ * for any account of the tenant, such as an assignee a supervisor names.
  */
-export interface RoleHolding {
-  readonly roleId: Id<'Role'>;
-  readonly scope: GrantScope;
-  readonly keys: ReadonlySet<string>;
-}
+export type RoleHolding = ActorGrant;
 
 /**
  * The port identity implements (ADR-0025): the holdings of an account of the caller's tenant.

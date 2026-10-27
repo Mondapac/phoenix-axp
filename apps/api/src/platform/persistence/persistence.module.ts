@@ -18,7 +18,11 @@ import { JOB_LOCK } from '../scheduler/job-lock';
 import { TenantRegistry } from '../tenant-config/tenant-registry';
 import { TenantContextFactory } from '../tenant-context/tenant-context.factory';
 import { UNIT_OF_WORK } from '../unit-of-work/unit-of-work';
+import { CAPTCHA_SPENT_STORE } from '../captcha/proof-of-work';
+import { RATE_LIMIT_STORE } from '../rate-limit/rate-limiter';
+import { SUBJECT_KEY_STORE } from '../subject-keys/subject-key-store';
 import { AdvisoryJobLock } from './advisory-job-lock';
+import { PrismaCaptchaSpentStore } from './captcha/prisma-captcha-spent-store';
 import { PrismaAuditChainStore } from './audit/prisma-audit-chain-store';
 import { createAuditWriter } from './audit/prisma-audit-writer';
 import { DatabaseProbe } from './database-probe';
@@ -30,6 +34,8 @@ import { PrismaOutboxRelay } from './outbox/prisma-outbox-relay';
 import { PrismaOutboxWriterFactory } from './outbox/prisma-outbox-writer';
 import { PrismaRoot } from './prisma-root';
 import { PrismaService } from './prisma.service';
+import { PrismaRateLimitStore } from './rate-limit/prisma-rate-limit-store';
+import { PrismaSubjectKeyStore } from './subject-keys/prisma-subject-key-store';
 import { PrismaUnitOfWork } from './prisma-unit-of-work';
 
 /** The generated map, checked against the shape the guard reads. */
@@ -102,6 +108,11 @@ const modelMap: ModelMap = MODEL_MAP;
       inject: [PrismaRoot],
       useFactory: (root: PrismaRoot) => new AdvisoryJobLock(root),
     },
+    // The stores of platform/subject-keys, rate-limit and captcha (slice 2.5): bound here so
+    // the Prisma side stays inside platform/persistence.
+    { provide: SUBJECT_KEY_STORE, useClass: PrismaSubjectKeyStore },
+    { provide: RATE_LIMIT_STORE, useClass: PrismaRateLimitStore },
+    { provide: CAPTCHA_SPENT_STORE, useClass: PrismaCaptchaSpentStore },
   ],
   exports: [
     PrismaService,
@@ -111,6 +122,9 @@ const modelMap: ModelMap = MODEL_MAP;
     OUTBOX_RELAY,
     EVENT_DISPATCHER,
     JOB_LOCK,
+    SUBJECT_KEY_STORE,
+    RATE_LIMIT_STORE,
+    CAPTCHA_SPENT_STORE,
   ],
 })
 export class PersistenceModule {

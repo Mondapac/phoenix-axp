@@ -5,11 +5,13 @@
 // (ADR-0010 decision 2).
 import { Module, type DynamicModule, type Provider, type Type } from '@nestjs/common';
 import { TenantRegistry } from '../tenant-config/tenant-registry';
+import { ACTOR_GRANT_READER } from './actor-grants';
 import { AUTHENTICATOR } from './authenticator';
 import { AUTHORISATION_CHECK, type AuthorisationCheck } from './authorisation-check';
 import { FIELD_RULE_READER } from './field-policy';
 import { PERMISSION_KEY_LOOKUP } from './permission-key-lookup';
 import { PermissionRegistry } from './permission-registry';
+import { FailClosedActorGrantReader } from './placeholders/fail-closed-actor-grant-reader';
 import { FailClosedAuthenticator } from './placeholders/fail-closed-authenticator';
 import { FailClosedAuthorisationCheck } from './placeholders/fail-closed-authorisation-check';
 import { FailClosedFieldRuleReader } from './placeholders/fail-closed-field-rule-reader';
@@ -21,9 +23,10 @@ import { createUseCaseGate } from './use-case-gate';
 import { USE_CASE_GATE } from './use-case-gate.token';
 
 /**
- * Where the five ports of `platform/authz` come from. Each is a Nest module that provides and
- * exports the token (`AUTHENTICATOR`, `AUTHORISATION_CHECK`, `FIELD_RULE_READER` and
- * `ROLE_HOLDING_READER` from identity, `SITE_ANCESTRY_READER` from tenancy),
+ * Where the six ports of `platform/authz` come from. Each is a Nest module that provides and
+ * exports the token (`AUTHENTICATOR`, `AUTHORISATION_CHECK`, `FIELD_RULE_READER`,
+ * `ACTOR_GRANT_READER` and `ROLE_HOLDING_READER` from identity, `SITE_ANCESTRY_READER` from
+ * tenancy),
  * passed by `app.module.ts`, so `platform/` imports no module. Absent, the fail-closed
  * placeholder is bound, and a production start is refused (ADR-0010 decision 4).
  */
@@ -32,6 +35,7 @@ export interface AuthzBindings {
   readonly authorisation?: Type;
   readonly siteAncestry?: Type;
   readonly fieldRules?: Type;
+  readonly actorGrants?: Type;
   readonly roleHoldings?: Type;
 }
 
@@ -72,6 +76,14 @@ export class AuthzModule {
     } else {
       if (!imports.includes(bindings.fieldRules)) imports.push(bindings.fieldRules);
       if (!reexported.includes(bindings.fieldRules)) reexported.push(bindings.fieldRules);
+    }
+    // Read by the use cases that narrow a site-scope key to a resource's site (ADR-0018).
+    if (bindings.actorGrants === undefined) {
+      placeholders.push({ provide: ACTOR_GRANT_READER, useClass: FailClosedActorGrantReader });
+      reexported.push(ACTOR_GRANT_READER);
+    } else {
+      if (!imports.includes(bindings.actorGrants)) imports.push(bindings.actorGrants);
+      if (!reexported.includes(bindings.actorGrants)) reexported.push(bindings.actorGrants);
     }
     // Read by the task inbox of the process module (ADR-0025), so exported either way.
     if (bindings.roleHoldings === undefined) {

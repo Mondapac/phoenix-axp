@@ -21,6 +21,7 @@ import {
 import { AuthzModule } from '../authz.module';
 import { FIELD_RULE_READER } from '../field-policy';
 import { ROLE_HOLDING_READER } from '../role-holdings';
+import { ACTOR_GRANT_READER } from '../actor-grants';
 import { SITE_ANCESTRY_READER, type SiteAncestryReader } from '../site-scope';
 import { USE_CASE_GATE } from '../use-case-gate.token';
 import { placeholderMarkOf } from '../../placeholders/placeholder-markers';
@@ -118,6 +119,12 @@ class RealAuthenticator {
   }
 }
 @Injectable()
+class RealActorGrants {
+  grantsOf(): Promise<never[]> {
+    return Promise.resolve([]);
+  }
+}
+@Injectable()
 class RealFieldRules {
   grantsFor(): Promise<never[]> {
     return Promise.resolve([]);
@@ -128,9 +135,16 @@ class RealFieldRules {
     { provide: AUTHORISATION_CHECK, useClass: RealCheck },
     { provide: AUTHENTICATOR, useClass: RealAuthenticator },
     { provide: FIELD_RULE_READER, useClass: RealFieldRules },
+    { provide: ACTOR_GRANT_READER, useClass: RealActorGrants },
     { provide: ROLE_HOLDING_READER, useClass: RealFieldRules },
   ],
-  exports: [AUTHORISATION_CHECK, AUTHENTICATOR, FIELD_RULE_READER, ROLE_HOLDING_READER],
+  exports: [
+    AUTHORISATION_CHECK,
+    AUTHENTICATOR,
+    FIELD_RULE_READER,
+    ACTOR_GRANT_READER,
+    ROLE_HOLDING_READER,
+  ],
 })
 class IdentityStandIn {}
 
@@ -163,6 +177,7 @@ describe('AuthzModule.register', () => {
   it('binds every fail-closed placeholder while no implementing module is given', async () => {
     const { found, gate } = await ports({});
     expect(found).toEqual([
+      'identity.actorGrantReader',
       'identity.authenticator',
       'identity.authorisationCheck',
       'identity.fieldRuleReader',
@@ -177,6 +192,7 @@ describe('AuthzModule.register', () => {
       authentication: IdentityStandIn,
       authorisation: IdentityStandIn,
       fieldRules: IdentityStandIn,
+      actorGrants: IdentityStandIn,
       roleHoldings: IdentityStandIn,
       siteAncestry: TenancyStandIn,
     });

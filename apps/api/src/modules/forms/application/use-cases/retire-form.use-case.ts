@@ -7,6 +7,7 @@ import { FORMS_FORMS_PUBLISH } from '../../contracts/permissions';
 import { FORM_RETIRED } from '../../domain/audit-actions';
 import { planRetire } from '../../domain/lifecycle';
 import { FORM_NOT_FOUND, type FormNotFound, type NotPublished } from '../failures';
+import type { FormReach } from '../form-reach';
 import type { FormRepository } from '../form.repository';
 
 export interface RetireFormInput {
@@ -28,16 +29,20 @@ export class RetireForm extends UseCase<RetireFormInput, void, RetireFormFailure
     gate: UseCaseGate,
     private readonly unitOfWork: UnitOfWork,
     private readonly forms: FormRepository,
+    private readonly reach: FormReach,
     private readonly audit: AuditWriter,
     private readonly clock: Clock,
   ) {
     super(gate);
   }
 
-  protected handle(
+  protected async handle(
     context: CallContext,
     input: RetireFormInput,
   ): Promise<Result<void, RetireFormFailure>> {
+    if ((await this.reach.form(context, FORMS_FORMS_PUBLISH.key, input.formId)) === null) {
+      return err(FORM_NOT_FOUND);
+    }
     const { tenant } = context;
     return this.unitOfWork.run<void, RetireFormFailure>(tenant, async () => {
       const form = await this.forms.find(tenant, input.formId);

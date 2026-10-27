@@ -5,6 +5,7 @@ import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work'
 import { FORMS_FORMS_VIEW } from '../../contracts/permissions';
 import { FORM_NOT_FOUND, type FormNotFound } from '../failures';
 import type { FormRecord, FormRepository, FormRevisionSummary } from '../form.repository';
+import type { FormReach } from '../form-reach';
 
 export interface FormView extends FormRecord {
   /** Every revision, newest first, without their documents. */
@@ -22,14 +23,18 @@ export class ViewForm extends UseCase<{ readonly formId: Id<'Form'> }, FormView,
     gate: UseCaseGate,
     private readonly unitOfWork: UnitOfWork,
     private readonly forms: FormRepository,
+    private readonly reach: FormReach,
   ) {
     super(gate);
   }
 
-  protected handle(
+  protected async handle(
     context: CallContext,
     input: { readonly formId: Id<'Form'> },
   ): Promise<Result<FormView, FormNotFound>> {
+    if ((await this.reach.form(context, FORMS_FORMS_VIEW.key, input.formId)) === null) {
+      return err(FORM_NOT_FOUND);
+    }
     const { tenant } = context;
     return this.unitOfWork.run<FormView, FormNotFound>(
       tenant,

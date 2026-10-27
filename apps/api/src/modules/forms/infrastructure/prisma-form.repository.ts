@@ -10,7 +10,9 @@ import type {
   FormRepository,
   FormRevisionRecord,
   FormRevisionSummary,
+  RevisionFields,
 } from '../application/form.repository';
+import { fieldsOf, type FormField } from '../domain/form-fields';
 import { retentionDaysOf, retentionOf, type Audience } from '../domain/form-settings';
 import type { JsonObject } from '../domain/form-schema';
 import type { FormStatus } from '../domain/lifecycle';
@@ -50,6 +52,14 @@ export class PrismaFormRepository implements FormRepository {
   async find(tenant: TenantContext, id: Id<'Form'>): Promise<FormRecord | null> {
     const row = await this.prisma.tx(tenant).form.findUnique({
       where: { tenantId_id: { tenantId: tenant.tenantId, id }, tenantId: tenant.tenantId },
+      select: FORM_COLUMNS,
+    });
+    return row === null ? null : formOf(row);
+  }
+
+  async findByKey(tenant: TenantContext, key: string): Promise<FormRecord | null> {
+    const row = await this.prisma.tx(tenant).form.findUnique({
+      where: { tenantId_key: { tenantId: tenant.tenantId, key }, tenantId: tenant.tenantId },
       select: FORM_COLUMNS,
     });
     return row === null ? null : formOf(row);
@@ -131,39 +141,71 @@ export class PrismaFormRepository implements FormRepository {
     if (count === 0) throw new StaleAggregateError('forms.form', id);
   }
 
-  async appendRevision(
-    tenant: TenantContext,
-    revision: Omit<FormRevisionRecord, 'number'>,
-  ): Promise<{ readonly number: number } | null> {
+  async takeRevisionNumber(tenant: TenantContext, formId: Id<'Form'>): Promise<number | null> {
     const tx = this.prisma.tx(tenant);
     // One statement takes the row lock and the number: a concurrent save waits here, then
     // takes the next one. The form's version is untouched (its own fields did not change).
     const { count } = await tx.form.updateMany({
-      where: { tenantId: tenant.tenantId, id: revision.formId },
+      where: { tenantId: tenant.tenantId, id: formId },
       data: { revisionCount: { increment: 1 } },
     });
     if (count === 0) return null;
     const form = await tx.form.findUnique({
-      where: {
-        tenantId_id: { tenantId: tenant.tenantId, id: revision.formId },
-        tenantId: tenant.tenantId,
-      },
+      where: { tenantId_id: { tenantId: tenant.tenantId, id: formId }, tenantId: tenant.tenantId },
       select: { revisionCount: true },
     });
-    const number = form!.revisionCount;
-    await tx.formRevision.create({
+    return form!.revisionCount;
+  }
+
+  async revisionFields(
+    tenant: TenantContext,
+    formId: Id<'Form'>,
+    number: number,
+  ): Promise<readonly FormField[] | null> {
+    const row = await this.prisma.tx(tenant).formRevision.findUnique({
+      where: {
+        tenantId_formId_number: { tenantId: tenant.tenantId, formId, number },
+        tenantId: tenant.tenantId,
+      },
+      select: { fields: true },
+    });
+    return row === null ? null : fieldsOf(row.fields);
+  }
+
+  async insertRevision(
+    tenant: TenantContext,
+    revision: FormRevisionRecord & { readonly fields: readonly FormField[] },
+  ): Promise<void> {
+    await this.prisma.tx(tenant).formRevision.create({
       data: {
         tenantId: tenant.tenantId,
         id: revision.id,
         formId: revision.formId,
-        number,
+        number: revision.number,
         jsonSchema: revision.jsonSchema as object,
         uiSchema: revision.uiSchema as object,
+        fields: revision.fields.map((field) => ({ ...field })),
         contentHash: revision.contentHash,
         createdAt: dateOf(revision.createdAt),
       },
     });
-    return { number };
+  }
+
+  async fieldsOfRevisions(
+    tenant: TenantContext,
+    ids: readonly Id<'FormRevision'>[],
+  ): Promise<ReadonlyMap<string, RevisionFields>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.tx(tenant).formRevision.findMany({
+      where: { tenantId: tenant.tenantId, id: { in: [...ids] } },
+      select: { id: true, number: true, fields: true },
+    });
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        { id: row.id as Id<'FormRevision'>, number: row.number, fields: fieldsOf(row.fields) },
+      ]),
+    );
   }
 
   async findRevision(
@@ -172,13 +214,14 @@ export class PrismaFormRepository implements FormRepository {
   ): Promise<FormRevisionRecord | null> {
     const row = await this.prisma.tx(tenant).formRevision.findUnique({
       where: { tenantId_id: { tenantId: tenant.tenantId, id }, tenantId: tenant.tenantId },
-      select: { ...SUMMARY_COLUMNS, jsonSchema: true, uiSchema: true },
+      select: { ...SUMMARY_COLUMNS, jsonSchema: true, uiSchema: true, fields: true },
     });
     if (row === null) return null;
     return {
       ...summaryOf(row),
       jsonSchema: row.jsonSchema as JsonObject,
       uiSchema: row.uiSchema as JsonObject,
+      fields: fieldsOf(row.fields),
     };
   }
 

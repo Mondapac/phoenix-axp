@@ -13,6 +13,7 @@ import {
   type InvalidValue,
   type SettingsNeedPublisher,
 } from '../failures';
+import type { FormReach } from '../form-reach';
 import type { FormRepository } from '../form.repository';
 import { parseSettings, settingsAudit, type FormSettingsInput } from '../form-settings-input';
 
@@ -40,20 +41,24 @@ export class UpdateForm extends UseCase<UpdateFormInput, void, UpdateFormFailure
     gate: UseCaseGate,
     private readonly unitOfWork: UnitOfWork,
     private readonly forms: FormRepository,
+    private readonly reach: FormReach,
     private readonly audit: AuditWriter,
     private readonly clock: Clock,
   ) {
     super(gate);
   }
 
-  protected handle(
+  protected async handle(
     context: CallContext,
     input: UpdateFormInput,
   ): Promise<Result<void, UpdateFormFailure>> {
     const name = parseName(input.name);
-    if (!name.ok) return Promise.resolve(name);
+    if (!name.ok) return name;
     const settings = parseSettings(input);
-    if (!settings.ok) return Promise.resolve(settings);
+    if (!settings.ok) return settings;
+    if ((await this.reach.form(context, FORMS_FORMS_DESIGN.key, input.formId)) === null) {
+      return err(FORM_NOT_FOUND);
+    }
     const { policy, retention } = settings.value;
     const { tenant } = context;
 
