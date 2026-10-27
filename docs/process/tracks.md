@@ -19,7 +19,7 @@
 | `product` | `phoenix-axp-reports` | `docs/phase-0-poc-reports` | #4 | گزارش چهار PoC (برش 0.6 تا 0.9)، **انجام‌شده** | merge |
 | `backend` | `phoenix-axp-backend` | `chore/skeleton` | #2 | برش 0.3 تا 0.5 (اسکلت، پایهٔ platform، Docker Compose) | اصلاح دروازهٔ مجوزها (ADR-0009) و بازبینی امنیتی، سپس merge |
 | `backend` | `phoenix-axp-phase1` | `feat/phase-1-platform` (روی `chore/skeleton`) | #5 | برش 1.1 تا 1.3 (authz، events، audit) | بازبینی امنیتی؛ پس از merge #2 هدف PR به `main` |
-| `backend` | — | `claude/project-thread-s01c02` (روی `chore/skeleton`) | #3 | برش 1.7 (storage)، ترد دیگر فاز ۱ | rebase پس از merge #5 |
+| `backend` | — | `claude/project-thread-s01c02` (روی `chore/skeleton`) | #3 | برش 1.7 (storage)، ترد دیگر فاز ۱ | ادغام `main` در شاخه (merge، بدون rebase) پس از merge #5 |
 | `process` | `phoenix-axp-poc-flowable` | `spike/poc-3-flowable-bridge` | — (merge نمی‌شود، D5) | PoC 3 (برش 0.8)، **انجام‌شده** @ `03c8fc8` | کار اصلی در فاز ۲ |
 | `frontend` | `phoenix-axp-poc-rtl` | `spike/poc-4-rtl-portal` | — (merge نمی‌شود، D5) | PoC 4 (برش 0.9)، **انجام‌شده** @ `1fa15c0` | برش 1.9 پس از P7 (فونت) |
 
