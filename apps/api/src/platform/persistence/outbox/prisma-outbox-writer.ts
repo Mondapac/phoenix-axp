@@ -42,7 +42,7 @@ interface OutboxRow {
  * The outbox writer of platform persistence design, "P", 5.2, bound to one module. It writes
  * through the module's outbox model of the open unit (`PrismaService.tx`), so the tenant guard
  * checks the tenant of every row like any other (P 4), row-level security checks it again in
- * the database (ADR-02), and the unit's commit or rollback decides the rows with the state
+ * the database (ADR-0002), and the unit's commit or rollback decides the rows with the state
  * change. Every row carries exactly one tenant: the context's, which is the unit's.
  */
 class PrismaOutboxWriter implements OutboxWriter {

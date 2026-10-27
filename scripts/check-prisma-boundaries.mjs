@@ -56,7 +56,7 @@ const RAW_SQL_FILES = new Set([
   'platform/persistence/database-probe.ts',
   'platform/persistence/guarded-client.ts',
   // The relay, the bus adapter and the dispatcher claim and mark rows of every module's outbox
-  // and of platform.event_delivery with fixed statements, setting the tenant first (ADR-05).
+  // and of platform.event_delivery with fixed statements, setting the tenant first (ADR-0006).
   'platform/persistence/outbox/in-process-event-bus.ts',
   'platform/persistence/outbox/prisma-event-dispatcher.ts',
   'platform/persistence/outbox/prisma-outbox-relay.ts',

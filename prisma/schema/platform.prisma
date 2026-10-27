@@ -22,14 +22,14 @@ model IsolationProbe {
 }
 
 /// One delivery of one event to one subscriber (ported from Mondapac platform.prisma, the
-/// in-process bus of ADR-05; Mondapac platform persistence design 6.3 and 6.4). The relay fans
+/// in-process bus of ADR-0006; Mondapac platform persistence design 6.3 and 6.4). The relay fans
 /// each published event out to a `pending` row per subscription of its type, with a copy of the
 /// envelope; the dispatcher claims due rows and runs their handlers. Phoenix: the tenant leads
-/// every key and row-level security applies (ADR-02), so the relay and the dispatcher set the
+/// every key and row-level security applies (ADR-0002), so the relay and the dispatcher set the
 /// tenant in each of their transactions. The CHECKs, the claim index, the grants and the policy
 /// are hand-written in the migration.
 model EventDelivery {
-  /// The tenant of the event (ADR-02): mandatory, no default, first in every key.
+  /// The tenant of the event (ADR-0002): mandatory, no default, first in every key.
   tenantId         String    @map("tenant_id") @db.VarChar(32)
   /// The event's id (the outbox row's event_id).
   eventId          String    @map("event_id") @db.Uuid
@@ -56,7 +56,7 @@ model EventDelivery {
   deliveredAt      DateTime? @map("delivered_at") @db.Timestamptz(3)
   deadAt           DateTime? @map("dead_at") @db.Timestamptz(3)
 
-  /// ADR-05: one row per event and subscriber, within the tenant.
+  /// ADR-0006: one row per event and subscriber, within the tenant.
   @@id([tenantId, eventId, subscriber])
   @@map("event_delivery")
   @@schema("platform")

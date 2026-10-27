@@ -72,7 +72,7 @@ type InboxDelegate = {
 
 /**
  * Inserts `(tenant, event, handler)` into the inbox of the subscriber's module, through the open
- * unit's guarded view, ignoring a repeated key (ADR-05, per-module inbox idempotency). Answers
+ * unit's guarded view, ignoring a repeated key (ADR-0006, per-module inbox idempotency). Answers
  * whether the row is new, so the work runs once per event and handler. The module's inbox model
  * comes from the model map (the named exception of this folder).
  */

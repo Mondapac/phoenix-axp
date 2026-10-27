@@ -183,7 +183,7 @@ export class PrismaUnitOfWork implements UnitOfWork {
   }
 
   /**
-   * Ported from Mondapac (P 6.4; ADR-05): the inbox row, the work when the row is new, and the
+   * Ported from Mondapac (P 6.4; ADR-0006): the inbox row, the work when the row is new, and the
    * mark of the delivery, in one read-write unit of the delivery's tenant; on a retry of the
    * unit all three run again. The delivery is settled only after the commit, so the dispatcher
    * sees a failed handler.

@@ -51,7 +51,7 @@ export interface UnitOfWork {
   ): Promise<Result<T, E>>;
 
   /**
-   * The unit of an event-handling use case (ported from Mondapac, P 6.4; ADR-05 inbox
+   * The unit of an event-handling use case (ported from Mondapac, P 6.4; ADR-0006 inbox
    * idempotency): one read-write unit of `tenant` that inserts `(tenant, eventId, subscriber)`
    * into the subscriber's module inbox, runs `work` only when that row is new, and marks the
    * delivery delivered, all in one transaction. A repeated delivery therefore commits nothing
