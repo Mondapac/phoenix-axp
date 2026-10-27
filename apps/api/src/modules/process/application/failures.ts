@@ -9,6 +9,17 @@ export type InvalidVariable = { readonly code: 'process.variable.invalid'; reado
 
 export type { BpmnRefusal };
 
+/**
+ * A form the model names is not a published form the publisher may view (slice 2.6); `field`
+ * is the BPMN element that names it, never the key.
+ */
+export type FormNotFound = { readonly code: 'process.form.not-found'; readonly field: string };
+/** The start form already starts another process key (one process per form); `field` as above. */
+export type FormStartsAnotherProcess = {
+  readonly code: 'process.form.starts-another-process';
+  readonly field: string;
+};
+
 export const REVISION_NOT_FOUND: RevisionNotFound = Object.freeze({
   code: 'process.revision.not-found',
 });

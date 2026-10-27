@@ -22,8 +22,13 @@ import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
 import { StaleAggregateError } from '../../src/platform/unit-of-work/errors';
 import { CallLostError, FakeProcessEngine } from '../support/fake-process-engine';
-import { RecordingAuditWriter, testTenantRegistry } from '../support/process-test-support';
+import {
+  ANY_FORMS,
+  RecordingAuditWriter,
+  testTenantRegistry,
+} from '../support/process-test-support';
 import { realFlowableScenarios } from './process-flowable.scenarios';
+import { formLinkScenarios } from './process-form-link.scenarios';
 import { taskInboxScenarios } from './process-inbox.scenarios';
 import { TEST_TENANTS } from '../support/test-config';
 import {
@@ -104,6 +109,7 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
         commands,
         hashing,
         audit,
+        ANY_FORMS,
         clock,
         ids,
       ),
@@ -710,4 +716,5 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
 // The task inbox on the fake engine (slice 2.3), then the same bridge on the real engine, after
 // the fake engine's scenarios (see that file).
 taskInboxScenarios();
+formLinkScenarios();
 realFlowableScenarios();

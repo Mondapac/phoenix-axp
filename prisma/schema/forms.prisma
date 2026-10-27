@@ -122,3 +122,32 @@ model FormSubmission {
   @@map("form_submission")
   @@schema("forms")
 }
+
+/// The forms module's outbox (ADR-0006; slice 2.6): written only by the platform OutboxWriter in
+/// the unit of the state change, read and marked only by the relay. The same fields as every
+/// module outbox (scripts/check-prisma-boundaries.mjs). Payloads hold ids and codes only.
+model FormsOutbox {
+  /// UUIDv7 stamped by the outbox writer.
+  eventId          String    @id @map("event_id") @db.Uuid
+  /// "forms.<subject>-<verb>.v<N>"; the CHECK refuses another module's type.
+  type             String    @db.VarChar(128)
+  /// The instant the use case took from Clock (UTC).
+  occurredAt       DateTime  @map("occurred_at") @db.Timestamptz(3)
+  /// The tenant of the unit that wrote the event (ADR-0002); stamped by the writer.
+  tenantId         String    @map("tenant_id") @db.VarChar(32)
+  aggregateType    String    @map("aggregate_type") @db.VarChar(64)
+  aggregateId      String    @map("aggregate_id") @db.Uuid
+  /// The aggregate's version after the change; unique per aggregate.
+  aggregateVersion Int       @map("aggregate_version")
+  correlationId    String    @map("correlation_id") @db.VarChar(128)
+  /// The consumed event that caused this one, or null.
+  causationId      String?   @map("causation_id") @db.Uuid
+  payload          Json      @db.JsonB
+  /// Set by the relay when the event was handed to the bus; the only column that changes.
+  publishedAt      DateTime? @map("published_at") @db.Timestamptz(3)
+
+  /// No two events of one aggregate share a version; led by the tenant (ADR-0002).
+  @@unique([tenantId, aggregateId, aggregateVersion], map: "outbox_tenant_id_aggregate_id_aggregate_version_key")
+  @@map("outbox")
+  @@schema("forms")
+}

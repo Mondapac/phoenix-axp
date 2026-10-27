@@ -35,7 +35,11 @@ import {
 import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node-bridge-hashing';
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
 import { CallLostError, FakeProcessEngine } from '../support/fake-process-engine';
-import { RecordingAuditWriter, testTenantRegistry } from '../support/process-test-support';
+import {
+  ANY_FORMS,
+  RecordingAuditWriter,
+  testTenantRegistry,
+} from '../support/process-test-support';
 import { TEST_TENANTS } from '../support/test-config';
 import {
   createPersistence,
@@ -199,6 +203,7 @@ export function taskInboxScenarios(): void {
           commands,
           hashing,
           audit,
+          ANY_FORMS,
           clock,
           ids,
         ),

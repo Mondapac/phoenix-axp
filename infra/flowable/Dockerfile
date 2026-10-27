@@ -4,15 +4,34 @@
 # database of its own, so the same image runs in development, CI, on-prem and offline
 # (`docker save` / `docker load`).
 #
-#   docker build -t phoenix/flowable-rest:7.1.0-phoenix.1 infra/flowable
+#   docker build -t phoenix/flowable-rest:7.1.0-phoenix.2 infra/flowable
 #
 # The base is pinned by digest. BASE_IMAGE may name a mirror or an offline registry, as long
 # as the digest stays the same (CI pulls from mirror.gcr.io: Docker Hub rate-limits runners).
+# JDK_IMAGE only compiles Phoenix's engine configuration (no-expression-beans/); nothing of it
+# ships in the image. Same rule for mirrors.
 ARG BASE_IMAGE=flowable/flowable-rest:7.1.0@sha256:b7ae287502cd5c243b577a0ca2894172e1c18cd75aea4fd67dc7d58f1b40db44
-FROM ${BASE_IMAGE}
+ARG JDK_IMAGE=eclipse-temurin:21-jdk-alpine@sha256:fd52084c35bbac78890d95d57707d31ffc9d7a3324199e89c06be2a9dc71bfa0
+
+FROM ${BASE_IMAGE} AS flowable
+
+# Compiled against the base image's own jars, for its Java 17+ runtime (security review of slice
+# 2.2: expressions resolve no Spring bean).
+FROM ${JDK_IMAGE} AS configuration
+COPY --from=flowable /app/WEB-INF/lib /flowable-lib
+COPY no-expression-beans /src
+RUN mkdir /out \
+ && javac --release 17 -cp '/flowable-lib/*' -d /out /src/src/org/phoenix/flowable/*.java \
+ && cp -r /src/resources/META-INF /out/ \
+ && jar cf /phoenix-no-expression-beans.jar -C /out .
+
+FROM flowable
 
 # A base without the driver fails the build here, not at the first deployment.
 RUN test -f /app/WEB-INF/lib/postgresql-42.7.4.jar
+
+# Spring Boot loads it as an auto-configuration from the classpath (WEB-INF/lib/*).
+COPY --from=configuration --chmod=0444 /phoenix-no-expression-beans.jar /app/WEB-INF/lib/
 
 # One COPY: BuildKit gives the directory it creates the same mode, read and enter, never write.
 COPY --chmod=0555 phoenix-entrypoint.sh phoenix-flowable.properties /opt/phoenix/

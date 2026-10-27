@@ -65,6 +65,8 @@ export interface FormChanges {
 export interface FormRepository {
   find(tenant: TenantContext, id: Id<'Form'>): Promise<FormRecord | null>;
   findByKey(tenant: TenantContext, key: string): Promise<FormRecord | null>;
+  /** The forms of these keys that exist, in no particular order. */
+  findByKeys(tenant: TenantContext, keys: readonly string[]): Promise<FormRecord[]>;
   /** The tenant's forms, by name then id. */
   list(tenant: TenantContext, filter: FormFilter): Promise<FormRecord[]>;
   /** `key-taken` when the key is in use in the tenant. */

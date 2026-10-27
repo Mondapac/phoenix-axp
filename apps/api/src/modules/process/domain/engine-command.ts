@@ -1,4 +1,5 @@
 import type { Temporal } from '@phoenix/shared-kernel';
+import { durationSeconds, timerDurationAllowed } from './bpmn-guard';
 
 /**
  * A command of the core to the engine (ADR-0005 decision 3; ADR-0020 decision 7). Written in
@@ -62,7 +63,11 @@ const VARIABLE_TEXT = /^[A-Za-z0-9._:-]{1,64}$/;
 export const RESERVED_VARIABLE_PREFIX = 'phoenix';
 export const MAX_VARIABLES = 32;
 
-/** Whether `variables` may be sent to the engine: the field name of the first bad one, or null. */
+/**
+ * Whether `variables` may be sent to the engine: the field name of the first bad one, or null.
+ * A value that reads as an ISO 8601 duration may feed a timer (bpmn-guard.ts), so it must last
+ * at least the guard's minimum.
+ */
 export function invalidVariable(variables: Readonly<Record<string, unknown>>): string | null {
   const entries = Object.entries(variables);
   if (entries.length > MAX_VARIABLES) return 'variables';
@@ -71,7 +76,9 @@ export function invalidVariable(variables: Readonly<Record<string, unknown>>): s
     const valid =
       typeof value === 'boolean' ||
       (typeof value === 'number' && Number.isSafeInteger(value)) ||
-      (typeof value === 'string' && VARIABLE_TEXT.test(value));
+      (typeof value === 'string' &&
+        VARIABLE_TEXT.test(value) &&
+        (durationSeconds(value) === null || timerDurationAllowed(value)));
     if (!valid) return name;
   }
   return null;

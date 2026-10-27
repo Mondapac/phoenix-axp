@@ -59,6 +59,7 @@ import { WorkerSchemaEngine } from '../../src/modules/forms/infrastructure/worke
 import { CreateSite } from '../../src/modules/tenancy/application/use-cases/create-site.use-case';
 import { TENANCY_PERMISSIONS } from '../../src/modules/tenancy/contracts/permissions';
 import { PrismaOrganizationRepository } from '../../src/modules/tenancy/infrastructure/prisma-organization.repository';
+import { FORMS_EVENTS } from '../../src/modules/forms/domain/events';
 import { PrismaSiteRepository } from '../../src/modules/tenancy/infrastructure/prisma-site.repository';
 import { PrismaTenantSettingsRepository } from '../../src/modules/tenancy/infrastructure/prisma-tenant-settings.repository';
 import { ClosureSiteAncestryReader } from '../../src/modules/tenancy/infrastructure/site-ancestry.reader';
@@ -74,6 +75,7 @@ import {
   tenantOf,
   type Persistence,
 } from './persistence-support';
+import { moduleWriter } from './outbox-support';
 import { testDatabaseUrl } from './test-database';
 
 // Phase 2 slice 2.5: form submissions end to end against PostgreSQL, on both tenant fixtures:
@@ -275,6 +277,7 @@ describe.each(TEST_TENANTS)('form submissions in tenant %s (database integration
       limiter,
       subjectKeys,
       audit,
+      moduleWriter(p, 'forms', FORMS_EVENTS),
       clock,
       ids,
     );
@@ -468,6 +471,30 @@ describe.each(TEST_TENANTS)('form submissions in tenant %s (database integration
           boundSubjectId: done.submissionId,
         },
       }),
+    ]);
+    // Slice 2.6: the submission's event, in its unit, with ids and the channel only.
+    const events = await asApplication<{
+      type: string;
+      aggregate_type: string;
+      aggregate_version: number;
+      payload: unknown;
+    }>(
+      `SELECT type, aggregate_type, aggregate_version, payload FROM forms.outbox
+        WHERE aggregate_id = $1`,
+      [done.submissionId],
+    );
+    expect(events).toEqual([
+      {
+        type: 'forms.submission-received.v1',
+        aggregate_type: 'form-submission',
+        aggregate_version: 1,
+        payload: {
+          formId: form.formId,
+          revisionId: form.revisionId,
+          siteId: form.siteId,
+          channel: 'anonymous',
+        },
+      },
     ]);
   });
 

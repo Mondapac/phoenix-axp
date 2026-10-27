@@ -31,6 +31,8 @@ export interface TaskRecord {
   readonly engineTaskId: string;
   readonly taskKey: string;
   readonly formKey: string | null;
+  /** The form revision the task shows, pinned by its process revision (slice 2.6). */
+  readonly formRevisionId: Id<'FormRevision'> | null;
   readonly status: TaskStatus;
   readonly completionKey: string | null;
   readonly version: number;
@@ -52,6 +54,20 @@ export type NewTask = Omit<
   TaskRecord,
   'version' | 'completionKey' | 'escalatedAt' | 'outcome' | 'openedAt'
 >;
+
+/** A form a revision pins (slice 2.6): its start form, or the form of one user task. */
+export interface FormBinding {
+  readonly elementId: string;
+  readonly kind: 'start' | 'task';
+  readonly formId: Id<'Form'>;
+  readonly formRevisionId: Id<'FormRevision'>;
+}
+
+/** The revision a submission of a form starts, with what its start event pins. */
+export interface StartingRevision {
+  readonly id: Id<'ProcessRevision'>;
+  readonly formRevisionId: Id<'FormRevision'>;
+}
 
 /** A revision's stored task settings: task key to attributes, checked again when read. */
 export type StoredTaskSettings = Readonly<Record<string, Readonly<Record<string, string>>>>;
@@ -117,6 +133,8 @@ export interface ProcessRepository {
       readonly id: Id<'ProcessInstance'>;
       readonly revisionId: Id<'ProcessRevision'>;
       readonly siteId: Id<'Site'> | null;
+      /** The submission that started it (slice 2.6); one instance per submission. */
+      readonly submissionId?: Id<'FormSubmission'> | null;
     },
     at: Temporal.Instant,
   ): Promise<void>;
@@ -140,6 +158,39 @@ export interface ProcessRepository {
 
   /** Inserts a task seen open, or seen only after it ended (closed at `at` then). */
   insertTask(tenant: TenantContext, task: NewTask, at: Temporal.Instant): Promise<void>;
+  /** The form revision a revision pins for one user task; null when it pins none. */
+  taskFormRevision(
+    tenant: TenantContext,
+    revisionId: Id<'ProcessRevision'>,
+    taskKey: string,
+  ): Promise<Id<'FormRevision'> | null>;
+
+  /** Records what a new revision pins (slice 2.6); in the unit that inserts the revision. */
+  insertFormBindings(
+    tenant: TenantContext,
+    revisionId: Id<'ProcessRevision'>,
+    bindings: readonly FormBinding[],
+  ): Promise<void>;
+  /**
+   * Claims `formId` as the start form of `processKey` if no process claimed it yet, and
+   * answers the process key that holds it after the call.
+   */
+  claimStartForm(
+    tenant: TenantContext,
+    formId: Id<'Form'>,
+    processKey: string,
+    at: Temporal.Instant,
+  ): Promise<string>;
+  /**
+   * The revision a submission of `formId` starts: the newest revision of the process that
+   * claimed the form, if that revision still binds it to its start event; otherwise null.
+   */
+  startingRevision(tenant: TenantContext, formId: Id<'Form'>): Promise<StartingRevision | null>;
+  /** Whether an instance was started from this submission. */
+  hasInstanceFromSubmission(
+    tenant: TenantContext,
+    submissionId: Id<'FormSubmission'>,
+  ): Promise<boolean>;
   findTask(tenant: TenantContext, id: string): Promise<TaskRecord | null>;
   findTaskByEngineId(tenant: TenantContext, engineTaskId: string): Promise<TaskRecord | null>;
   /** Open and completing tasks, oldest first, after `afterId`, at most `limit`. */

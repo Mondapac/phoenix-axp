@@ -6,12 +6,14 @@ import { StaleAggregateError } from '../../../platform/unit-of-work/errors';
 import type {
   CalendarRecord,
   CommandRecord,
+  FormBinding,
   IncidentRecord,
   InstanceRecord,
   NewCommand,
   NewTask,
   ProcessRepository,
   RevisionRecord,
+  StartingRevision,
   StoredTaskSettings,
   SyncState,
   TaskRecord,
@@ -32,6 +34,7 @@ const TASK_COLUMNS = {
   engineTaskId: true,
   taskKey: true,
   formKey: true,
+  formRevisionId: true,
   status: true,
   completionKey: true,
   version: true,
@@ -136,6 +139,7 @@ export class PrismaProcessRepository implements ProcessRepository {
       readonly id: Id<'ProcessInstance'>;
       readonly revisionId: Id<'ProcessRevision'>;
       readonly siteId: Id<'Site'> | null;
+      readonly submissionId?: Id<'FormSubmission'> | null;
     },
     at: Temporal.Instant,
   ): Promise<void> {
@@ -145,6 +149,7 @@ export class PrismaProcessRepository implements ProcessRepository {
         id: instance.id,
         revisionId: instance.revisionId,
         siteId: instance.siteId,
+        submissionId: instance.submissionId ?? null,
         status: 'starting',
         engineInstanceId: null,
         requestedAt: dateOf(at),
@@ -218,6 +223,7 @@ export class PrismaProcessRepository implements ProcessRepository {
         engineTaskId: task.engineTaskId,
         taskKey: task.taskKey,
         formKey: task.formKey,
+        formRevisionId: task.formRevisionId,
         status: task.status,
         completionKey: null,
         siteId: task.siteId,
@@ -234,6 +240,104 @@ export class PrismaProcessRepository implements ProcessRepository {
         version: 1,
       },
     });
+  }
+
+  async taskFormRevision(
+    tenant: TenantContext,
+    revisionId: Id<'ProcessRevision'>,
+    taskKey: string,
+  ): Promise<Id<'FormRevision'> | null> {
+    const row = await this.prisma.tx(tenant).processFormBinding.findUnique({
+      where: {
+        tenantId_revisionId_elementId: {
+          tenantId: tenant.tenantId,
+          revisionId,
+          elementId: taskKey,
+        },
+        tenantId: tenant.tenantId,
+      },
+      select: { kind: true, formRevisionId: true },
+    });
+    return row?.kind === 'task' ? (row.formRevisionId as Id<'FormRevision'>) : null;
+  }
+
+  async insertFormBindings(
+    tenant: TenantContext,
+    revisionId: Id<'ProcessRevision'>,
+    bindings: readonly FormBinding[],
+  ): Promise<void> {
+    if (bindings.length === 0) return;
+    await this.prisma.tx(tenant).processFormBinding.createMany({
+      data: bindings.map((binding) => ({
+        tenantId: tenant.tenantId,
+        revisionId,
+        elementId: binding.elementId,
+        kind: binding.kind,
+        formId: binding.formId,
+        formRevisionId: binding.formRevisionId,
+      })),
+    });
+  }
+
+  async claimStartForm(
+    tenant: TenantContext,
+    formId: Id<'Form'>,
+    processKey: string,
+    at: Temporal.Instant,
+  ): Promise<string> {
+    const tx = this.prisma.tx(tenant);
+    // ON CONFLICT DO NOTHING: a second claim waits for the first and then inserts nothing.
+    await tx.processStartForm.createMany({
+      data: [{ tenantId: tenant.tenantId, formId, processKey, claimedAt: dateOf(at) }],
+      skipDuplicates: true,
+    });
+    const row = await tx.processStartForm.findUniqueOrThrow({
+      where: { tenantId_formId: { tenantId: tenant.tenantId, formId }, tenantId: tenant.tenantId },
+      select: { processKey: true },
+    });
+    return row.processKey;
+  }
+
+  async startingRevision(
+    tenant: TenantContext,
+    formId: Id<'Form'>,
+  ): Promise<StartingRevision | null> {
+    const tx = this.prisma.tx(tenant);
+    const claim = await tx.processStartForm.findUnique({
+      where: { tenantId_formId: { tenantId: tenant.tenantId, formId }, tenantId: tenant.tenantId },
+      select: { processKey: true },
+    });
+    if (claim === null) return null;
+    const latest = await tx.processRevision.findFirst({
+      where: { tenantId: tenant.tenantId, processKey: claim.processKey },
+      orderBy: { revision: 'desc' },
+      select: { id: true },
+    });
+    if (latest === null) return null;
+    const start = await tx.processFormBinding.findFirst({
+      where: { tenantId: tenant.tenantId, revisionId: latest.id, kind: 'start', formId },
+      select: { formRevisionId: true },
+    });
+    return start === null
+      ? null
+      : {
+          id: latest.id as Id<'ProcessRevision'>,
+          formRevisionId: start.formRevisionId as Id<'FormRevision'>,
+        };
+  }
+
+  async hasInstanceFromSubmission(
+    tenant: TenantContext,
+    submissionId: Id<'FormSubmission'>,
+  ): Promise<boolean> {
+    const row = await this.prisma.tx(tenant).processInstance.findUnique({
+      where: {
+        tenantId_submissionId: { tenantId: tenant.tenantId, submissionId },
+        tenantId: tenant.tenantId,
+      },
+      select: { id: true },
+    });
+    return row !== null;
   }
 
   async findTask(tenant: TenantContext, id: string): Promise<TaskRecord | null> {
@@ -656,6 +760,7 @@ function taskOf(row: {
   engineTaskId: string;
   taskKey: string;
   formKey: string | null;
+  formRevisionId: string | null;
   status: string;
   completionKey: string | null;
   version: number;
@@ -674,6 +779,7 @@ function taskOf(row: {
     ...row,
     id: row.id as Id<'ProcessTask'>,
     instanceId: row.instanceId as Id<'ProcessInstance'>,
+    formRevisionId: row.formRevisionId as Id<'FormRevision'> | null,
     status: row.status as TaskStatus,
     siteId: row.siteId as Id<'Site'> | null,
     candidateRoleId: row.candidateRoleId as Id<'Role'> | null,

@@ -11,6 +11,7 @@ import {
   type SiteAncestryReader,
 } from '../../platform/authz';
 import { CLOCK } from '../../platform/clock/clock.module';
+import { registerSubscriptionsFrom } from '../../platform/events/event-subscriptions';
 import type { AppConfig } from '../../platform/config/app-config';
 import { APP_CONFIG } from '../../platform/config/config.module';
 import { ID_GENERATOR } from '../../platform/ids/ids.module';
@@ -18,6 +19,7 @@ import { PersistenceModule } from '../../platform/persistence/persistence.module
 import { registerJobsFrom } from '../../platform/scheduler/job-registry';
 import { TenantRegistry } from '../../platform/tenant-config/tenant-registry';
 import { UNIT_OF_WORK, type UnitOfWork } from '../../platform/unit-of-work/unit-of-work';
+import { FORM_REFERENCES, FormsModule } from '../forms';
 import { CommandRelay } from './application/bridge/command-relay';
 import { EngineSync } from './application/bridge/engine-sync';
 import { EngineCommands } from './application/engine-commands';
@@ -36,6 +38,7 @@ import { PublishProcessRevision } from './application/use-cases/publish-process-
 import { RelayEngineCommands } from './application/use-cases/relay-engine-commands.use-case';
 import { ReleaseTask } from './application/use-cases/release-task.use-case';
 import { ReplaceWorkingCalendar } from './application/use-cases/replace-working-calendar.use-case';
+import { StartProcessFromSubmission } from './application/use-cases/start-process-from-submission.use-case';
 import { StartProcessInstance } from './application/use-cases/start-process-instance.use-case';
 import { SyncEngine } from './application/use-cases/sync-engine.use-case';
 import { ViewTask } from './application/use-cases/view-task.use-case';
@@ -49,6 +52,7 @@ import { UnconfiguredEngine } from './infrastructure/unconfigured-engine';
 import { escalateOverdueTasksJob } from './presentation/jobs/escalate-overdue-tasks.job';
 import { relayEngineCommandsJob } from './presentation/jobs/relay-engine-commands.job';
 import { syncEngineJob } from './presentation/jobs/sync-engine.job';
+import { startFromSubmissionSubscriber } from './presentation/subscribers/start-from-submission.subscriber';
 import { ProcessIncidentsController } from './presentation/process-incidents.controller';
 import { ProcessRevisionsController } from './presentation/process-revisions.controller';
 import { ProcessTasksController } from './presentation/process-tasks.controller';
@@ -71,9 +75,12 @@ const REPOSITORY = PROCESS_REPOSITORY;
  * deploys it per tenant; the relay sends the core's commands with a lease; the sync reads the
  * engine's tasks and ended instances into the core with watermarks and records incidents. The
  * task inbox (slice 2.3, ADR-0025) assigns, claims and completes tasks, with deadlines on the
- * tenant's working calendar and escalation; the form link (2.6) builds on it.
+ * tenant's working calendar and escalation. The form link (2.6): a revision pins the form
+ * revisions its model names, through the forms facade; a stored submission starts the process
+ * its form starts (forms.submission-received.v1), and each task carries its form revision.
  */
 @Module({
+  imports: [FormsModule],
   controllers: [
     ProcessRevisionsController,
     ProcessIncidentsController,
@@ -161,9 +168,23 @@ const REPOSITORY = PROCESS_REPOSITORY;
       EngineCommands,
       BRIDGE_HASHING,
       AUDIT_WRITER,
+      FORM_REFERENCES,
       CLOCK,
       ID_GENERATOR,
     ]),
+    useCase(StartProcessFromSubmission, [
+      UNIT_OF_WORK,
+      REPOSITORY,
+      EngineCommands,
+      SITE_ANCESTRY_READER,
+      CLOCK,
+      ID_GENERATOR,
+    ]),
+    registerSubscriptionsFrom(
+      'process',
+      [StartProcessFromSubmission],
+      (start: StartProcessFromSubmission) => [startFromSubmissionSubscriber(start)],
+    ),
     useCase(StartProcessInstance, [UNIT_OF_WORK, REPOSITORY, EngineCommands, CLOCK, ID_GENERATOR]),
     useCase(ListProcessIncidents, [UNIT_OF_WORK, REPOSITORY]),
     useCase(RelayEngineCommands, [CommandRelay]),

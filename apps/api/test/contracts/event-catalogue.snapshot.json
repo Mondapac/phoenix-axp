@@ -1,0 +1,12 @@
+[
+  {
+    "type": "forms.submission-received.v1",
+    "aggregateType": "form-submission",
+    "fields": {
+      "formId": "id",
+      "revisionId": "id",
+      "siteId": "id",
+      "channel": "enumOf(anonymous|portal-user|staff|on-behalf)"
+    }
+  }
+]

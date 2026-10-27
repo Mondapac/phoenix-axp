@@ -1,4 +1,4 @@
-import { checkBpmn, MAX_BPMN_BYTES } from './bpmn-guard';
+import { checkBpmn, durationSeconds, MAX_BPMN_BYTES } from './bpmn-guard';
 
 const model = (process: string, key = 'leave-approval') => `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -166,6 +166,83 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
     expect(refusal(model(body))).toEqual({ code: 'process.bpmn.forbidden-construct', field });
   });
 
+  describe('form references (slice 2.6)', () => {
+    const checked = (body: string) => {
+      const result = checkBpmn(model(body), 'leave-approval');
+      if (!result.ok) throw new Error(result.error.code);
+      return result.value.forms;
+    };
+
+    it('reads the start form and each user task form, with their elements', () => {
+      const body = `<startEvent id="start" flowable:formKey="leave-request"/>
+        <sequenceFlow id="f1" sourceRef="start" targetRef="approve"/>
+        <userTask id="approve" flowable:formKey="leave-decision"/>
+        <sequenceFlow id="f2" sourceRef="approve" targetRef="file"/>
+        <userTask id="file"/>
+        <sequenceFlow id="f3" sourceRef="file" targetRef="end"/><endEvent id="end"/>`;
+      expect(checked(body)).toEqual([
+        { elementId: 'start', kind: 'start', formKey: 'leave-request' },
+        { elementId: 'approve', kind: 'task', formKey: 'leave-decision' },
+      ]);
+    });
+
+    it('reads no forms from a model that names none', () => {
+      expect(checked('<startEvent id="start"/>')).toEqual([]);
+    });
+
+    it.each([
+      ['on a manual task', '<manualTask id="m" flowable:formKey="f"/>'],
+      [
+        'on two start events',
+        '<startEvent id="a" flowable:formKey="f"/><startEvent id="b" flowable:formKey="g"/>',
+      ],
+    ])('refuses a form key %s', (_label, body) => {
+      expect(refusal(model(body))).toEqual({
+        code: 'process.bpmn.forbidden-construct',
+        field: 'formKey',
+      });
+    });
+  });
+
+  describe('timer durations (2.2 condition: a minimum)', () => {
+    const timer = (duration: string) => `<startEvent id="start"/>
+      <sequenceFlow id="f1" sourceRef="start" targetRef="wait"/>
+      <intermediateCatchEvent id="wait"><timerEventDefinition><timeDuration>${duration}</timeDuration></timerEventDefinition></intermediateCatchEvent>
+      <sequenceFlow id="f2" sourceRef="wait" targetRef="end"/><endEvent id="end"/>`;
+
+    it.each(['PT1M', 'PT60S', ' P1D ', 'P1W', 'PT1H30M', '${escalateAfter}', '${ dueIn }'])(
+      'accepts %s',
+      (duration) => {
+        expect(refusal(model(timer(duration)))).toBeNull();
+      },
+    );
+
+    it.each([
+      'PT0S',
+      'PT59S',
+      'PT59.9S',
+      'P',
+      'PT',
+      '-PT5M',
+      '1 hour',
+      '${a + b}',
+      '${escalateAfter}x',
+    ])('refuses %s', (duration) => {
+      expect(refusal(model(timer(duration)))).toEqual({
+        code: 'process.bpmn.forbidden-construct',
+        field: 'timeDuration',
+      });
+    });
+
+    it('reads the fewest seconds of a duration', () => {
+      expect(durationSeconds('P1M')).toBe(28 * 86_400);
+      expect(durationSeconds('PT1M30.5S')).toBe(90.5);
+      expect(durationSeconds('PT1,5S')).toBe(1.5);
+      expect(durationSeconds('P1DT')).toBeNull();
+      expect(durationSeconds('nope')).toBeNull();
+    });
+  });
+
   it.each([
     ['UTF-7', '<?xml version="1.0" encoding="UTF-7"?>'],
     ['IBM037', '<?xml version="1.0" encoding="IBM037"?>'],
@@ -193,7 +270,7 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
 
     it('refuses a loop through a timer and a manual task, without a person', () => {
       const body = `<startEvent id="start"/><sequenceFlow id="f1" sourceRef="start" targetRef="wait"/>
-        <intermediateCatchEvent id="wait"><timerEventDefinition><timeDuration>PT1S</timeDuration></timerEventDefinition></intermediateCatchEvent>
+        <intermediateCatchEvent id="wait"><timerEventDefinition><timeDuration>PT5M</timeDuration></timerEventDefinition></intermediateCatchEvent>
         <sequenceFlow id="f2" sourceRef="wait" targetRef="m"/><manualTask id="m"/>
         <sequenceFlow id="f3" sourceRef="m" targetRef="wait"/>`;
       expect(refusal(model(body))).toEqual({ code: 'process.bpmn.unbounded-flow' });
@@ -216,10 +293,39 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
     it('refuses a token pump through a boundary timer back into its own task (re-review H1)', () => {
       const body = `<startEvent id="start"/><sequenceFlow id="f1" sourceRef="start" targetRef="u"/>
         <userTask id="u"/>
-        <boundaryEvent id="b" attachedToRef="u" cancelActivity="false"><timerEventDefinition><timeDuration>PT0S</timeDuration></timerEventDefinition></boundaryEvent>
+        <boundaryEvent id="b" attachedToRef="u" cancelActivity="false"><timerEventDefinition><timeDuration>PT5M</timeDuration></timerEventDefinition></boundaryEvent>
         <sequenceFlow id="f2" sourceRef="b" targetRef="split"/><parallelGateway id="split"/>
         <sequenceFlow id="f3" sourceRef="split" targetRef="u"/><sequenceFlow id="f4" sourceRef="split" targetRef="u"/>`;
       expect(refusal(model(body))).toEqual({ code: 'process.bpmn.unbounded-flow' });
+    });
+
+    it('refuses parallel splits that multiply tokens without a loop (2.2 condition)', () => {
+      // Four splits of eight in a row: 8^4 = 4096 tokens reach the last node.
+      const stage = (i: number) =>
+        `<parallelGateway id="p${i}"/>` +
+        Array.from(
+          { length: 8 },
+          (_, b) => `<sequenceFlow id="s${i}_${b}" sourceRef="p${i}" targetRef="j${i}"/>`,
+        ).join('') +
+        `<exclusiveGateway id="j${i}"/><sequenceFlow id="n${i}" sourceRef="j${i}" targetRef="${i === 3 ? 'end' : `p${i + 1}`}"/>`;
+      const body = `<startEvent id="start"/><sequenceFlow id="f0" sourceRef="start" targetRef="p0"/>
+        ${[0, 1, 2, 3].map(stage).join('')}<endEvent id="end"/>`;
+      expect(refusal(model(body))).toEqual({ code: 'process.bpmn.unbounded-flow' });
+    });
+
+    it('accepts a wide split that joins once, and splits separated by a user task', () => {
+      const branches = (from: string, to: string, n: number) =>
+        Array.from(
+          { length: n },
+          (_, b) => `<sequenceFlow id="${from}_${b}" sourceRef="${from}" targetRef="${to}"/>`,
+        ).join('');
+      const body = `<startEvent id="start"/><sequenceFlow id="f0" sourceRef="start" targetRef="a"/>
+        <parallelGateway id="a"/>${branches('a', 'ja', 30)}<parallelGateway id="ja"/>
+        <sequenceFlow id="f1" sourceRef="ja" targetRef="u"/><userTask id="u"/>
+        <sequenceFlow id="f2" sourceRef="u" targetRef="b"/>
+        <parallelGateway id="b"/>${branches('b', 'jb', 30)}<parallelGateway id="jb"/>
+        <sequenceFlow id="f3" sourceRef="jb" targetRef="end"/><endEvent id="end"/>`;
+      expect(refusal(model(body))).toBeNull();
     });
 
     it('refuses a flow that names a node the model does not hold', () => {
