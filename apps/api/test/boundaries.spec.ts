@@ -527,14 +527,17 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
   });
 
   describe('source files', () => {
-    // Every lint block names .ts, .mts and .cts, and the dependency-cruiser patterns end in
-    // .ts; source of any other kind would escape them. Placeholders and notes are allowed.
+    // Every lint block names .ts, .mts and .cts, and the dependency-cruiser rules match by
+    // directory; source of any other kind would escape them. Placeholders and notes are
+    // allowed, and so is a worker thread's entry (`*-worker.mts`, which Node runs as an ES
+    // module: the forms schema worker, slice 2.5).
     it.each(['apps/api/src', 'packages/shared-kernel/src'])('%s holds only .ts files', (dir) => {
       const others = readdirSync(path.join(REPO_ROOT, dir), {
         recursive: true,
         withFileTypes: true,
       })
         .filter((entry) => entry.isFile() && !entry.name.endsWith('.ts'))
+        .filter((entry) => !/^[a-z][a-z0-9-]*-worker\.mts$/.test(entry.name))
         .filter((entry) => !['.gitkeep', 'README.md'].includes(entry.name))
         .filter((entry) => !entry.parentPath.includes(`${path.sep}generated`))
         .map((entry) => path.relative(REPO_ROOT, path.join(entry.parentPath, entry.name)));

@@ -12,6 +12,7 @@ import { FORMS_FORMS_DESIGN } from '../../contracts/permissions';
 import { FORM_CREATED } from '../../domain/audit-actions';
 import { parseFormKey, parseName } from '../../domain/values';
 import { SITE_NOT_FOUND, type InvalidValue, type KeyTaken, type SiteNotFound } from '../failures';
+import type { FormReach } from '../form-reach';
 import type { FormRepository } from '../form.repository';
 import { parseSettings, settingsAudit, type FormSettingsInput } from '../form-settings-input';
 
@@ -35,6 +36,7 @@ export class CreateForm extends UseCase<CreateFormInput, { id: Id<'Form'> }, Cre
     gate: UseCaseGate,
     private readonly unitOfWork: UnitOfWork,
     private readonly forms: FormRepository,
+    private readonly reach: FormReach,
     private readonly sites: SiteAncestryReader,
     private readonly audit: AuditWriter,
     private readonly clock: Clock,
@@ -56,6 +58,10 @@ export class CreateForm extends UseCase<CreateFormInput, { id: Id<'Form'> }, Cre
     // A port call reads in a unit of its own, so it comes before this one (no facade call
     // inside a unit). Sites are not deleted, so the answer still holds at the insert.
     if (!(await this.sites.siteExists(context, input.siteId))) return err(SITE_NOT_FOUND);
+    // A site the actor's design grants do not reach answers as one that does not exist.
+    if (!(await this.reach.covers(context, FORMS_FORMS_DESIGN.key, input.siteId))) {
+      return err(SITE_NOT_FOUND);
+    }
     const id = this.ids.next<'Form'>();
     const { tenant } = context;
     const { policy, retention } = settings.value;

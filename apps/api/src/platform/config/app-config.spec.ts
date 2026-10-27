@@ -17,9 +17,13 @@ function issuesOf(env: Record<string, string | undefined>): readonly string[] {
   throw new Error('expected InvalidConfigError');
 }
 
-/** The session and Keycloak settings a production start needs besides object storage. */
+/**
+ * The session, Keycloak and subject-key settings a production start needs besides object
+ * storage.
+ */
 const PRODUCTION_SESSION = {
   SESSION_SECRET: Buffer.alloc(32, 1).toString('base64url'),
+  SUBJECT_KEY_KEK: Buffer.alloc(32, 2).toString('base64url'),
   KEYCLOAK_URL: 'https://sso.example.test',
   KEYCLOAK_STUDIO_CLIENT_SECRET: 'client-secret',
   STUDIO_SIGN_IN_CALLBACK_URL: 'https://studio.example.test/auth/callback',
@@ -49,10 +53,28 @@ describe('loadAppConfig', () => {
       storage: null,
       session: { secret: config.session.secret, panelOrigins: [], staffSessionHours: 8 },
       keycloak: null,
+      subjectKeyKek: null,
     });
     expect(config.session.secret).toHaveLength(32);
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.hostedTenants)).toBe(true);
+  });
+
+  it('takes the subject-key KEK as exactly 32 bytes of base64url (ADR-0003)', () => {
+    const kek = Buffer.alloc(32, 7);
+    expect(
+      loadAppConfig({ HOSTED_TENANTS: 'demo-fa', SUBJECT_KEY_KEK: kek.toString('base64url') })
+        .subjectKeyKek,
+    ).toEqual(kek);
+    for (const bad of [
+      Buffer.alloc(16).toString('base64url'),
+      kek.toString('base64'),
+      'x'.repeat(44),
+    ]) {
+      expect(issuesOf({ HOSTED_TENANTS: 'demo-fa', SUBJECT_KEY_KEK: bad })).toEqual([
+        expect.stringMatching(/^SUBJECT_KEY_KEK: must be exactly 32 random bytes/),
+      ]);
+    }
   });
 
   it('records whether NODE_ENV was set, for the placeholder check (ADR-0010 decision 4)', () => {
@@ -297,6 +319,7 @@ describe('loadAppConfig', () => {
       }).filter((issue) => !issue.startsWith('S3_'));
       expect(production).toEqual([
         'SESSION_SECRET: required in production (sessions, ADR-0004)',
+        'SUBJECT_KEY_KEK: required in production (personal data, ADR-0003)',
         'PANEL_ORIGINS: "http://studio.example.test" must be an origin over https',
         'KEYCLOAK_ADMIN_CLIENT_SECRET: required in production (directory sync, ADR-0022)',
         'KEYCLOAK_URL: required in production (staff sign-in, ADR-0004)',

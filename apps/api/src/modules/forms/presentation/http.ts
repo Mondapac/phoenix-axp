@@ -2,7 +2,13 @@ import { HttpException } from '@nestjs/common';
 import { parseId } from '@phoenix/shared-kernel';
 import type { Id, Result } from '@phoenix/shared-kernel';
 import { z } from 'zod';
-import { ACCESS_DENIED_STATUS, type AccessDenied } from '../../../platform/authz';
+import {
+  ACCESS_DENIED_STATUS,
+  FIELD_DENIED_STATUS,
+  type AccessDenied,
+} from '../../../platform/authz';
+import { CAPTCHA_REJECTED_STATUS } from '../../../platform/captcha';
+import { RATE_LIMITED_STATUS } from '../../../platform/rate-limit';
 
 // The HTTP edge of the forms controllers: request parsing and the error body of
 // platform-foundations 5.1, `{ statusCode, code }`, plus the field of an invalid value and, for
@@ -19,7 +25,16 @@ const FAILURE_STATUS: Readonly<Record<string, number>> = Object.freeze({
   'forms.form.already-published': 409,
   'forms.form.not-published': 409,
   'forms.form.settings-need-publisher': 409,
+  'forms.form-revision.outdated': 409,
+  'forms.form-revision.lowering-denied': 403,
+  'forms.submission.not-found': 404,
+  'forms.submission.invalid': 422,
+  'forms.submission.already-erased': 409,
+  'forms.submission.unavailable': 503,
   ...ACCESS_DENIED_STATUS,
+  ...FIELD_DENIED_STATUS,
+  ...CAPTCHA_REJECTED_STATUS,
+  ...RATE_LIMITED_STATUS,
 });
 
 type Failure =
@@ -29,6 +44,10 @@ type Failure =
       readonly field?: string;
       readonly problem?: string;
       readonly pointer?: string;
+      /** For invalid answers: where and which keyword, never a value. */
+      readonly problems?: readonly { readonly pointer: string; readonly keyword: string }[];
+      /** For a rate limit: sent as `Retry-After`. */
+      readonly retryAfterSeconds?: number;
     };
 
 /** The value of an `ok`, or the HTTP answer of the failure. */
@@ -38,7 +57,10 @@ export function answer<T>(result: Result<T, Failure>): T {
   const statusCode = FAILURE_STATUS[failure.code];
   // A code without a status is a programmer error: a 500, as any other exception.
   if (statusCode === undefined) throw new Error(`No HTTP status for "${failure.code}"`);
-  const { field, problem, pointer } = failure as Exclude<Failure, AccessDenied>;
+  const { field, problem, pointer, problems, retryAfterSeconds } = failure as Exclude<
+    Failure,
+    AccessDenied
+  >;
   throw new HttpException(
     {
       statusCode,
@@ -46,6 +68,8 @@ export function answer<T>(result: Result<T, Failure>): T {
       ...(field === undefined ? {} : { field }),
       ...(problem === undefined ? {} : { problem }),
       ...(pointer === undefined ? {} : { pointer }),
+      ...(problems === undefined ? {} : { problems }),
+      ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
     },
     statusCode,
   );

@@ -11,6 +11,17 @@
     }
   },
   {
+    "action": "forms.form-revision.sensitivity-lowered",
+    "targetType": "forms.form-revision",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "fieldIds": "listOf(id, max 256)",
+      "formId": "id"
+    }
+  },
+  {
     "action": "forms.form.created",
     "targetType": "forms.form",
     "targetId": "id",
@@ -65,6 +76,30 @@
       "nameChanged": "boolean",
       "retentionDays": "optional(integer)",
       "roleIds": "listOf(id, max 32)"
+    }
+  },
+  {
+    "action": "forms.submission.erased",
+    "targetType": "forms.submission",
+    "targetId": "id",
+    "actors": ["authenticated", "system"],
+    "before": null,
+    "after": {
+      "formId": "id",
+      "reason": "enumOf(request|retention)"
+    }
+  },
+  {
+    "action": "forms.submission.received",
+    "targetType": "forms.submission",
+    "targetId": "id",
+    "actors": ["anonymous", "authenticated"],
+    "before": null,
+    "after": {
+      "boundSubjectId": "id",
+      "channel": "enumOf(anonymous|portal-user|staff|on-behalf)",
+      "formId": "id",
+      "revisionId": "id"
     }
   },
   {

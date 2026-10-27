@@ -1,4 +1,11 @@
 [
+  { "name": "forms.erase-expired-submissions", "rule": "system" },
+  { "name": "forms.issue-submission-challenge", "rule": "anonymous" },
+  { "name": "forms.submit-form", "rule": "anonymous" },
+  { "name": "forms.submit-form-signed-in", "rule": "own-resources" },
+  { "name": "forms.track-submission", "rule": "anonymous" },
+  { "name": "forms.view-published-form", "rule": "anonymous" },
+  { "name": "forms.view-published-form-signed-in", "rule": "own-resources" },
   { "name": "identity.begin-staff-sign-in", "rule": "anonymous" },
   { "name": "identity.bootstrap-tenant-administrator", "rule": "system" },
   { "name": "identity.complete-staff-sign-in", "rule": "anonymous" },
