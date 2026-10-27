@@ -1,12 +1,13 @@
-# ADR-0022: Phase 1 Owner Decisions — Public Sign-up, Isolation Overhead, AD Sync, Font Licence
+# ADR-0022: Phase 1 Owner Decisions — Public Sign-up, Keycloak Realms, Isolation Overhead, AD Sync, Font Licence
 
-**Status:** Accepted — 2026-10-27 (owner decisions on cards P1, P5, P6 and P7 of the Phase 1 review)
-**Amends:** ADR-0002 (isolation overhead criterion), ADR-0009 (licence allow-list, fonts only)
+**Status:** Accepted — 2026-10-27 (owner decisions on cards P1, P2, P5, P6 and P7 of the Phase 1 review)
+**Amends:** ADR-0004 (realm layout), ADR-0002 (isolation overhead criterion), ADR-0009 (licence allow-list, fonts only)
 **Relates to:** ADR-0004, ADR-0020, `docs/reviews/poc-1-tenant-isolation.md`,
 `docs/reviews/poc-2-hybrid-login.md`, `docs/reviews/poc-4-rtl-portal.md`
 
 ## Context
-The Phase 1 review asked how public users sign up (card P1). The Phase 0 PoCs left three questions open (Phase 1 review, cards P5 to P7):
+The Phase 1 review asked how public users sign up (card P1) and whether Keycloak keeps one realm per tenant (P2); PoC 2
+ran with a realm per tenant and it worked. The Phase 0 PoCs left three questions open (Phase 1 review, cards P5 to P7):
 - PoC 1 showed that RLS policies cost within noise, but a transaction per tiny unit of work costs
   more than 15% on sub-millisecond reads. The criterion in ADR-0002 did not say what it measures.
 - PoC 2 showed that Keycloak sends no back-channel when an account is disabled in AD; the core
@@ -31,6 +32,9 @@ The Phase 1 review asked how public users sign up (card P1). The Phase 0 PoCs le
    (one-time SMS code) or an email address. Each tenant chooses mobile, email or both. The SMS
    gateway sits behind a port; each tenant connects its own provider, and there is no default
    provider.
+5. **Keycloak realms (P2).** Each tenant gets its own Keycloak realm: its AD connection, login
+   theme and password policy stay separate. Trigger for review: more than about 200 tenants on
+   one SaaS deployment, decided in a new ADR.
 
 ## Consequences
 - PoC 1's per-request result meets the criterion; the per-unit numbers stay in the report as
