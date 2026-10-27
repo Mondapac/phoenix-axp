@@ -14,6 +14,8 @@ const tenantCode = z.string().transform((value, context) => {
   return z.NEVER;
 });
 
+const httpUrl = z.string().regex(/^https?:\/\/[^\s/]+(\/\S*)?$/, 'must be an http(s):// URL');
+
 const hostedTenants = z
   .string({ error: 'HOSTED_TENANTS is required; there is no default tenant (ADR-02)' })
   .transform((value) =>
@@ -45,7 +47,25 @@ const envSchema = z.object({
     .regex(/^postgres(ql)?:\/\/\S+$/, 'must be a postgresql:// connection URL'),
   // An explicit pool maximum per process, 10 unless set.
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  // Object storage (ADR-0012): all four of the first group, or none.
+  S3_ENDPOINT: httpUrl.optional(),
+  S3_BUCKET: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/, 'must be an S3 bucket name')
+    .optional(),
+  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_PUBLIC_ENDPOINT: httpUrl.optional(),
+  S3_REGION: z.string().min(1).default('us-east-1'),
 });
+
+/** The variables that switch object storage on, together. */
+const STORAGE_REQUIRED = [
+  'S3_ENDPOINT',
+  'S3_BUCKET',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+] as const;
 
 /** The migration role's URL: read by the prisma CLI, the scripts and test setup only. */
 export const MIGRATION_DATABASE_URL = 'MIGRATION_DATABASE_URL';
@@ -69,6 +89,24 @@ export interface AppConfig {
   readonly databaseUrl: string;
   /** The most pooled connections this process opens. `DATABASE_POOL_MAX`, 1 to 100, default 10. */
   readonly databasePoolMax: number;
+  /**
+   * The S3-compatible object store (SeaweedFS, ADR-0012), or `null` when `S3_*` is unset:
+   * then every storage call fails. Required in production.
+   */
+  readonly storage: StorageConfig | null;
+}
+
+export interface StorageConfig {
+  /** The URL the API reaches the store at. */
+  readonly endpoint: string;
+  /** The URL browsers reach the store at, for signed URLs; `endpoint` unless set. */
+  readonly publicEndpoint: string;
+  readonly region: string;
+  /** One bucket per deployment; keys start with the tenant. */
+  readonly bucket: string;
+  readonly accessKeyId: string;
+  /** A credential: never log it. */
+  readonly secretAccessKey: string;
 }
 
 export class InvalidConfigError extends Error {
@@ -93,7 +131,9 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
         'pnpm db:*, pnpm test:db and pnpm verify only',
     );
   }
+  if (parsed.success) issues.push(...storageIssues(env, parsed.data.NODE_ENV));
   if (!parsed.success || issues.length > 0) throw new InvalidConfigError(issues);
+  const data = parsed.data;
   return Object.freeze({
     appRole: parsed.data.APP_ROLE,
     nodeEnv: parsed.data.NODE_ENV,
@@ -104,5 +144,28 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
     tenantConfigDirs: Object.freeze([path.resolve(parsed.data.TENANT_CONFIG_DIR)]),
     databaseUrl: parsed.data.DATABASE_URL,
     databasePoolMax: parsed.data.DATABASE_POOL_MAX,
+    storage:
+      data.S3_ENDPOINT && data.S3_BUCKET && data.S3_ACCESS_KEY_ID && data.S3_SECRET_ACCESS_KEY
+        ? Object.freeze({
+            endpoint: data.S3_ENDPOINT,
+            publicEndpoint: data.S3_PUBLIC_ENDPOINT ?? data.S3_ENDPOINT,
+            region: data.S3_REGION,
+            bucket: data.S3_BUCKET,
+            accessKeyId: data.S3_ACCESS_KEY_ID,
+            secretAccessKey: data.S3_SECRET_ACCESS_KEY,
+          })
+        : null,
   });
+}
+
+/** All of STORAGE_REQUIRED or none of them; all of them in production. */
+function storageIssues(env: Record<string, string | undefined>, nodeEnv: string): string[] {
+  const missing = STORAGE_REQUIRED.filter((name) => !env[name]);
+  if (missing.length === 0) return [];
+  if (nodeEnv === 'production') {
+    return missing.map((name) => `${name}: required in production (object storage, ADR-0012)`);
+  }
+  if (missing.length === STORAGE_REQUIRED.length) return [];
+  const together = STORAGE_REQUIRED.join(', ');
+  return missing.map((name) => `${name}: ${together} are set together (object storage, ADR-0012)`);
 }

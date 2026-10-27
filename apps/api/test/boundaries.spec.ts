@@ -134,6 +134,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'module-internals-are-private',
         'module-public-api-only',
         'no-circular',
+        'object-store-sdk-only-in-storage',
         'persistence-internals-are-private',
         'persistence-root-is-private',
         'platform-does-not-import-modules',
@@ -170,6 +171,8 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'module-internals-are-private: src/platform/reaches-into-module.ts',
         'module-public-api-only: src/modules/alpha/application/reaches-into-module.ts',
         'no-circular: src/modules/alpha/domain/circular-a.ts',
+        'object-store-sdk-only-in-storage: src/modules/alpha/infrastructure/uses-s3-sdk.ts',
+        'object-store-sdk-only-in-storage: src/platform/uses-s3-sdk.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-service.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-via-barrel.ts',
         'persistence-root-is-private: src/modules/alpha/infrastructure/uses-prisma-root.ts',
@@ -225,6 +228,8 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       'src/platform/uses-database-probe.ts',
       // A platform entry adapter builds actors and call contexts.
       'src/platform/scheduler/builds-system-context.ts',
+      // The S3 adapter is the one user of the AWS SDK.
+      'src/platform/storage/s3-object-store.ts',
     ])('accepts the allowed file %s', (file) => {
       expect(cruise.modules.map((module) => module.source)).toContain(file);
       expect(found.filter((violation) => violation.endsWith(`: ${file}`))).toEqual([]);

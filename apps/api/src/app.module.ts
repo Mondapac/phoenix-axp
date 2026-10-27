@@ -10,6 +10,7 @@ import { ConflictFilter } from './platform/http/conflict-filter';
 import { IdsModule } from './platform/ids/ids.module';
 import { LoggingModule } from './platform/logging/logging.module';
 import { PersistenceModule } from './platform/persistence/persistence.module';
+import { StorageModule } from './platform/storage/storage.module';
 import { TenantConfigModule } from './platform/tenant-config/tenant-config.module';
 import { TenantContextGuard } from './platform/tenant-context/tenant-context.guard';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
@@ -47,6 +48,7 @@ export class AppModule {
         TenantConfigModule,
         TenantContextModule,
         PersistenceModule,
+        StorageModule,
         WorkerModule,
         HealthModule,
       ],

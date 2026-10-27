@@ -18,13 +18,14 @@
     "format": "prettier --write .",
     "test": "pnpm -r test",
     "test:db": "pnpm --filter @phoenix/api test:db",
+    "test:storage": "pnpm --filter @phoenix/api test:storage",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "node scripts/migrate-dev.mjs",
     "db:check-reversible": "node scripts/check-migrations-reversible.mjs",
     "db:bootstrap": "docker compose exec -T postgres psql -U postgres -d phoenix -f /docker-entrypoint-initdb.d/10-bootstrap-dev.sql",
     "licences": "node scripts/check-licences.mjs",
-    "verify": "pnpm db:generate && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm licences && pnpm test && pnpm test:db && pnpm db:check-reversible",
+    "verify": "pnpm db:generate && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm licences && pnpm test && pnpm test:db && pnpm test:storage && pnpm db:check-reversible",
     "boundaries": "pnpm --filter @phoenix/api boundaries && node scripts/check-prisma-boundaries.mjs"
   },
   "devDependencies": {
