@@ -1,0 +1,135 @@
+// The tenancy module (schema "tenancy"; Phase 1 slice 1.4): the site tree and its closure
+// table, the organization tree and its closure table, the link of a site to an organization,
+// site domains and the tenant's editable settings (ADR-0002, ADR-0018). The tenant itself, its
+// locales, calendar and time zone stay in config/tenants/ and HOSTED_TENANTS (ADR-0002). The
+// CHECKs, the grants and the row-level security policies are hand-written in the migration.
+// Shape copied from the PoC 1 spike (site.prisma), which measured subtree checks at about 3 ms
+// for a tenant of 500 sites.
+
+/// A site or portal of a tenant. Sites form a tree inside the tenant (ADR-0018 decision 2).
+model Site {
+  /// UUIDv7 from the IdGenerator.
+  id             String         @id @db.Uuid
+  tenantId       String         @map("tenant_id") @db.VarChar(32)
+  /// The parent site in the same tenant; null for a root site. A tenant may have several roots.
+  parentSiteId   String?        @map("parent_site_id") @db.Uuid
+  /// The organization node the site belongs to, if any (ADR-0018 decision 3).
+  organizationId String?        @map("organization_id") @db.Uuid
+  /// Unique in the tenant; the path segment of a site that lives under its parent's domain.
+  slug           String         @db.VarChar(64)
+  name           String         @db.VarChar(200)
+  /// Distance from the root (root = 0); below the tenant's ceiling (tenant_settings).
+  depth          Int            @db.SmallInt
+  /// Optimistic concurrency of the site's own fields; a move of an ancestor does not change it.
+  version        Int
+  createdAt      DateTime       @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @map("updated_at") @db.Timestamptz(3)
+  parent         Site?          @relation("SiteParent", fields: [tenantId, parentSiteId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "site_parent_fkey")
+  children       Site[]         @relation("SiteParent")
+  organization   Organization?  @relation(fields: [tenantId, organizationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "site_organization_fkey")
+  ancestors      SiteAncestry[] @relation("SiteAncestryDescendant")
+  descendants    SiteAncestry[] @relation("SiteAncestryAncestor")
+  domains        SiteDomain[]
+
+  @@unique([tenantId, id], map: "site_tenant_id_id_key")
+  @@unique([tenantId, slug], map: "site_tenant_id_slug_key")
+  @@index([tenantId, parentSiteId], map: "site_tenant_id_parent_site_id_idx")
+  @@index([tenantId, organizationId], map: "site_tenant_id_organization_id_idx")
+  @@map("site")
+  @@schema("tenancy")
+}
+
+/// The closure table of the site tree: one row per (ancestor, descendant) pair, the site itself
+/// included at depth 0 (ADR-0018 decision 2). Written only in the unit that creates or moves a
+/// site, under the tenant's structure lock (tenant_settings.structure_version).
+model SiteAncestry {
+  tenantId     String @map("tenant_id") @db.VarChar(32)
+  ancestorId   String @map("ancestor_id") @db.Uuid
+  descendantId String @map("descendant_id") @db.Uuid
+  /// Edges between the two; 0 for the site itself.
+  depth        Int    @db.SmallInt
+  ancestor     Site   @relation("SiteAncestryAncestor", fields: [tenantId, ancestorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "site_ancestry_ancestor_fkey")
+  descendant   Site   @relation("SiteAncestryDescendant", fields: [tenantId, descendantId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "site_ancestry_descendant_fkey")
+
+  @@id([tenantId, ancestorId, descendantId], map: "site_ancestry_pkey")
+  @@index([tenantId, descendantId, depth], map: "site_ancestry_tenant_id_descendant_id_idx")
+  @@map("site_ancestry")
+  @@schema("tenancy")
+}
+
+/// A host name, and optionally a path under it, that serves a site. Unique in the tenant; a
+/// deployment-wide host registry for the portal's host-to-tenant lookup comes with the portal.
+model SiteDomain {
+  id         String   @id @db.Uuid
+  tenantId   String   @map("tenant_id") @db.VarChar(32)
+  siteId     String   @map("site_id") @db.Uuid
+  /// Lower-case ASCII host name (IDN in its punycode form), no port.
+  hostname   String   @db.VarChar(253)
+  /// "" for the whole host, or "/a/b": the site lives on a path under the host.
+  pathPrefix String   @map("path_prefix") @db.VarChar(200)
+  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
+  site       Site     @relation(fields: [tenantId, siteId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "site_domain_site_fkey")
+
+  @@unique([tenantId, id], map: "site_domain_tenant_id_id_key")
+  @@unique([tenantId, hostname, pathPrefix], map: "site_domain_tenant_id_hostname_path_prefix_key")
+  @@index([tenantId, siteId], map: "site_domain_tenant_id_site_id_idx")
+  @@map("site_domain")
+  @@schema("tenancy")
+}
+
+/// A node of the tenant's organization chart (deputy office, provincial office, department).
+/// Separate from the site tree: reorganising the chart moves no site (ADR-0018 decision 3).
+model Organization {
+  id          String                 @id @db.Uuid
+  tenantId    String                 @map("tenant_id") @db.VarChar(32)
+  parentId    String?                @map("parent_id") @db.Uuid
+  name        String                 @db.VarChar(200)
+  depth       Int                    @db.SmallInt
+  version     Int
+  createdAt   DateTime               @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime               @map("updated_at") @db.Timestamptz(3)
+  parent      Organization?          @relation("OrganizationParent", fields: [tenantId, parentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "organization_parent_fkey")
+  children    Organization[]         @relation("OrganizationParent")
+  ancestors   OrganizationAncestry[] @relation("OrganizationAncestryDescendant")
+  descendants OrganizationAncestry[] @relation("OrganizationAncestryAncestor")
+  sites       Site[]
+
+  @@unique([tenantId, id], map: "organization_tenant_id_id_key")
+  @@index([tenantId, parentId], map: "organization_tenant_id_parent_id_idx")
+  @@map("organization")
+  @@schema("tenancy")
+}
+
+/// The closure table of the organization tree, the same shape as site_ancestry.
+model OrganizationAncestry {
+  tenantId     String       @map("tenant_id") @db.VarChar(32)
+  ancestorId   String       @map("ancestor_id") @db.Uuid
+  descendantId String       @map("descendant_id") @db.Uuid
+  depth        Int          @db.SmallInt
+  ancestor     Organization @relation("OrganizationAncestryAncestor", fields: [tenantId, ancestorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "organization_ancestry_ancestor_fkey")
+  descendant   Organization @relation("OrganizationAncestryDescendant", fields: [tenantId, descendantId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "organization_ancestry_descendant_fkey")
+
+  @@id([tenantId, ancestorId, descendantId], map: "organization_ancestry_pkey")
+  @@index([tenantId, descendantId, depth], map: "organization_ancestry_tenant_id_descendant_id_idx")
+  @@map("organization_ancestry")
+  @@schema("tenancy")
+}
+
+/// The tenant's editable settings, one row per tenant, written on first need. Locale, calendar
+/// and time zone are configuration (config/tenants/), not rows.
+model TenantSettings {
+  tenantId         String   @id @map("tenant_id") @db.VarChar(32)
+  /// Where staff sign in (ADR-0019): "directory" (AD/LDAP), "local", or both.
+  signInSources    String[] @map("sign_in_sources") @db.VarChar(16)
+  /// The most levels a site tree may have (ADR-0018 decision 2; default 8).
+  maxSiteDepth     Int      @map("max_site_depth") @db.SmallInt
+  /// Bumped as the first statement of every change to a tree's structure: the row lock
+  /// serialises those changes per tenant (PoC 1 finding: concurrent moves).
+  structureVersion Int      @map("structure_version")
+  /// Optimistic concurrency of the editable settings.
+  version          Int
+  updatedAt        DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@map("tenant_settings")
+  @@schema("tenancy")
+}

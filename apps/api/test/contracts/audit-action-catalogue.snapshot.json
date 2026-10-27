@@ -1,1 +1,110 @@
-[]
+[
+  {
+    "action": "tenancy.organization.created",
+    "targetType": "tenancy.organization",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "depth": "integer",
+      "parentId": "optional(id)"
+    }
+  },
+  {
+    "action": "tenancy.organization.moved",
+    "targetType": "tenancy.organization",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "depth": "integer",
+      "parentId": "optional(id)"
+    },
+    "after": {
+      "depth": "integer",
+      "parentId": "optional(id)",
+      "subtreeSize": "integer"
+    }
+  },
+  {
+    "action": "tenancy.organization.renamed",
+    "targetType": "tenancy.organization",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": null
+  },
+  {
+    "action": "tenancy.site-domain.added",
+    "targetType": "tenancy.site-domain",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "siteId": "id"
+    }
+  },
+  {
+    "action": "tenancy.site-domain.removed",
+    "targetType": "tenancy.site-domain",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "siteId": "id"
+    },
+    "after": null
+  },
+  {
+    "action": "tenancy.site.created",
+    "targetType": "tenancy.site",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "depth": "integer",
+      "organizationId": "optional(id)",
+      "parentSiteId": "optional(id)"
+    }
+  },
+  {
+    "action": "tenancy.site.moved",
+    "targetType": "tenancy.site",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "depth": "integer",
+      "parentSiteId": "optional(id)"
+    },
+    "after": {
+      "depth": "integer",
+      "parentSiteId": "optional(id)",
+      "subtreeSize": "integer"
+    }
+  },
+  {
+    "action": "tenancy.site.updated",
+    "targetType": "tenancy.site",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "organizationId": "optional(id)"
+    },
+    "after": {
+      "nameChanged": "boolean",
+      "organizationId": "optional(id)"
+    }
+  },
+  {
+    "action": "tenancy.tenant-settings.changed",
+    "targetType": "tenancy.tenant-settings",
+    "targetId": "enumOf(tenant)",
+    "actors": ["authenticated"],
+    "before": {
+      "maxSiteDepth": "integer",
+      "signInSources": "listOf(enumOf(directory|local), max 2)"
+    },
+    "after": {
+      "maxSiteDepth": "integer",
+      "signInSources": "listOf(enumOf(directory|local), max 2)"
+    }
+  }
+]
