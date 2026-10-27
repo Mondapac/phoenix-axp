@@ -7,6 +7,7 @@ import {
   AUTHORISATION_CHECK,
   PermissionRegistry,
   registerPermissions,
+  SITE_ANCESTRY_READER,
   USE_CASE_GATE,
 } from '../../platform/authz';
 import { CLOCK } from '../../platform/clock/clock.module';
@@ -24,6 +25,7 @@ import {
   DIRECTORY_SYNC_REPOSITORY,
   type DirectorySyncRepository,
 } from './application/directory-sync.repository';
+import { ROLE_REPOSITORY } from './application/roles/role.repository';
 import { SESSION_REPOSITORY, type SessionRepository } from './application/session.repository';
 import { SIGN_IN_FLOWS, SignInFlows } from './application/sign-in-flow';
 import {
@@ -31,6 +33,13 @@ import {
   STAFF_SESSION_HOURS,
 } from './application/staff-identity-provider';
 import { STAFF_DIRECTORY, type StaffDirectory } from './application/staff-directory';
+import { AssignRole } from './application/use-cases/assign-role.use-case';
+import { ChangeRolePermissions } from './application/use-cases/change-role-permissions.use-case';
+import { CreateRole } from './application/use-cases/create-role.use-case';
+import { ListAccountRoleAssignments } from './application/use-cases/list-account-role-assignments.use-case';
+import { ListPermissions } from './application/use-cases/list-permissions.use-case';
+import { ListRoles } from './application/use-cases/list-roles.use-case';
+import { RevokeRoleAssignment } from './application/use-cases/revoke-role-assignment.use-case';
 import { BeginStaffSignIn } from './application/use-cases/begin-staff-sign-in.use-case';
 import { CompleteStaffSignIn } from './application/use-cases/complete-staff-sign-in.use-case';
 import { CreateLocalStaffAccount } from './application/use-cases/create-local-staff-account.use-case';
@@ -48,8 +57,11 @@ import { KeycloakDirectory, UnconfiguredDirectory } from './infrastructure/keycl
 import { KeycloakOidc, UnconfiguredIdentityProvider } from './infrastructure/keycloak-oidc';
 import { PrismaAccountRepository } from './infrastructure/prisma-account.repository';
 import { PrismaDirectorySyncRepository } from './infrastructure/prisma-directory-sync.repository';
+import { PrismaRoleRepository } from './infrastructure/prisma-role.repository';
 import { PrismaSessionRepository } from './infrastructure/prisma-session.repository';
 import { DirectorySyncController } from './presentation/directory-sync.controller';
+import { RoleAssignmentsController } from './presentation/role-assignments.controller';
+import { RolesController } from './presentation/roles.controller';
 import { syncDirectoryAccountsJob } from './presentation/jobs/sync-directory-accounts.job';
 import { StaffAccountsController } from './presentation/staff-accounts.controller';
 import { StaffSignInController } from './presentation/staff-sign-in.controller';
@@ -97,14 +109,24 @@ function useCase(type: abstract new (...args: never[]) => unknown, inject: unkno
 }
 
 const ACCOUNTS = ACCOUNT_REPOSITORY;
+const ROLES = ROLE_REPOSITORY;
+/** The permission registry, as the role rules read it. */
+const CATALOGUE = PermissionRegistry;
 
 /**
  * The identity module (Phase 1 slice 1.5): staff sign-in through the tenant's Keycloak realm,
  * opaque sessions, local staff accounts, and the per-tenant directory sync with its "sync now",
- * behind the studio API. Its audit writer stays inside the module.
+ * behind the studio API; and (slice 1.6) custom roles and the grants of roles to accounts. Its
+ * audit writer stays inside the module.
  */
 @Module({
-  controllers: [StaffSignInController, StaffAccountsController, DirectorySyncController],
+  controllers: [
+    StaffSignInController,
+    StaffAccountsController,
+    DirectorySyncController,
+    RolesController,
+    RoleAssignmentsController,
+  ],
   providers: [
     registerPermissions('identity', IDENTITY_PERMISSIONS),
     registerAuditActions('identity', IDENTITY_AUDIT_ACTIONS),
@@ -112,6 +134,7 @@ const ACCOUNTS = ACCOUNT_REPOSITORY;
     SESSIONS,
     { provide: ACCOUNTS, useClass: PrismaAccountRepository },
     { provide: DIRECTORY_SYNC_REPOSITORY, useClass: PrismaDirectorySyncRepository },
+    { provide: ROLES, useClass: PrismaRoleRepository },
     {
       provide: SIGN_IN_FLOWS,
       inject: [APP_CONFIG],
@@ -175,7 +198,38 @@ const ACCOUNTS = ACCOUNT_REPOSITORY;
     useCase(ViewOwnAccount, [UNIT_OF_WORK, ACCOUNTS]),
     useCase(ListStaffAccounts, [UNIT_OF_WORK, ACCOUNTS]),
     useCase(CreateLocalStaffAccount, [UNIT_OF_WORK, ACCOUNTS, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
-    useCase(DisableStaffAccount, [UNIT_OF_WORK, ACCOUNTS, SESSION_REPOSITORY, AUDIT_WRITER, CLOCK]),
+    useCase(DisableStaffAccount, [
+      UNIT_OF_WORK,
+      ACCOUNTS,
+      SESSION_REPOSITORY,
+      ROLES,
+      CATALOGUE,
+      AUDIT_WRITER,
+      CLOCK,
+    ]),
+    useCase(ListRoles, [UNIT_OF_WORK, ROLES]),
+    useCase(ListPermissions, [CATALOGUE]),
+    useCase(CreateRole, [UNIT_OF_WORK, ROLES, CATALOGUE, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
+    useCase(ChangeRolePermissions, [UNIT_OF_WORK, ROLES, CATALOGUE, AUDIT_WRITER, CLOCK]),
+    useCase(ListAccountRoleAssignments, [UNIT_OF_WORK, ACCOUNTS, ROLES]),
+    useCase(AssignRole, [
+      UNIT_OF_WORK,
+      ACCOUNTS,
+      ROLES,
+      CATALOGUE,
+      SITE_ANCESTRY_READER,
+      AUDIT_WRITER,
+      CLOCK,
+      ID_GENERATOR,
+    ]),
+    useCase(RevokeRoleAssignment, [
+      UNIT_OF_WORK,
+      ACCOUNTS,
+      ROLES,
+      CATALOGUE,
+      SITE_ANCESTRY_READER,
+      AUDIT_WRITER,
+    ]),
     useCase(SyncDirectoryAccounts, [DirectorySyncRunner]),
     useCase(RunDirectorySyncNow, [DirectorySyncRunner]),
     useCase(ViewDirectorySync, [UNIT_OF_WORK, DIRECTORY_SYNC_REPOSITORY]),

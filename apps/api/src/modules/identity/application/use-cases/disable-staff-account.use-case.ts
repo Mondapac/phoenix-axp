@@ -1,6 +1,14 @@
 import { err, ok } from '@phoenix/shared-kernel';
 import type { CallContext, Clock, Id, Result } from '@phoenix/shared-kernel';
-import { UseCase, type AccessDeclaration, type UseCaseGate } from '../../../../platform/authz';
+import {
+  GrantPolicy,
+  LastHolderPolicy,
+  UseCase,
+  type AccessDeclaration,
+  type CannotActOn,
+  type LastHolder,
+  type UseCaseGate,
+} from '../../../../platform/authz';
 import type { AuditWriter } from '../../../../platform/audit/audit-writer';
 import { StaleAggregateError } from '../../../../platform/unit-of-work/errors';
 import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work';
@@ -13,6 +21,8 @@ import {
   type AccountNotLocal,
   type OwnAccount,
 } from '../failures';
+import { grantingActorsOf, heldKeysOf, type KeyCatalogue } from '../roles/acting-assignments';
+import type { RoleRepository } from '../roles/role.repository';
 import type { SessionRepository } from '../session.repository';
 
 export interface DisableStaffAccountInput {
@@ -20,13 +30,16 @@ export interface DisableStaffAccountInput {
   readonly version: number;
 }
 
-export type DisableStaffAccountFailure = AccountNotFound | AccountNotLocal | OwnAccount;
+export type DisableStaffAccountFailure =
+  AccountNotFound | AccountNotLocal | OwnAccount | CannotActOn | LastHolder;
 
 /**
  * Disables a local staff account and ends all its sessions in one unit (ADR-0004 decision 2,
  * PoC 2 verdict 4): the next request with any of its cookies is refused, and its next sign-in
  * too. A directory account is disabled in the directory; the sync applies it (ADR-0022
- * decision 6). Disabling an already disabled account changes nothing.
+ * decision 6). Disabling an already disabled account changes nothing. The actor must outrank
+ * the account (GrantPolicy.canActOn: the account's keys are a subset of the actor's), and the
+ * tenant keeps a system role holder who can sign in (LastHolderPolicy).
  */
 export class DisableStaffAccount extends UseCase<
   DisableStaffAccountInput,
@@ -43,6 +56,8 @@ export class DisableStaffAccount extends UseCase<
     private readonly unitOfWork: UnitOfWork,
     private readonly accounts: AccountRepository,
     private readonly sessions: SessionRepository,
+    private readonly roles: RoleRepository,
+    private readonly catalogue: KeyCatalogue,
     private readonly audit: AuditWriter,
     private readonly clock: Clock,
   ) {
@@ -69,6 +84,36 @@ export class DisableStaffAccount extends UseCase<
           throw new StaleAggregateError('identity.account', account.id);
         }
         if (account.status === 'disabled') return ok({ sessionsEnded: 0 });
+        if (actor.kind !== 'authenticated') return err(ACCOUNT_NOT_FOUND);
+        const held = await this.roles.assignmentsOf(tenant, account.id);
+        const target = {
+          accountId: account.id,
+          population: account.population,
+          effectiveKeys: heldKeysOf(held, account.population, this.catalogue),
+        };
+        const actors = grantingActorsOf(
+          actor.accountId,
+          actor.population,
+          await this.roles.assignmentsOf(tenant, actor.accountId),
+          IDENTITY_ACCOUNTS_MANAGE.key,
+          this.catalogue,
+        );
+        let refusal: CannotActOn = { code: 'member.outranks-actor' };
+        let outranked = false;
+        for (const acting of actors) {
+          const decision = GrantPolicy.canActOn(acting, target);
+          if (decision.ok) {
+            outranked = true;
+            break;
+          }
+          refusal = decision.error;
+        }
+        if (!outranked) return err(refusal);
+        const lastHolder = LastHolderPolicy.allowsLosing(
+          await this.roles.tenantSystemRoleHolders(tenant),
+          account.id,
+        );
+        if (!lastHolder.ok) return lastHolder;
         await this.accounts.disable(tenant, account.id, account.version, this.clock.now());
         const sessionsEnded = await this.sessions.endAllOf(tenant, account.id);
         await this.audit.record(
@@ -77,6 +122,7 @@ export class DisableStaffAccount extends UseCase<
         );
         return ok({ sessionsEnded });
       },
+      { isolation: 'serializable' },
     );
   }
 }

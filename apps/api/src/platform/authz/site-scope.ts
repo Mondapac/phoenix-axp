@@ -12,10 +12,16 @@ import type { GrantScope } from './roles/role-model';
  *
  * The tenancy module implements it (Phase 1, after PoC 1). Until then `AuthzModule` binds the
  * fail-closed placeholder of `placeholders/fail-closed-site-ancestry-reader.ts`, which always
- * answers `false`: no grant reaches a descendant, so access stays at the granted site itself.
+ * answers `false`: no grant reaches a descendant, so access stays at the granted site itself,
+ * and no site exists to grant on.
  * Implementations read committed state in a read-only unit of their own and cache nothing.
  */
 export interface SiteAncestryReader {
+  /**
+   * True when `siteId` is a site of the caller's tenant: a site grant names one (identity's
+   * role grants, slice 1.6). Another tenant's site, or none, answers false.
+   */
+  siteExists(context: CallContext, siteId: Id<'Site'>): Promise<boolean>;
   isWithinSubtree(
     context: CallContext,
     siteId: Id<'Site'>,

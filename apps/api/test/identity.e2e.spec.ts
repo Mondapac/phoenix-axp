@@ -15,6 +15,18 @@ const KEYCLOAK = {
 };
 /** Matches the session token pattern, so it would be looked up: never in any log line. */
 const TOKEN = 'T'.repeat(43);
+/** A well-formed UUIDv7 for the path parameters: the refusal comes before any lookup. */
+const ROLE_ID = '0190a000-0000-7000-8000-000000000001';
+/** The valid bodies of the role routes (slice 1.6). */
+const BODIES: Readonly<Record<string, object>> = {
+  '/identity/roles': { key: 'editor', scope: 'site', permissionKeys: ['x.y.z'] },
+  [`/identity/roles/${ROLE_ID}/permissions`]: { version: 1, permissionKeys: ['x.y.z'] },
+  '/identity/role-assignments': {
+    accountId: ROLE_ID,
+    roleId: ROLE_ID,
+    placement: { level: 'tenant' },
+  },
+};
 
 describe('the identity API (HTTP)', () => {
   let app: NestExpressApplication;
@@ -32,7 +44,7 @@ describe('the identity API (HTTP)', () => {
   });
 
   describe.each(TEST_TENANTS)('in tenant %s', (tenant) => {
-    const call = (method: 'get' | 'post' | 'put', path: string, target = app) =>
+    const call = (method: 'get' | 'post' | 'put' | 'delete', path: string, target = app) =>
       request(target.getHttpServer())[method](path).set('x-tenant-id', tenant);
 
     it("redirects a sign-in to the tenant's realm with a Lax flow cookie", async () => {
@@ -93,9 +105,17 @@ describe('the identity API (HTTP)', () => {
       ['get', '/identity/directory-sync'],
       ['put', '/identity/directory-sync'],
       ['post', '/identity/directory-sync/run'],
+      ['get', '/identity/roles'],
+      ['get', '/identity/permissions'],
+      ['post', '/identity/roles'],
+      ['put', `/identity/roles/${ROLE_ID}/permissions`],
+      ['get', `/identity/staff-accounts/${ROLE_ID}/role-assignments`],
+      ['post', '/identity/role-assignments'],
+      ['delete', `/identity/role-assignments/${ROLE_ID}`],
     ] as const)('refuses an anonymous %s %s with 401', async (method, path) => {
       // A valid body for each route, so the refusal is the authentication's, not the parser's.
-      const body = method === 'put' ? { version: 1, intervalMinutes: 5 } : { username: 'x' };
+      const body =
+        BODIES[path] ?? (method === 'put' ? { version: 1, intervalMinutes: 5 } : { username: 'x' });
       const response = await call(method, path).send(body);
       expect(response.status).toBe(401);
       expect(response.body).toEqual({ statusCode: 401, code: 'access.unauthenticated' });

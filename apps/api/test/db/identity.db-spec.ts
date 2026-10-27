@@ -11,7 +11,8 @@ import type {
 import { FixedClock, SequenceIdGenerator, testCallContext } from '@phoenix/shared-kernel/testing';
 import { Client } from 'pg';
 import type { AuditWriter } from '../../src/platform/audit/audit-writer';
-import type { PermissionDeclaration } from '../../src/platform/authz/permission';
+import { declarePermissions, definePermission } from '../../src/platform/authz/permission';
+import { PermissionRegistry } from '../../src/platform/authz/permission-registry';
 import { createUseCaseGate } from '../../src/platform/authz/use-case-gate';
 import { loadTenantConfigs } from '../../src/platform/tenant-config/tenant-config';
 import { TenantRegistry } from '../../src/platform/tenant-config/tenant-registry';
@@ -37,7 +38,17 @@ import { SyncDirectoryAccounts } from '../../src/modules/identity/application/us
 import { UpdateDirectorySyncInterval } from '../../src/modules/identity/application/use-cases/update-directory-sync-interval.use-case';
 import { ViewDirectorySync } from '../../src/modules/identity/application/use-cases/view-directory-sync.use-case';
 import { ViewOwnAccount } from '../../src/modules/identity/application/use-cases/view-own-account.use-case';
+import { AssignRole } from '../../src/modules/identity/application/use-cases/assign-role.use-case';
+import { ChangeRolePermissions } from '../../src/modules/identity/application/use-cases/change-role-permissions.use-case';
+import { CreateRole } from '../../src/modules/identity/application/use-cases/create-role.use-case';
+import { ListAccountRoleAssignments } from '../../src/modules/identity/application/use-cases/list-account-role-assignments.use-case';
+import { ListPermissions } from '../../src/modules/identity/application/use-cases/list-permissions.use-case';
+import { ListRoles } from '../../src/modules/identity/application/use-cases/list-roles.use-case';
+import { RevokeRoleAssignment } from '../../src/modules/identity/application/use-cases/revoke-role-assignment.use-case';
 import { IDENTITY_PERMISSIONS } from '../../src/modules/identity/contracts/permissions';
+import { PrismaRoleRepository } from '../../src/modules/identity/infrastructure/prisma-role.repository';
+import { ClosureSiteAncestryReader } from '../../src/modules/tenancy/infrastructure/site-ancestry.reader';
+import { PrismaSiteRepository } from '../../src/modules/tenancy/infrastructure/prisma-site.repository';
 import { IDENTITY_AUDIT_ACTIONS } from '../../src/modules/identity/domain/audit-actions';
 import type { DirectoryStatus } from '../../src/modules/identity/domain/directory-sync';
 import { PrismaAccountRepository } from '../../src/modules/identity/infrastructure/prisma-account.repository';
@@ -65,7 +76,8 @@ class RecordingAuditWriter implements AuditWriter {
     const definition = DEFINITIONS.get(entry.action);
     if (definition === undefined) throw new Error(`undeclared audit action ${entry.action}`);
     expect(definition.actors).toContain(context.actor.kind);
-    const options = { isKnownPermissionKey: () => false };
+    const registry = permissionRegistry();
+    const options = { isKnownPermissionKey: (key: string) => registry.isKnownPermissionKey(key) };
     for (const [fields, values] of [
       [definition.before, entry.before],
       [definition.after, entry.after],
@@ -116,6 +128,22 @@ class ScriptedDirectory implements StaffDirectory {
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID().slice(0, 8)}`;
 
+/** A site key of another module, so a site role can confer an unprotected key. */
+const CONTENT_ITEMS_EDIT = definePermission('content', {
+  key: 'content.items.edit',
+  scope: 'site',
+  protected: false,
+});
+
+/** The sealed registry of the running app, with the identity catalogue and the test key. */
+function permissionRegistry(): PermissionRegistry {
+  const registry = new PermissionRegistry();
+  registry.register('identity', IDENTITY_PERMISSIONS);
+  registry.register('content', declarePermissions('content', [CONTENT_ITEMS_EDIT]));
+  registry.seal();
+  return registry;
+}
+
 describe.each(TEST_TENANTS)('the identity module in tenant %s (database integration)', (code) => {
   const tenant: TenantContext = tenantOf(code);
   const other: TenantContext = tenantOf(otherTenantOf(code));
@@ -133,10 +161,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
   let identity: ReturnType<typeof build>;
 
   function build(p: Persistence) {
-    const declared = new Map<string, PermissionDeclaration>(
-      IDENTITY_PERMISSIONS.declarations.map((d) => [d.key, d]),
-    );
-    const permissions = { get: (key: string) => declared.get(key) };
+    const permissions = permissionRegistry();
     const tenants = new TenantRegistry(
       loadTenantConfigs(TEST_TENANT_CONFIG_DIRS, TEST_TENANTS.map(testTenantId)),
     );
@@ -147,7 +172,18 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
     const gate = createUseCaseGate(tenants, permissions, check);
     const syncs = new PrismaDirectorySyncRepository(p.service);
     const runner = new DirectorySyncRunner(uow, syncs, accounts, sessions, directory, audit, clock);
+    const roles = new PrismaRoleRepository(p.service);
+    const sites = new PrismaSiteRepository(p.service);
+    const ancestry = new ClosureSiteAncestryReader(uow, sites);
     return {
+      sites,
+      listRoles: new ListRoles(gate, uow, roles),
+      listPermissions: new ListPermissions(gate, permissions),
+      createRole: new CreateRole(gate, uow, roles, permissions, audit, clock, ids),
+      changeRole: new ChangeRolePermissions(gate, uow, roles, permissions, audit, clock),
+      listGrants: new ListAccountRoleAssignments(gate, uow, accounts, roles),
+      assign: new AssignRole(gate, uow, accounts, roles, permissions, ancestry, audit, clock, ids),
+      revoke: new RevokeRoleAssignment(gate, uow, accounts, roles, permissions, ancestry, audit),
       sync: new SyncDirectoryAccounts(gate, runner),
       syncNow: new RunDirectorySyncNow(gate, runner),
       viewSync: new ViewDirectorySync(gate, uow, syncs),
@@ -170,7 +206,16 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       viewOwn: new ViewOwnAccount(gate, uow, accounts),
       list: new ListStaffAccounts(gate, uow, accounts),
       create: new CreateLocalStaffAccount(gate, uow, accounts, audit, clock, ids),
-      disable: new DisableStaffAccount(gate, uow, accounts, sessions, audit, clock),
+      disable: new DisableStaffAccount(
+        gate,
+        uow,
+        accounts,
+        sessions,
+        roles,
+        permissions,
+        audit,
+        clock,
+      ),
     };
   }
 
@@ -200,7 +245,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
   }
 
   async function role(kind: 'system' | 'custom', scope: 'tenant' | 'site', keys: string[]) {
-    const id = randomUUID();
+    const id = ids.next();
     await sql(
       tenant,
       `INSERT INTO identity.role (id, tenant_id, key, kind, scope, permission_keys, version, created_at, updated_at)
@@ -211,7 +256,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
   }
 
   async function grant(accountId: string, roleId: string, siteId: string | null = null) {
-    const id = randomUUID();
+    const id = ids.next();
     await sql(
       tenant,
       `INSERT INTO identity.role_assignment (id, tenant_id, account_id, role_id, level, site_id, include_descendants, created_at)
@@ -514,6 +559,396 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       } finally {
         await writer.query('ROLLBACK');
       }
+    });
+
+    describe('roles and grants (slice 1.6)', () => {
+      const editKey = CONTENT_ITEMS_EDIT.key;
+
+      /** A staff account that signed in once, and its context. */
+      async function staffMember(prefix: string) {
+        const session = await signedIn({ username: unique(prefix), directory: true });
+        return { id: session.accountId, context: await contextOf(session.sessionToken) };
+      }
+
+      async function site(parentSiteId: Id<'Site'> | null): Promise<Id<'Site'>> {
+        const id = ids.next<'Site'>();
+        const done = await persistence.unitOfWork.run(tenant, async () =>
+          ok(
+            await identity.sites.insert(
+              tenant,
+              {
+                id,
+                parentSiteId,
+                organizationId: null,
+                slug: unique('s'),
+                name: 'سایت',
+                depth: parentSiteId === null ? 0 : 1,
+              },
+              clock.now(),
+            ),
+          ),
+        );
+        if (!done.ok || done.value !== 'created') throw new Error('site setup failed');
+        return id;
+      }
+
+      async function customRole(
+        scope: 'tenant' | 'site',
+        permissionKeys: string[],
+        by: CallContext = admin,
+      ): Promise<Id<'Role'>> {
+        const created = await identity.createRole.execute(by, {
+          key: unique(scope),
+          scope,
+          permissionKeys,
+        });
+        if (!created.ok) throw new Error(`role setup: ${created.error.code}`);
+        return created.value.id;
+      }
+
+      async function assigned(
+        accountId: Id<'Account'>,
+        roleId: Id<'Role'>,
+        placement: Parameters<typeof identity.assign.execute>[1]['placement'] = {
+          level: 'tenant',
+        },
+        by: CallContext = admin,
+      ): Promise<Id<'RoleAssignment'>> {
+        const done = await identity.assign.execute(by, { accountId, roleId, placement });
+        if (!done.ok) throw new Error(`grant setup: ${done.error.code}`);
+        return done.value.id;
+      }
+
+      it('lists the staff permission catalogue and defines a custom role', async () => {
+        const listed = await identity.listPermissions.execute(admin, undefined);
+        expect(listed.ok && listed.value.map((d) => d.key)).toEqual(
+          expect.arrayContaining(['identity.accounts.view', editKey]),
+        );
+
+        const key = unique('Reviewer').toUpperCase();
+        const created = await identity.createRole.execute(admin, {
+          key,
+          scope: 'tenant',
+          permissionKeys: ['identity.accounts.view', editKey],
+        });
+        if (!created.ok) throw new Error(created.error.code);
+        expect(
+          await identity.createRole.execute(admin, {
+            key,
+            scope: 'tenant',
+            permissionKeys: [editKey],
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.role.key-taken' } });
+        // A site role holds site keys only; an unknown key is no key.
+        for (const permissionKeys of [['identity.accounts.view'], ['unknown.key.x'], []]) {
+          expect(
+            await identity.createRole.execute(admin, {
+              key: unique('bad'),
+              scope: 'site',
+              permissionKeys,
+            }),
+          ).toEqual({
+            ok: false,
+            error: { code: 'identity.value.invalid', field: 'permissionKeys' },
+          });
+        }
+
+        const roles = await identity.listRoles.execute(admin, undefined);
+        expect(roles.ok && roles.value.find((r) => r.id === created.value.id)).toMatchObject({
+          key: key.toLowerCase(),
+          kind: 'custom',
+          scope: 'tenant',
+          permissionKeys: [editKey, 'identity.accounts.view'],
+          version: 1,
+        });
+        expect(audit.actions()).toContain('identity.role.created');
+      });
+
+      it('changes a custom role with its version, never a system role', async () => {
+        const roleId = await customRole('tenant', ['identity.accounts.view']);
+        expect(
+          await identity.changeRole.execute(admin, {
+            roleId,
+            version: 1,
+            permissionKeys: ['identity.accounts.view', editKey],
+          }),
+        ).toEqual({ ok: true, value: undefined });
+        await expect(
+          identity.changeRole.execute(admin, { roleId, version: 1, permissionKeys: [editKey] }),
+        ).rejects.toThrow(StaleAggregateError);
+        const system = await role('system', 'tenant', []);
+        expect(
+          await identity.changeRole.execute(admin, {
+            roleId: system as Id<'Role'>,
+            version: 1,
+            permissionKeys: [editKey],
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.role.not-editable' } });
+        expect(
+          await identity.changeRole.execute(admin, {
+            roleId: ids.next<'Role'>(),
+            version: 1,
+            permissionKeys: [editKey],
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.role.not-found' } });
+        expect(audit.actions()).toContain('identity.role.permissions-changed');
+      });
+
+      it('lets a delegate define roles only from its own unprotected keys', async () => {
+        const delegate = await staffMember('delegate');
+        await assigned(
+          delegate.id,
+          await customRole('tenant', ['identity.roles.manage', 'identity.accounts.view']),
+        );
+        expect(
+          await identity.createRole.execute(delegate.context, {
+            key: unique('r'),
+            scope: 'tenant',
+            permissionKeys: ['identity.accounts.view'],
+          }),
+        ).toMatchObject({ ok: true });
+        for (const permissionKeys of [[editKey], ['identity.roles.manage']]) {
+          expect(
+            await identity.createRole.execute(delegate.context, {
+              key: unique('r'),
+              scope: 'tenant',
+              permissionKeys,
+            }),
+          ).toMatchObject({ ok: false, error: { code: 'role.not-grantable' } });
+        }
+      });
+
+      it('grants a role that counts on the next request, once, and revokes it', async () => {
+        const member = await staffMember('member');
+        const viewer = await customRole('tenant', ['identity.accounts.view']);
+        expect((await identity.list.execute(member.context, undefined)).ok).toBe(false);
+
+        const grant = await assigned(member.id, viewer);
+        expect((await identity.list.execute(member.context, undefined)).ok).toBe(true);
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: member.id,
+            roleId: viewer,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.role-assignment.exists' } });
+        const grants = await identity.listGrants.execute(admin, { accountId: member.id });
+        expect(grants.ok && grants.value.map((g) => [g.id, g.role.id, g.level])).toEqual([
+          [grant, viewer, 'tenant'],
+        ]);
+
+        expect(await identity.revoke.execute(admin, { assignmentId: grant })).toEqual({
+          ok: true,
+          value: undefined,
+        });
+        expect((await identity.list.execute(member.context, undefined)).ok).toBe(false);
+        expect(await identity.revoke.execute(admin, { assignmentId: grant })).toEqual({
+          ok: false,
+          error: { code: 'identity.role-assignment.not-found' },
+        });
+        expect(audit.actions()).toEqual(
+          expect.arrayContaining(['identity.role.assigned', 'identity.role.revoked']),
+        );
+      });
+
+      it('refuses a grant to an unlinked local account, itself, or a role of another level (M1)', async () => {
+        const local = await identity.create.execute(admin, { username: unique('fresh') });
+        if (!local.ok) throw new Error(local.error.code);
+        const viewer = await customRole('tenant', ['identity.accounts.view']);
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: local.value.id,
+            roleId: viewer,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.account.not-linked' } });
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: adminAccount,
+            roleId: viewer,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'member.self' } });
+
+        const member = await staffMember('placed');
+        const editor = await customRole('site', [editKey]);
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: member.id,
+            roleId: editor,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'role.not-grantable', reason: 'placement' } });
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: member.id,
+            roleId: editor,
+            placement: { level: 'site', siteId: ids.next<'Site'>(), includeDescendants: false },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.site.not-found' } });
+      });
+
+      it('lets a site administrator grant only inside its subtree (ADR-0018 decision 6)', async () => {
+        const parent = await site(null);
+        const child = await site(parent);
+        const sibling = await site(null);
+        const siteAdmin = await customRole('site', ['identity.role-assignments.manage', editKey]);
+        const editor = await customRole('site', [editKey]);
+        const manager = await staffMember('site-admin');
+        await assigned(manager.id, siteAdmin, {
+          level: 'site',
+          siteId: parent,
+          includeDescendants: true,
+        });
+        const member = await staffMember('editor');
+        const onSite = (siteId: Id<'Site'>) => ({
+          accountId: member.id,
+          roleId: editor,
+          placement: { level: 'site' as const, siteId, includeDescendants: false },
+        });
+
+        const below = await identity.assign.execute(manager.context, onSite(child));
+        expect(below.ok).toBe(true);
+        expect(await identity.assign.execute(manager.context, onSite(sibling))).toEqual({
+          ok: false,
+          error: { code: 'role.not-grantable', reason: 'subtree' },
+        });
+        // Its own protected key it cannot hand out: only a system role holder can.
+        expect(
+          await identity.assign.execute(manager.context, {
+            accountId: member.id,
+            roleId: siteAdmin,
+            placement: { level: 'site', siteId: child, includeDescendants: false },
+          }),
+        ).toEqual({ ok: false, error: { code: 'role.not-grantable', reason: 'protected-key' } });
+        // It takes back what it gave, not what lies outside its reach.
+        const outside = await assigned(member.id, editor, {
+          level: 'site',
+          siteId: sibling,
+          includeDescendants: false,
+        });
+        // Beyond its reach a grant is another owner's: not found (security review, M2).
+        expect(await identity.revoke.execute(manager.context, { assignmentId: outside })).toEqual({
+          ok: false,
+          error: { code: 'identity.role-assignment.not-found' },
+        });
+        if (!below.ok) throw new Error('grant failed');
+        expect(
+          await identity.revoke.execute(manager.context, { assignmentId: below.value.id }),
+        ).toEqual({ ok: true, value: undefined });
+      });
+
+      it('lets only a system role holder change a role that has holders', async () => {
+        const delegate = await staffMember('shaper');
+        await assigned(
+          delegate.id,
+          await customRole('tenant', ['identity.roles.manage', 'identity.accounts.view']),
+        );
+        const shared = await customRole('tenant', ['identity.accounts.view'], delegate.context);
+        const change = () =>
+          identity.changeRole.execute(delegate.context, {
+            roleId: shared,
+            version: 1,
+            permissionKeys: ['identity.accounts.view'],
+          });
+        expect(await change()).toEqual({ ok: true, value: undefined });
+        await assigned((await staffMember('holder')).id, shared);
+        expect(
+          await identity.changeRole.execute(delegate.context, {
+            roleId: shared,
+            version: 2,
+            permissionKeys: ['identity.accounts.view'],
+          }),
+        ).toEqual({ ok: false, error: { code: 'role.not-grantable', reason: 'system-role' } });
+      });
+
+      it('refuses a role to a disabled account, and ids of another tenant', async () => {
+        const name = unique('gone');
+        const local = await identity.create.execute(admin, { username: name });
+        if (!local.ok) throw new Error(local.error.code);
+        await signedIn({ username: name, directory: false });
+        await identity.disable.execute(admin, { accountId: local.value.id, version: 2 });
+        const viewer = await customRole('tenant', ['identity.accounts.view']);
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: local.value.id,
+            roleId: viewer,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.account.disabled' } });
+
+        // The other tenant's account, role and grant are not found here (row-level security).
+        const member = await staffMember('here');
+        await assigned(member.id, viewer);
+        const foreign = await persistence.unitOfWork.run(
+          other,
+          async () => ok(await new PrismaRoleRepository(persistence.service).list(other)),
+          { readOnly: true },
+        );
+        expect(foreign.ok && foreign.value.some((r) => r.id === viewer)).toBe(false);
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: ids.next<'Account'>(),
+            roleId: viewer,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.account.not-found' } });
+        expect(
+          await identity.assign.execute(admin, {
+            accountId: member.id,
+            roleId: ids.next<'Role'>(),
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.role.not-found' } });
+      });
+
+      it('keeps a system role holder when two holders revoke each other at once', async () => {
+        const system = await role('system', 'tenant', []);
+        const one = await staffMember('one');
+        const two = await staffMember('two');
+        const grantOne = await grant(one.id, system);
+        const grantTwo = await grant(two.id, system);
+        const results = await Promise.all([
+          identity.revoke.execute(one.context, { assignmentId: grantTwo as Id<'RoleAssignment'> }),
+          identity.revoke.execute(two.context, { assignmentId: grantOne as Id<'RoleAssignment'> }),
+        ]);
+        // The admin of the suite also holds a system role, so both may succeed only in turn:
+        // whichever runs second has lost its own system role and is refused.
+        expect(results.filter((r) => r.ok)).toHaveLength(1);
+      });
+
+      it('refuses disabling an account that outranks the actor', async () => {
+        const manager = await staffMember('hr');
+        await assigned(
+          manager.id,
+          await customRole('tenant', ['identity.accounts.manage', 'identity.accounts.view']),
+        );
+        const peerName = unique('peer');
+        const peer = await identity.create.execute(admin, { username: peerName });
+        if (!peer.ok) throw new Error(peer.error.code);
+        await signedIn({ username: peerName, directory: false });
+        // The peer holds a key the manager does not.
+        await assigned(peer.value.id, await customRole('tenant', [editKey]));
+        expect(
+          await identity.disable.execute(manager.context, { accountId: peer.value.id, version: 2 }),
+        ).toEqual({ ok: false, error: { code: 'member.outranks-actor' } });
+        // The administrator holds every key: it may.
+        expect(
+          await identity.disable.execute(admin, { accountId: peer.value.id, version: 2 }),
+        ).toMatchObject({ ok: true });
+      });
+
+      it('keeps one grant per place and the grant at its role level in the database', async () => {
+        const member = await staffMember('db');
+        const viewer = await role('custom', 'tenant', ['identity.accounts.view']);
+        await grant(member.id, viewer);
+        await expect(grant(member.id, viewer)).rejects.toMatchObject({
+          constraint: 'role_assignment_tenant_id_account_id_role_id_site_id_key',
+        });
+        await expect(grant(member.id, viewer, randomUUID())).rejects.toMatchObject({
+          constraint: 'role_assignment_role_fkey',
+        });
+      });
     });
 
     describe('the directory sync (owner decision P6)', () => {

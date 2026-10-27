@@ -24,3 +24,25 @@ export type { InvalidUsername };
 export const ACCOUNT_NOT_FOUND: AccountNotFound = Object.freeze({
   code: 'identity.account.not-found',
 });
+
+export type RoleNotFound = { readonly code: 'identity.role.not-found' };
+export type RoleKeyTaken = { readonly code: 'identity.role.key-taken' };
+/** Only a custom role's keys change: a system role holds its scope, a default role is seeded. */
+export type RoleNotEditable = { readonly code: 'identity.role.not-editable' };
+export type AssignmentNotFound = { readonly code: 'identity.role-assignment.not-found' };
+export type AssignmentExists = { readonly code: 'identity.role-assignment.exists' };
+/** The site of a site grant, unknown in the tenant. */
+export type SiteNotFound = { readonly code: 'identity.site.not-found' };
+/**
+ * A local account that never signed in holds no role (security review of slice 1.5, M1): it
+ * links to the first realm user of its username, who must not inherit grants made before.
+ */
+export type AccountNotLinked = { readonly code: 'identity.account.not-linked' };
+
+/** A disabled account receives no role (security review of slice 1.6, L1). */
+export type AccountDisabled = { readonly code: 'identity.account.disabled' };
+
+export const ROLE_NOT_FOUND: RoleNotFound = Object.freeze({ code: 'identity.role.not-found' });
+export const ASSIGNMENT_NOT_FOUND: AssignmentNotFound = Object.freeze({
+  code: 'identity.role-assignment.not-found',
+});
