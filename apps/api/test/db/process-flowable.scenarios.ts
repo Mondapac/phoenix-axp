@@ -50,7 +50,7 @@ const model = (key: string) => `<?xml version="1.0" encoding="UTF-8"?>
     <sequenceFlow id="f1" sourceRef="start" targetRef="approve"/>
     <userTask id="approve" name="Approve" flowable:formKey="leave-decision"/>
     <boundaryEvent id="deadline" attachedToRef="approve" cancelActivity="true">
-      <timerEventDefinition><timeDuration>\${escalateAfter}</timeDuration></timerEventDefinition>
+      <timerEventDefinition><timeDate>\${escalateAt}</timeDate></timerEventDefinition>
     </boundaryEvent>
     <sequenceFlow id="f2" sourceRef="deadline" targetRef="escalate"/>
     <userTask id="escalate" name="Escalate" flowable:formKey="leave-decision"
@@ -112,11 +112,20 @@ export function realFlowableScenarios(): void {
         return result.value;
       }
 
-      async function start(escalateAfter: string): Promise<Id<'ProcessInstance'>> {
+      // A deadline in whole seconds: a duration under the guard's minimum (2.6) cannot reach the
+      // engine, so the escalation test waits for a date one second away instead.
+      const deadlineIn = (seconds: number): string =>
+        clock
+          .now()
+          .add({ seconds })
+          .round({ smallestUnit: 'second', roundingMode: 'ceil' })
+          .toString();
+
+      async function start(escalateAt: string): Promise<Id<'ProcessInstance'>> {
         const id = ids.next<'ProcessInstance'>();
         await unit(async () => {
           await repository.insertInstance(tenant, { id, revisionId, siteId: null }, clock.now());
-          await commands.startInstance(system, id, revisionId, { escalateAfter, days: 3 });
+          await commands.startInstance(system, id, revisionId, { escalateAt, days: 3 });
         });
         expect(await relay.runOnce(system)).toMatchObject({ delivered: 1 });
         return id;
@@ -204,7 +213,7 @@ export function realFlowableScenarios(): void {
       });
 
       it('starts, surfaces, completes with the key and ends the instance', async () => {
-        const instanceId = await start('PT1H');
+        const instanceId = await start(deadlineIn(3600));
         const adopted = await instanceOf(instanceId);
         expect(adopted.status).toBe('running');
         expect(await engine.findInstancesByBusinessKey(tenant, instanceId)).toHaveLength(1);
@@ -232,7 +241,7 @@ export function realFlowableScenarios(): void {
       });
 
       it('sees a boundary timer escalate the task, as Flowable records it', async () => {
-        const instanceId = await start('PT1S');
+        const instanceId = await start(deadlineIn(1));
         await sync.runOnce(system);
         // Timers are acquired every second in CI and in compose (slice 2.1).
         for (let wait = 0; wait < 20; wait += 1) {
@@ -248,12 +257,12 @@ export function realFlowableScenarios(): void {
       }, 40_000);
 
       it('removes a second instance with the business key as an orphan', async () => {
-        const instanceId = await start('PT1H');
+        const instanceId = await start(deadlineIn(3600));
         const orphan = await engine.startInstance(tenant, {
           processKey: key,
           revisionId,
           businessKey: instanceId,
-          variables: { escalateAfter: 'PT1H' },
+          variables: { escalateAt: deadlineIn(3600) },
         });
         await sync.runOnce(system);
         await relay.runOnce(system);
@@ -276,7 +285,7 @@ export function realFlowableScenarios(): void {
       });
 
       it("never reads or completes the other tenant's task", async () => {
-        const instanceId = await start('PT1H');
+        const instanceId = await start(deadlineIn(3600));
         await sync.runOnce(system);
         const [task] = await tasksOf(instanceId);
         expect(await engine.findTask(other, task!.engine_task_id)).toBeNull();

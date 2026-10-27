@@ -100,7 +100,7 @@ services:
     # on http://localhost:8090/flowable-rest/service/ (rest-admin / phoenix-dev-flowable).
     build:
       context: ./infra/flowable
-    image: phoenix/flowable-rest:7.1.0-phoenix.1
+    image: phoenix/flowable-rest:7.1.0-phoenix.2
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/flowable
       SPRING_DATASOURCE_USERNAME: flowable

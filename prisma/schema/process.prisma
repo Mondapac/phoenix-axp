@@ -24,6 +24,8 @@ model ProcessRevision {
   taskSettings Json             @default("{}") @map("task_settings")
   publishedAt DateTime          @map("published_at") @db.Timestamptz(3)
   instances   ProcessInstance[]
+  /// The form revisions its start event and user tasks name (slice 2.6).
+  formBindings ProcessFormBinding[]
 
   @@unique([tenantId, id], map: "process_revision_tenant_id_id_key")
   @@unique([tenantId, processKey, revision], map: "process_revision_tenant_id_process_key_revision_key")
@@ -47,12 +49,16 @@ model ProcessInstance {
   engineInstanceId String?         @map("engine_instance_id") @db.VarChar(64)
   requestedAt      DateTime        @map("requested_at") @db.Timestamptz(3)
   endedAt          DateTime?       @map("ended_at") @db.Timestamptz(3)
+  /// The forms submission that started it (slice 2.6), a plain id across schemas; null when the
+  /// core started it otherwise. One instance per submission.
+  submissionId     String?         @map("submission_id") @db.Uuid
   version          Int
   revision         ProcessRevision @relation(fields: [tenantId, revisionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "process_instance_revision_fkey")
   tasks            ProcessTask[]
 
   @@unique([tenantId, id], map: "process_instance_tenant_id_id_key")
   @@unique([tenantId, engineInstanceId], map: "process_instance_tenant_id_engine_instance_id_key")
+  @@unique([tenantId, submissionId], map: "process_instance_tenant_id_submission_id_key")
   @@index([tenantId, revisionId], map: "process_instance_tenant_id_revision_id_idx")
   @@map("process_instance")
   @@schema("process")
@@ -72,6 +78,9 @@ model ProcessTask {
   taskKey       String          @map("task_key") @db.VarChar(255)
   /// The BPMN form key, when the model names one.
   formKey       String?         @map("form_key") @db.VarChar(255)
+  /// The forms revision the task shows (slice 2.6): the one its process revision bound at publish,
+  /// a plain id across schemas. Null when the model names no form.
+  formRevisionId String?        @map("form_revision_id") @db.Uuid
   /// open | completing | completed | superseded | escalated | cancelled
   status        String          @db.VarChar(16)
   /// The engine command of the completion: the key stored on the engine task (PoC 3 R4).
@@ -200,5 +209,59 @@ model WorkingCalendar {
   updatedAt   DateTime   @map("updated_at") @db.Timestamptz(3)
 
   @@map("working_calendar")
+  @@schema("process")
+}
+
+/// V1, inserted with its process revision and never changed (slice 2.6; ADR-0005 decision 5):
+/// the form a BPMN element names by its form key, pinned to the form revision that was published
+/// when the process revision was. `start` is the start event (a submission of the form starts
+/// the process); `task` is a user task (the task shows that revision). Form ids are plain ids
+/// across schemas, resolved through the forms facade at publish.
+model ProcessFormBinding {
+  tenantId       String          @map("tenant_id") @db.VarChar(32)
+  revisionId     String          @map("revision_id") @db.Uuid
+  /// The BPMN element id: the start event's, or the user task's (its task key).
+  elementId      String          @map("element_id") @db.VarChar(64)
+  /// start | task
+  kind           String          @db.VarChar(8)
+  formId         String          @map("form_id") @db.Uuid
+  formRevisionId String          @map("form_revision_id") @db.Uuid
+  revision       ProcessRevision @relation(fields: [tenantId, revisionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "process_form_binding_revision_fkey")
+
+  @@id([tenantId, revisionId, elementId], map: "process_form_binding_pkey")
+  @@map("process_form_binding")
+  @@schema("process")
+}
+
+/// Which process a form starts (slice 2.6): one process key per form and one form per key,
+/// claimed by the first revision that binds the form to its start event; later revisions of the
+/// key must keep that start form (no release yet). Publishing the claim needs
+/// `forms.forms.publish` on the form. A partial unique index (migration only) also keeps one
+/// start binding per revision.
+/// Versioning (ADR-0007): insert-only, no history needed (the bindings hold it).
+model ProcessStartForm {
+  tenantId   String   @map("tenant_id") @db.VarChar(32)
+  formId     String   @map("form_id") @db.Uuid
+  processKey String   @map("process_key") @db.VarChar(64)
+  claimedAt  DateTime @map("claimed_at") @db.Timestamptz(3)
+
+  @@id([tenantId, formId], map: "process_start_form_pkey")
+  @@unique([tenantId, processKey], map: "process_start_form_tenant_id_process_key_key")
+  @@map("process_start_form")
+  @@schema("process")
+}
+
+/// Events the process module's subscribers have handled (ADR-0006; slice 2.6): `runOnce` inserts
+/// (tenant, event, handler) in the handler's own unit and skips the work when the row exists.
+/// Written only by platform/persistence/outbox/.
+model ProcessInbox {
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  eventId     String   @map("event_id") @db.Uuid
+  /// The subscriber's name, "process.<handler>".
+  handler     String   @db.VarChar(96)
+  processedAt DateTime @map("processed_at") @db.Timestamptz(3)
+
+  @@id([tenantId, eventId, handler])
+  @@map("inbox")
   @@schema("process")
 }

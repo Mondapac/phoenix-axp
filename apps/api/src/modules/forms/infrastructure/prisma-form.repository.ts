@@ -65,6 +65,15 @@ export class PrismaFormRepository implements FormRepository {
     return row === null ? null : formOf(row);
   }
 
+  async findByKeys(tenant: TenantContext, keys: readonly string[]): Promise<FormRecord[]> {
+    if (keys.length === 0) return [];
+    const rows = await this.prisma.tx(tenant).form.findMany({
+      where: { tenantId: tenant.tenantId, key: { in: [...keys] } },
+      select: FORM_COLUMNS,
+    });
+    return rows.map(formOf);
+  }
+
   async list(tenant: TenantContext, filter: FormFilter): Promise<FormRecord[]> {
     const rows = await this.prisma.tx(tenant).form.findMany({
       where: {

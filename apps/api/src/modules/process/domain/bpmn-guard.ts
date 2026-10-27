@@ -21,11 +21,15 @@ import {
  *   reads it (text and CDATA joined, comments dropped), as one `${...}` of variables, literals
  *   and comparison or logic operators: no member access, call, index, assignment, lambda or
  *   engine object; never in an attribute, a name or a form key;
- * - element ids and form keys of plain characters, sized for the core's columns;
+ * - a timer duration is a literal ISO 8601 duration of at least MIN_TIMER_SECONDS, or one
+ *   variable, whose value the core checks the same way (engine-command.ts);
+ * - element ids and form keys of plain characters, sized for the core's columns; a form key in
+ *   a namespace, on a start event or user task of the executable process, one start form;
  * - a flow the engine cannot spin in: at most MAX_FLOW_NODES nodes, every loop passes a user
- *   task (a boundary event of that task does not count as passing it), no repeating timer, and
- *   no start event definition: only the core starts instances (one tenant's model must not
- *   hold the shared engine);
+ *   task (a boundary event of that task does not count as passing it), no repeating timer, at
+ *   most MAX_TOKENS tokens reach a node between two waits for a person (gateways cannot
+ *   multiply tokens without a loop), and no start event definition: only the core starts
+ *   instances (one tenant's model must not hold the shared engine);
  * - exactly one executable process, whose id is the published process key;
  * - the core's own user task settings (task-settings.ts) on user tasks only, each valid.
  *
@@ -49,9 +53,21 @@ export type BpmnRefusal =
   | { readonly code: 'process.bpmn.forbidden-construct'; readonly field: string }
   | InvalidTaskSetting;
 
-/** What the check read of an accepted model: the core's settings of each user task, by id. */
+/** Where a model names a form (slice 2.6): its start event, or a user task. */
+export interface FormReference {
+  readonly elementId: string;
+  readonly kind: 'start' | 'task';
+  /** The forms module's key of the form, as the model wrote it. */
+  readonly formKey: string;
+}
+
+/**
+ * What the check read of an accepted model: the core's settings of each user task, by id, and
+ * the forms its start event and user tasks name (at most one start form).
+ */
 export interface CheckedModel {
   readonly userTasks: ReadonlyMap<string, TaskSettings>;
+  readonly forms: readonly FormReference[];
 }
 
 const MALFORMED: BpmnRefusal = Object.freeze({ code: 'process.bpmn.malformed' });
@@ -178,6 +194,43 @@ const FORM_KEY = /^[A-Za-z0-9_.:-]{1,128}$/;
 /** The most flow nodes a model may hold. */
 export const MAX_FLOW_NODES = 500;
 
+/**
+ * The most tokens that may reach one node in one run of the engine between waits for a person
+ * (security review of slice 2.2: fan-out). Counted as paths, so an exclusive split that joins
+ * again counts both branches: about ten such diamonds in a row reach it.
+ */
+export const MAX_TOKENS = 1000;
+
+/** The shortest timer duration (security review of slice 2.2): one minute. */
+export const MIN_TIMER_SECONDS = 60;
+
+/** An ISO 8601 duration as the engine reads it: `P[nY][nM][nW][nD][T[nH][nM][n[.n]S]]`. */
+const ISO_DURATION =
+  /^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:[.,]\d+)?)S)?)?$/;
+
+/**
+ * The fewest seconds an ISO 8601 duration can last (a month counted as 28 days), or null when
+ * `text` is not one.
+ */
+export function durationSeconds(text: string): number | null {
+  const match = ISO_DURATION.exec(text);
+  if (match === null || text === 'P' || text.endsWith('T')) return null;
+  const [years, months, weeks, days, hours, minutes] = match
+    .slice(1, 7)
+    .map((part) => Number(part ?? 0)) as [number, number, number, number, number, number];
+  const seconds = Number((match[7] ?? '0').replace(',', '.'));
+  return (
+    ((years * 365 + months * 28 + weeks * 7 + days) * 24 + hours) * 3600 + minutes * 60 + seconds
+  );
+}
+
+/** A duration a timer may wait: at least MIN_TIMER_SECONDS. */
+export const timerDurationAllowed = (text: string): boolean =>
+  (durationSeconds(text) ?? -1) >= MIN_TIMER_SECONDS;
+
+/** A timer duration that names one variable; the core checks the value it sends. */
+const DURATION_VARIABLE = /^\s*\$\{\s*[a-z][A-Za-z0-9]{0,63}\s*\}\s*$/;
+
 /** Names an expression must not read: the engine's own objects and the host's environment. */
 const RESERVED_IDENTIFIERS: ReadonlySet<string> = new Set([
   'execution',
@@ -215,8 +268,12 @@ function valueAllowed(value: string): boolean {
 }
 
 /** Whether an element's whole text, as the engine reads it, is allowed there. */
-const textAllowed = (element: string, text: string): boolean =>
-  EXPRESSION_ELEMENTS.has(element) ? valueAllowed(text) : !HAS_EXPRESSION.test(text);
+function textAllowed(element: string, text: string): boolean {
+  if (element === 'timeDuration') {
+    return DURATION_VARIABLE.test(text) || timerDurationAllowed(text.trim());
+  }
+  return EXPRESSION_ELEMENTS.has(element) ? valueAllowed(text) : !HAS_EXPRESSION.test(text);
+}
 
 const PREDEFINED: Readonly<Record<string, string>> = {
   lt: '<',
@@ -289,7 +346,9 @@ interface Flow {
  * Whether the flow cannot spin in the engine: within MAX_FLOW_NODES, and without the flows out of
  * its user tasks the graph has no cycle (a loop through gateways, events or manual tasks runs
  * without a wait state, inside one engine transaction or as a busy timer). A user task waits
- * for a person; a boundary event on it does not.
+ * for a person; a boundary event on it does not. On that acyclic graph, no node may be reached
+ * by more than MAX_TOKENS paths: a token leaves each start and each user task alone, and a
+ * parallel or inclusive split copies it to every branch.
  */
 function flowBounded(flow: Flow): boolean {
   if (flow.nodes.size > MAX_FLOW_NODES) return false;
@@ -309,11 +368,17 @@ function flowBounded(flow: Flow): boolean {
     incoming.set(boundary, incoming.get(boundary)! + 1);
   }
   const ready = [...flow.nodes.keys()].filter((id) => incoming.get(id) === 0);
+  // Tokens per node, counted as the paths that reach it; a node with no counted flow in (a
+  // start, or one reached only from user tasks) holds one.
+  const tokens = new Map<string, number>();
   let visited = 0;
   while (ready.length > 0) {
     const id = ready.pop()!;
     visited += 1;
+    const held = Math.max(tokens.get(id) ?? 0, 1);
+    if (held > MAX_TOKENS) return false;
     for (const target of outgoing.get(id) ?? []) {
+      tokens.set(target, (tokens.get(target) ?? 0) + held);
       const left = incoming.get(target)! - 1;
       incoming.set(target, left);
       if (left === 0) ready.push(target);
@@ -339,6 +404,8 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
   const processes: ProcessSeen[] = [];
   const flow: Flow = { nodes: new Map(), edges: [], attached: [] };
   const userTasks = new Map<string, TaskSettings>();
+  const forms: FormReference[] = [];
+  let formOutsideRun = false;
   let rootSeen = false;
   let at = 0;
   const body = xml.replace(/^\uFEFF/, '');
@@ -384,7 +451,9 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
     if (end !== null) {
       const closed = open.pop();
       if (closed === undefined || closed.name !== end[1]) return err(MALFORMED);
-      if (!textAllowed(closed.element, closed.text)) return forbidden('expression');
+      if (!textAllowed(closed.element, closed.text)) {
+        return forbidden(closed.element === 'timeDuration' ? 'timeDuration' : 'expression');
+      }
       at += end[0].length;
       continue;
     }
@@ -428,6 +497,9 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
       if (HAS_EXPRESSION.test(value)) return forbidden('expression');
       if (local === 'id' && !ELEMENT_ID.test(value)) return forbidden('id');
       if (local === 'formKey' && !FORM_KEY.test(value)) return forbidden('formKey');
+      // The engine reads only its own namespace's formKey; an unprefixed one it ignores, and the
+      // core would bind a form the engine never shows.
+      if (local === 'formKey' && !attributeName.includes(':')) return forbidden('formKey');
       if (TASK_SETTING_ATTRIBUTES.has(local) && element !== 'userTask') return forbidden(local);
       // The BPMN schema admits a foreign attribute only in a namespace of its own: the engine
       // refuses an unprefixed one at deployment, so the publication refuses it first.
@@ -444,6 +516,17 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
       flow.nodes.set(id, element);
       const host = attributes.get('attachedToRef');
       if (element === 'boundaryEvent' && host !== undefined) flow.attached.push([id, host]);
+    }
+    const formKey = attributes.get('formKey');
+    if (formKey !== undefined) {
+      // A form starts the process or shows on a task; anywhere else the core would not read it.
+      const kind = element === 'startEvent' ? 'start' : element === 'userTask' ? 'task' : null;
+      if (kind === null) return forbidden('formKey');
+      if (kind === 'start' && forms.some((form) => form.kind === 'start')) {
+        return forbidden('formKey');
+      }
+      if (processes.at(-1)?.executable !== true) formOutsideRun = true;
+      forms.push({ elementId: id!, kind, formKey });
     }
     if (element === 'userTask') {
       const settings = parseTaskSettings(attributes);
@@ -465,6 +548,8 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
   if (executable.length !== 1 || executable[0]!.id !== processKey) {
     return err({ code: 'process.bpmn.process-key-mismatch' });
   }
+  // Only the executable process runs: a form in another process would bind for nothing.
+  if (formOutsideRun) return forbidden('formKey');
   if (!flowBounded(flow)) return err({ code: 'process.bpmn.unbounded-flow' });
-  return ok({ userTasks });
+  return ok({ userTasks, forms });
 }

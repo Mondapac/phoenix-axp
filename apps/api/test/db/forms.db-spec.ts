@@ -16,6 +16,7 @@ import { loadTenantConfigs } from '../../src/platform/tenant-config/tenant-confi
 import { TenantRegistry } from '../../src/platform/tenant-config/tenant-registry';
 import { StaleAggregateError } from '../../src/platform/unit-of-work/errors';
 import { CreateForm } from '../../src/modules/forms/application/use-cases/create-form.use-case';
+import { ResolvePublishedForms } from '../../src/modules/forms/application/use-cases/resolve-published-forms.use-case';
 import { ListForms } from '../../src/modules/forms/application/use-cases/list-forms.use-case';
 import { PublishForm } from '../../src/modules/forms/application/use-cases/publish-form.use-case';
 import { RetireForm } from '../../src/modules/forms/application/use-cases/retire-form.use-case';
@@ -25,7 +26,7 @@ import { UpdateForm } from '../../src/modules/forms/application/use-cases/update
 import { ViewFormRevision } from '../../src/modules/forms/application/use-cases/view-form-revision.use-case';
 import { ViewForm } from '../../src/modules/forms/application/use-cases/view-form.use-case';
 import { FormReach } from '../../src/modules/forms/application/form-reach';
-import { FORMS_PERMISSIONS } from '../../src/modules/forms/contracts/permissions';
+import { FORMS_FORMS_VIEW, FORMS_PERMISSIONS } from '../../src/modules/forms/contracts/permissions';
 import { FORMS_AUDIT_ACTIONS } from '../../src/modules/forms/domain/audit-actions';
 import { PrismaFormRepository } from '../../src/modules/forms/infrastructure/prisma-form.repository';
 import { WorkerSchemaEngine } from '../../src/modules/forms/infrastructure/worker-schema-engine';
@@ -133,6 +134,8 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
     scope: { level: 'tenant' },
     keys: new Set(FORMS_PERMISSIONS.declarations.map((d) => d.key)),
   };
+  /** The grants the reach reads; a test may narrow them and must put them back. */
+  let grants: readonly ActorGrant[] = [everyKey];
   const engine = new WorkerSchemaEngine();
 
   let useCases: ReturnType<typeof build>;
@@ -155,12 +158,7 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
     const sites = new PrismaSiteRepository(p.service);
     const forms = new PrismaFormRepository(p.service);
     const reader = new ClosureSiteAncestryReader(uow, sites);
-    const reach = new FormReach(
-      uow,
-      forms,
-      { grantsOf: () => Promise.resolve([everyKey]) },
-      reader,
-    );
+    const reach = new FormReach(uow, forms, { grantsOf: () => Promise.resolve(grants) }, reader);
     const checker = engine;
     return {
       createSite: new CreateSite(
@@ -182,6 +180,7 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
       listForms: new ListForms(gate, uow, forms, reach),
       viewForm: new ViewForm(gate, uow, forms, reach),
       viewRevision: new ViewFormRevision(gate, uow, forms, reach),
+      resolve: new ResolvePublishedForms(gate, uow, forms, reach),
     };
   }
 
@@ -497,6 +496,61 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
       action: 'forms.form.updated',
       before: { audience: 'anyone', retentionDays: null },
       after: { audience: 'staff', retentionDays: 30, nameChanged: false },
+    });
+  });
+
+  it('resolves published forms by key for a process, the start form only for a publisher (slice 2.6)', async () => {
+    const siteId = await site();
+    const keyed = async (key: string, publish: boolean) => {
+      const created = await useCases.createForm.execute(context, {
+        siteId,
+        key,
+        name: 'فرم',
+        policy: anyone,
+      });
+      if (!created.ok) throw new Error(`setup: ${created.error.code}`);
+      const saved = await revision(created.value.id);
+      if (publish) {
+        await useCases.publishForm.execute(context, {
+          formId: created.value.id,
+          version: 1,
+          revisionId: saved.id,
+        });
+      }
+      return { key, formId: created.value.id, revisionId: saved.id };
+    };
+    const request = await keyed(unique('request'), true);
+    const decision = await keyed(unique('decision'), true);
+    const draft = await keyed(unique('draft'), false);
+    const keys = [request.key, decision.key, draft.key, unique('none'), request.key];
+
+    const all = await useCases.resolve.execute(context, { keys, startKey: request.key });
+    expect(all.ok && [...all.value].sort((a, b) => a.key.localeCompare(b.key))).toEqual(
+      [request, decision].sort((a, b) => a.key.localeCompare(b.key)),
+    );
+    // A viewer who does not publish the form cannot make it start a process.
+    grants = [{ ...everyKey, keys: new Set([FORMS_FORMS_VIEW.key]) }];
+    try {
+      expect(await useCases.resolve.execute(context, { keys, startKey: request.key })).toEqual({
+        ok: true,
+        value: [decision],
+      });
+      expect(await useCases.resolve.execute(context, { keys: [request.key] })).toEqual({
+        ok: true,
+        value: [request],
+      });
+    } finally {
+      grants = [everyKey];
+    }
+    const tooMany = Array.from({ length: 65 }, (_, i) => `k${i}`);
+    expect(await useCases.resolve.execute(context, { keys: tooMany })).toEqual({
+      ok: true,
+      value: [],
+    });
+    // Another tenant's staff never reach this tenant's forms.
+    expect(await useCases.resolve.execute(staff(other), { keys: [request.key] })).toEqual({
+      ok: true,
+      value: [],
     });
   });
 

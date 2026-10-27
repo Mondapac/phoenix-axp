@@ -102,6 +102,24 @@ describe('engine commands (ADR-0020 decision 7)', () => {
     const many = Object.fromEntries(Array.from({ length: 33 }, (_, i) => [`v${i}`, i]));
     expect(invalidVariable(many)).toBe('variables');
   });
+
+  it('refuses a duration shorter than the timer minimum, which could feed a timer (2.2 condition)', () => {
+    expect(invalidVariable({ escalateAfter: 'PT59S' })).toBe('escalateAfter');
+    expect(invalidVariable({ escalateAfter: 'PT0S' })).toBe('escalateAfter');
+    expect(invalidVariable({ escalateAfter: 'PT1M', dueIn: 'P2D' })).toBeNull();
+    // A sign the engine reads, which the guard's duration grammar does not.
+    expect(invalidVariable({ escalateAfter: '-PT1M' })).toBe('escalateAfter');
+    expect(invalidVariable({ escalateAfter: '+PT1S' })).toBe('escalateAfter');
+    // A code that only starts like one is not a duration.
+    expect(invalidVariable({ status: 'PENDING', grade: 'P' })).toBeNull();
+    // Ids and dates are not durations.
+    expect(
+      invalidVariable({
+        formId: '01890a5d-ac96-774b-bcce-b302099a8057',
+        at: '2026-11-04T12:00:00Z',
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('watermarks (PoC 3 R5)', () => {

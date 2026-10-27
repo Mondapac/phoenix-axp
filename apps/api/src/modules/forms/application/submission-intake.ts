@@ -11,10 +11,12 @@ import type {
 } from '@phoenix/shared-kernel';
 import type { ActorGrantReader } from '../../../platform/authz';
 import type { AuditWriter } from '../../../platform/audit/audit-writer';
+import type { OutboxWriter } from '../../../platform/events/outbox-writer';
 import type { RateLimited, RateLimiter } from '../../../platform/rate-limit';
 import type { SubjectKeyService } from '../../../platform/subject-keys';
 import type { UnitOfWork } from '../../../platform/unit-of-work/unit-of-work';
 import { FORM_SUBMITTED } from '../domain/audit-actions';
+import { FORM_SUBMISSION_RECEIVED } from '../domain/events';
 import type { FormField } from '../domain/form-fields';
 import type { JsonObject } from '../domain/form-schema';
 import {
@@ -99,6 +101,7 @@ export class SubmissionIntake {
     private readonly limiter: RateLimiter,
     private readonly subjectKeys: SubjectKeyService,
     private readonly audit: AuditWriter,
+    private readonly outbox: OutboxWriter,
     private readonly clock: Clock,
     private readonly ids: IdGenerator,
   ) {}
@@ -187,6 +190,15 @@ export class SubmissionIntake {
               after: { formId: form.id, revisionId: revision.id, channel, boundSubjectId: id },
             }),
           );
+          // The process the form starts, if any, starts from this event (slice 2.6).
+          await this.outbox.append(context, [
+            FORM_SUBMISSION_RECEIVED.record({
+              aggregateId: id,
+              aggregateVersion: 1,
+              occurredAt: submittedAt,
+              payload: { formId: form.id, revisionId: revision.id, siteId: form.siteId, channel },
+            }),
+          ]);
           return ok({ submissionId: id, trackingCode: formatTrackingCode(code), submittedAt });
         })
         .catch((error: unknown) => {

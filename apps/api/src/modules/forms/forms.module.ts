@@ -14,6 +14,8 @@ import {
 } from '../../platform/authz';
 import { CAPTCHA_SERVICE } from '../../platform/captcha';
 import { CLOCK } from '../../platform/clock/clock.module';
+import { registerEvents } from '../../platform/events/event-catalogue';
+import { OUTBOX_WRITER, type OutboxWriter } from '../../platform/events/outbox-writer';
 import { ID_GENERATOR } from '../../platform/ids/ids.module';
 import { PersistenceModule } from '../../platform/persistence/persistence.module';
 import { RATE_LIMITER, type RateLimiter } from '../../platform/rate-limit';
@@ -53,8 +55,12 @@ import { ViewFormSubmission } from './application/use-cases/view-form-submission
 import { ViewForm } from './application/use-cases/view-form.use-case';
 import { ViewPublishedFormSignedIn } from './application/use-cases/view-published-form-signed-in.use-case';
 import { ViewPublishedForm } from './application/use-cases/view-published-form.use-case';
+import { ResolvePublishedForms } from './application/use-cases/resolve-published-forms.use-case';
+import { FORM_REFERENCES } from './contracts/form-references';
+import { FormReferencesFacade } from './form-references.facade';
 import { FORMS_PERMISSIONS } from './contracts/permissions';
 import { FORMS_AUDIT_ACTIONS } from './domain/audit-actions';
+import { FORMS_EVENTS } from './domain/events';
 import { PrismaFormRepository } from './infrastructure/prisma-form.repository';
 import { PrismaSubmissionRepository } from './infrastructure/prisma-submission.repository';
 import { WorkerSchemaEngine } from './infrastructure/worker-schema-engine';
@@ -97,7 +103,9 @@ const REACH = FORM_REACH;
   providers: [
     registerPermissions('forms', FORMS_PERMISSIONS),
     registerAuditActions('forms', FORMS_AUDIT_ACTIONS),
+    registerEvents('forms', FORMS_EVENTS),
     PersistenceModule.auditWriterFor('forms'),
+    PersistenceModule.outboxWriterFor('forms'),
     { provide: FORMS, useClass: PrismaFormRepository },
     { provide: SUBMISSIONS, useClass: PrismaSubmissionRepository },
     WorkerSchemaEngine,
@@ -135,6 +143,12 @@ const REACH = FORM_REACH;
     ]),
     useCase(PublishForm, [FORMS, REACH, FORM_SCHEMA_CHECKER, AUDIT_WRITER, CLOCK]),
     useCase(RetireForm, [FORMS, REACH, AUDIT_WRITER, CLOCK]),
+    useCase(ResolvePublishedForms, [FORMS, REACH]),
+    {
+      provide: FORM_REFERENCES,
+      inject: [ResolvePublishedForms],
+      useFactory: (resolve: ResolvePublishedForms) => new FormReferencesFacade(resolve),
+    },
     {
       provide: SUBMISSION_INTAKE,
       inject: [
@@ -145,6 +159,7 @@ const REACH = FORM_REACH;
         RATE_LIMITER,
         SUBJECT_KEY_SERVICE,
         AUDIT_WRITER,
+        OUTBOX_WRITER,
         CLOCK,
         ID_GENERATOR,
       ],
@@ -156,6 +171,7 @@ const REACH = FORM_REACH;
         limiter: RateLimiter,
         subjectKeys: SubjectKeyService,
         audit: AuditWriter,
+        outbox: OutboxWriter,
         clock: Clock,
         ids: IdGenerator,
       ) =>
@@ -167,6 +183,7 @@ const REACH = FORM_REACH;
           limiter,
           subjectKeys,
           audit,
+          outbox,
           clock,
           ids,
         ),
@@ -193,5 +210,6 @@ const REACH = FORM_REACH;
       eraseExpiredSubmissionsJob(erase),
     ]),
   ],
+  exports: [FORM_REFERENCES],
 })
 export class FormsModule {}

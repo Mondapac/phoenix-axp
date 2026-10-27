@@ -1,4 +1,5 @@
 import type { Temporal } from '@phoenix/shared-kernel';
+import { timerDurationAllowed } from './bpmn-guard';
 
 /**
  * A command of the core to the engine (ADR-0005 decision 3; ADR-0020 decision 7). Written in
@@ -58,11 +59,17 @@ export type EngineVariables = Readonly<Record<string, EngineVariableValue>>;
 const VARIABLE_NAME = /^[a-z][A-Za-z0-9]{0,63}$/;
 /** A code or an id: no spaces, no free text. */
 const VARIABLE_TEXT = /^[A-Za-z0-9._:-]{1,64}$/;
+/** A value the engine may read as a duration, signed or not: it must be one the guard allows. */
+const DURATION_SHAPED = /^[+-]?P(?:\d|T\d)/;
 /** The core's own variables, set by the bridge only. */
 export const RESERVED_VARIABLE_PREFIX = 'phoenix';
 export const MAX_VARIABLES = 32;
 
-/** Whether `variables` may be sent to the engine: the field name of the first bad one, or null. */
+/**
+ * Whether `variables` may be sent to the engine: the field name of the first bad one, or null.
+ * A value that reads as an ISO 8601 duration may feed a timer (bpmn-guard.ts), so it must last
+ * at least the guard's minimum.
+ */
 export function invalidVariable(variables: Readonly<Record<string, unknown>>): string | null {
   const entries = Object.entries(variables);
   if (entries.length > MAX_VARIABLES) return 'variables';
@@ -71,7 +78,9 @@ export function invalidVariable(variables: Readonly<Record<string, unknown>>): s
     const valid =
       typeof value === 'boolean' ||
       (typeof value === 'number' && Number.isSafeInteger(value)) ||
-      (typeof value === 'string' && VARIABLE_TEXT.test(value));
+      (typeof value === 'string' &&
+        VARIABLE_TEXT.test(value) &&
+        (!DURATION_SHAPED.test(value) || timerDurationAllowed(value)));
     if (!valid) return name;
   }
   return null;

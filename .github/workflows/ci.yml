@@ -82,6 +82,7 @@ jobs:
       - name: Build and start Flowable (process engine)
         run: |
           docker build --build-arg BASE_IMAGE=mirror.gcr.io/flowable/flowable-rest:7.1.0@sha256:b7ae287502cd5c243b577a0ca2894172e1c18cd75aea4fd67dc7d58f1b40db44 \
+            --build-arg JDK_IMAGE=mirror.gcr.io/library/eclipse-temurin:21-jdk-alpine@sha256:fd52084c35bbac78890d95d57707d31ffc9d7a3324199e89c06be2a9dc71bfa0 \
             -t phoenix/flowable-rest:ci infra/flowable
           # Refuses to start without its own PostgreSQL database.
           if docker run --rm phoenix/flowable-rest:ci; then

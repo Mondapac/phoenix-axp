@@ -109,3 +109,21 @@ export class RecordingBus implements EventBus {
     await this.next?.publish(events, transaction);
   }
 }
+
+/** A module's own writer over a catalogue of `events`, as `PersistenceModule.outboxWriterFor` binds it. */
+export function moduleWriter(
+  db: Persistence,
+  module: string,
+  events: Parameters<EventCatalogue['register']>[1],
+): OutboxWriter {
+  const catalogue = new EventCatalogue();
+  catalogue.register(module, events);
+  catalogue.seal();
+  return new PrismaOutboxWriterFactory(
+    modelMap,
+    db.service,
+    catalogue,
+    ids,
+    NO_PERMISSION_KEYS,
+  ).forModule(module);
+}

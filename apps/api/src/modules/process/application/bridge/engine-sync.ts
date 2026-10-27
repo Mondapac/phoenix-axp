@@ -250,6 +250,11 @@ export class EngineSync {
           engineTaskId: task.engineTaskId,
           taskKey: task.taskKey,
           formKey: task.formKey,
+          formRevisionId: await this.repository.taskFormRevision(
+            tenant,
+            instance.revisionId,
+            task.taskKey,
+          ),
           status: closed === null ? 'open' : closed.status,
           siteId: instance.siteId,
           name: settings.name,
