@@ -20,6 +20,7 @@ import { TenantConfigModule } from './platform/tenant-config/tenant-config.modul
 import { TenantContextGuard } from './platform/tenant-context/tenant-context.guard';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
 import { WorkerModule } from './platform/worker/worker.module';
+import { FormsModule } from './modules/forms';
 import { IdentityAccessModule, IdentityModule } from './modules/identity';
 import { TenancyModule, TenancySiteAncestryModule } from './modules/tenancy';
 
@@ -71,6 +72,7 @@ export class AppModule {
         HealthModule,
         TenancyModule,
         IdentityModule,
+        FormsModule,
       ],
       providers: [
         ...GLOBAL_GUARDS.map((guard) => ({ provide: APP_GUARD, useClass: guard })),

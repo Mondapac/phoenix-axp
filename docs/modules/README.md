@@ -37,7 +37,7 @@
 | tenancy | A | ۱ | — | — | — |
 | process | A | ۲ | — | — | — |
 | objects | A | ۲ | — | — | — |
-| forms | A | ۲ | — | — | — |
+| forms | A | ۲ | — | ۲۰۲۶-۱۰-۲۷ (مرور فاز ۲، D2) | در PR برش 2.4 |
 | portal | B | ۳ | — | — | — |
 | pages | B | ۳ | — | — | — |
 | notifications | B | ۳ | — | — | — |

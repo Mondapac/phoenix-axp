@@ -1,0 +1,68 @@
+// The forms module (schema "forms"; Phase 2 slice 2.4): form definitions and their immutable
+// revisions (ADR-0007 pattern V1). Submissions arrive with slice 2.5. The site is tenancy's: a
+// plain id, no foreign key across schemas. The CHECKs, the grants and the row-level security
+// policies are hand-written in the migration.
+
+/// A form of a tenant, owned by one site (its form inbox). Pattern V1: the form points at the
+/// revision it publishes; its own fields (name, settings, status) are versioned optimistically.
+model Form {
+  /// UUIDv7 from the IdGenerator.
+  id                  String        @id @db.Uuid
+  tenantId            String        @map("tenant_id") @db.VarChar(32)
+  /// The tenancy site whose form inbox receives the submissions. Checked at creation.
+  siteId              String        @map("site_id") @db.Uuid
+  /// Unique in the tenant.
+  key                 String        @db.VarChar(64)
+  name                String        @db.VarChar(200)
+  /// draft (never published) | published | retired.
+  status              String        @db.VarChar(16)
+  /// The revision new submissions use; null only while the form is a draft. A retired form
+  /// keeps the revision it last served.
+  publishedRevisionId String?       @map("published_revision_id") @db.Uuid
+  /// Submission policy: anyone | portal-user | staff | staff-roles.
+  audience            String        @db.VarChar(16)
+  /// identity role ids for `staff-roles`, empty otherwise. Plain ids, no foreign key across
+  /// schemas; an id that names no role admits nobody.
+  roleIds             String[]      @map("role_ids") @db.Uuid
+  allowOnBehalf       Boolean       @map("allow_on_behalf")
+  /// Days the personal data of a submission is kept; null keeps it forever (owner decision D5).
+  retentionDays       Int?          @map("retention_days")
+  /// The number of the newest revision; 0 before the first. Taken under the row lock.
+  revisionCount       Int           @map("revision_count")
+  version             Int
+  createdAt           DateTime      @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime      @map("updated_at") @db.Timestamptz(3)
+  revisions           FormRevision[] @relation("FormRevisions")
+  /// The published revision is one of the form's own: the key includes the form.
+  publishedRevision   FormRevision? @relation("FormPublishedRevision", fields: [tenantId, id, publishedRevisionId], references: [tenantId, formId, id], onDelete: Restrict, onUpdate: Restrict, map: "form_published_revision_fkey")
+
+  @@unique([tenantId, id], map: "form_tenant_id_id_key")
+  @@unique([tenantId, key], map: "form_tenant_id_key_key")
+  @@index([tenantId, siteId], map: "form_tenant_id_site_id_idx")
+  @@map("form")
+  @@schema("forms")
+}
+
+/// One revision of a form: its JSON Schema and JSON Forms UI Schema, inserted once and never
+/// changed (ADR-0007 V1; the application role has no UPDATE on the table). The content hash
+/// is what a submission records with the revision id (V3).
+model FormRevision {
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  formId      String   @map("form_id") @db.Uuid
+  /// 1, 2, 3 ... in the form, without gaps.
+  number      Int
+  jsonSchema  Json     @map("json_schema") @db.JsonB
+  uiSchema    Json     @map("ui_schema") @db.JsonB
+  /// `sha256:` over the canonical JSON of { jsonSchema, uiSchema }.
+  contentHash String   @map("content_hash") @db.VarChar(80)
+  createdAt   DateTime @map("created_at") @db.Timestamptz(3)
+  form        Form     @relation("FormRevisions", fields: [tenantId, formId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "form_revision_form_fkey")
+  publishedBy Form[]   @relation("FormPublishedRevision")
+
+  @@unique([tenantId, id], map: "form_revision_tenant_id_id_key")
+  @@unique([tenantId, formId, number], map: "form_revision_tenant_id_form_id_number_key")
+  @@unique([tenantId, formId, id], map: "form_revision_tenant_id_form_id_id_key")
+  @@map("form_revision")
+  @@schema("forms")
+}
