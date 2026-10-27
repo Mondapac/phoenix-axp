@@ -39,7 +39,8 @@ other's data, and some require a separate database or an on-premise installation
 
 ## Consequences
 - RLS with Prisma and connection pooling (PgBouncer) is a risk; PoC 1 (slice 0.6) measures leak
-  = 0 and overhead < 15% with 1000 tenants before any module code.
+  = 0 and overhead < 15% with 1000 tenants before any module code. The overhead is measured per
+  request, end to end (amended by ADR-0022).
 - Every module design states its tenant, site and organisation scope.
 
 ## Alternatives considered

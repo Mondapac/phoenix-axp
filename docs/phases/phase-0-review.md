@@ -22,7 +22,7 @@
 | 0.3 | اسکلت و ابزار | backend | حسین، کاظم | pnpm monorepo، TypeScript 6، NestJS 12، ESLint و Prettier، Jest، dependency-cruiser با boundary-fixtures، `check-prisma-boundaries`، بررسی مجوز وابستگی‌ها، endpoint سلامت، لاگ با correlation id، `pnpm verify`، GitHub Actions |
 | 0.4 | انتقال پایهٔ platform | backend | حسین، محمد، مجتبی | از Mondapac، با جایگزینی Market با Tenant: shared-kernel (Id، Clock، Result، TenantContext، ActorContext، CallContext)، persistence و UnitOfWork و tenant guard، نقش‌های پایگاه داده، health و logging. بقیهٔ `platform/` طبق «تعویق با trigger» با اولین مصرف‌کننده‌اش در فاز ۱ می‌آید |
 | 0.5 | Docker Compose | backend | کاظم | Postgres 17، Redis، mail catcher، Keycloak، Flowable REST، SeaweedFS |
-| 0.6 | PoC ۱: جداسازی مستأجر | backend | مجتبی، حسن | tenant guard به‌علاوهٔ RLS، ۱۰۰۰ مستأجر، به‌علاوهٔ یک Tenant با ۵۰۰ سایت درختی و دسترسی زیردرخت (تصمیم صاحب پروژه، ۲۰۲۶-۱۰-۲۶). معیار: نشت صفر و افت کارایی کمتر از ۱۵٪ |
+| 0.6 | PoC ۱: جداسازی مستأجر | backend | مجتبی، حسن | tenant guard به‌علاوهٔ RLS، ۱۰۰۰ مستأجر، به‌علاوهٔ یک Tenant با ۵۰۰ سایت درختی و دسترسی زیردرخت (تصمیم صاحب پروژه، ۲۰۲۶-۱۰-۲۶). معیار: نشت صفر و افت کارایی کمتر از ۱۵٪ برای هر درخواست (ADR-0022) |
 | 0.7 | PoC ۲: ورود ترکیبی | backend | حسین، حسن | Keycloak با LDAP آزمایشی، سپس نشست سمت سرور و یک use case با `access`. معیار: ابطال نقش و غیرفعال‌سازی LDAP در درخواست بعدی اثر کند |
 | 0.8 | PoC ۳: پل Flowable | process | حسین، محمد | فرایند تأیید اداری با فرم JSON Schema، Task Inbox، تایمر و escalation، از طریق outbox و inbox. معیار: هیچ task گم یا تکرار نشود |
 | 0.9 | PoC ۴: RTL | frontend | مهدی، رضا | صفحهٔ پورتال فارسی از درخت JSON (Puck) و فرم با تاریخ جلالی. معیار: WCAG 2.1 AA |
