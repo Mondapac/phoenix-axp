@@ -7,11 +7,13 @@
 # PostgreSQL roles: `postgres` is the bootstrap superuser and nothing else; no URL names it. On
 # a fresh volume the image runs scripts/db/bootstrap-dev.sql once, which creates the migration
 # role `phoenix_migrator` (owner of the database) and the application login `phoenix_api`
-# (group `phoenix_app`). On an existing volume, run it again with `pnpm db:bootstrap`.
+# (group `phoenix_app`), then scripts/db/bootstrap-flowable-dev.sql, which creates Flowable's own
+# database and login `flowable`. On an existing volume, run both again with `pnpm db:bootstrap`.
 #
 # The API connects to PostgreSQL and, when S3_* is set, to SeaweedFS (platform/storage). Valkey,
 # Mailpit, Keycloak and Flowable are here so the later slices that need them
-# (docs/platform-deferred.md) find them running; nothing in the API connects to them yet.
+# (docs/platform-deferred.md) find them running; nothing in the API connects to them yet
+# (Flowable: the process module, slice 2.2).
 name: phoenix
 
 services:
@@ -32,6 +34,12 @@ services:
       - type: bind
         source: ./scripts/db/bootstrap-dev.sql
         target: /docker-entrypoint-initdb.d/10-bootstrap-dev.sql
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./scripts/db/bootstrap-flowable-dev.sql
+        target: /docker-entrypoint-initdb.d/20-bootstrap-flowable-dev.sql
         read_only: true
         bind:
           create_host_path: false
@@ -84,13 +92,26 @@ services:
           create_host_path: false
 
   flowable:
-    # Flowable REST 7.1.0 (BPMN engine, Apache-2.0) with its default in-memory H2 database:
-    # a local placeholder for the workflow slice. REST API on
-    # http://localhost:8090/flowable-rest/service/ (rest-admin / test).
-    image: flowable/flowable-rest:7.1.0
+    # Phoenix's Flowable image (infra/flowable/Dockerfile: Flowable REST 7.1.0, Apache-2.0, with
+    # the PostgreSQL JDBC driver and Phoenix's settings) on its OWN database `flowable` and
+    # login `flowable` in the same cluster, created by scripts/db/bootstrap-flowable-dev.sql
+    # (ADR-0005, PoC 3 R9). Timers and async jobs are picked up every second here (10 s in the
+    # image). Healthy once /management/engine answers (20 s or more on a first start). REST API
+    # on http://localhost:8090/flowable-rest/service/ (rest-admin / phoenix-dev-flowable).
+    build:
+      context: ./infra/flowable
+    image: phoenix/flowable-rest:7.1.0-phoenix.1
     environment:
-      FLOWABLE_REST_APP_ADMIN_USER_ID: rest-admin
-      FLOWABLE_REST_APP_ADMIN_PASSWORD: test
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/flowable
+      SPRING_DATASOURCE_USERNAME: flowable
+      SPRING_DATASOURCE_PASSWORD: flowable
+      FLOWABLE_REST_APP_ADMIN_USERID: rest-admin
+      FLOWABLE_REST_APP_ADMIN_PASSWORD: phoenix-dev-flowable
+      FLOWABLE_PROCESS_ASYNC_EXECUTOR_DEFAULTTIMERJOBACQUIREWAITTIME: 1s
+      FLOWABLE_PROCESS_ASYNC_EXECUTOR_DEFAULTASYNCJOBACQUIREWAITTIME: 1s
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - '127.0.0.1:${FLOWABLE_PORT:-8090}:8080'
 
