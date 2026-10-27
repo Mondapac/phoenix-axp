@@ -223,7 +223,7 @@ describe('the licence gate (scripts/check-licences.mjs, ADR-0009)', () => {
     ]);
   });
 
-  it('passes OFL-1.1 for a font package only (ADR-0022 decision 3)', () => {
+  it('passes OFL-1.1 for a font package only (ADR-0022 decision 7)', () => {
     const font = gate({ 'OFL-1.1': [pkg('@fontsource-variable/vazirmatn')] }, []);
     expect(font).toMatchObject({ status: 0, problems: [] });
     expect(font.out).toContain('font files only, self-hosted');
