@@ -1,13 +1,13 @@
-# ADR-0022: Phase 1 Owner Decisions — Public Sign-up, Keycloak Realms, UI Languages, Isolation Overhead, AD Sync, Font Licence
+# ADR-0022: Phase 1 Owner Decisions — Public Sign-up, Keycloak Realms, UI Languages, Isolation Overhead, AD Sync, Font Licence, Licence Allow-list
 
-**Status:** Accepted — 2026-10-27 (owner decisions on cards P1, P2, P3, P5, P6 and P7 of the Phase 1 review)
-**Amends:** ADR-0004 (realm layout), ADR-0002 (isolation overhead criterion), ADR-0009 (licence allow-list, fonts only)
+**Status:** Accepted — 2026-10-27 (owner decisions on cards P1, P2, P3, P4, P5, P6 and P7 of the Phase 1 review)
+**Amends:** ADR-0004 (realm layout), ADR-0002 (isolation overhead criterion), ADR-0009 (licence allow-list: fonts, and the permissive variants of decision 7)
 **Relates to:** ADR-0004, ADR-0020, `docs/reviews/poc-1-tenant-isolation.md`,
 `docs/reviews/poc-2-hybrid-login.md`, `docs/reviews/poc-4-rtl-portal.md`
 
 ## Context
-The Phase 1 review asked how public users sign up (card P1) and whether Keycloak keeps one realm per tenant (P2) and which UI languages Phase 1 ships (P3); PoC 2
-ran with a realm per tenant and it worked. The Phase 0 PoCs left three questions open (Phase 1 review, cards P5 to P7):
+The Phase 1 review asked how public users sign up (card P1) and whether Keycloak keeps one realm per tenant (P2) and which UI languages Phase 1 ships (P3), and whether the licence allow-list of ADR-0009 widens to common permissive variants (P4).
+PoC 2 ran with a realm per tenant and it worked. The Phase 0 PoCs left three questions open (Phase 1 review, cards P5 to P7):
 - PoC 1 showed that RLS policies cost within noise, but a transaction per tiny unit of work costs
   more than 15% on sub-millisecond reads. The criterion in ADR-0002 did not say what it measures.
 - PoC 2 showed that Keycloak sends no back-channel when an account is disabled in AD; the core
@@ -41,6 +41,9 @@ ran with a realm per tenant and it worked. The Phase 0 PoCs left three questions
    languages it offers and which one is the default. Phase 1 ships Persian (RTL) and English
    (LTR). Adding a language never needs a deploy; translations missing for a key fall back to
    the tenant's default language.
+7. **Licence allow-list (P4).** 0BSD, CC0-1.0, Unlicense, BlueOak-1.0.0 and Python-2.0 join the
+   allow-list and pass without an exception. MPL-2.0 and EPL-2.0 stay case-by-case exceptions,
+   for dev tools or unmodified use only. The denied families of ADR-0009 are unchanged.
 
 ## Consequences
 - PoC 1's per-request result meets the criterion; the per-unit numbers stay in the report as
@@ -53,6 +56,10 @@ ran with a realm per tenant and it worked. The Phase 0 PoCs left three questions
   screens in slice 1.10; every UI string goes through translation keys from day one.
 - Slice 1.9 may ship Vazirmatn. The licence gate gets a font-only rule for OFL-1.1 when the first
   font package lands (until then no OFL package is in the tree).
+- The licence gate (`scripts/licence-policy.mjs`) allows the five ids of decision 7, and their
+  exceptions leave `config/licence-exceptions.json` (tslib, argparse, postgres,
+  robust-predicates and the BlueOak dev tools). MIT-0, MPL-2.0, EPL-2.0 (elkjs) and CC-BY-4.0
+  (caniuse-lite) still need a `cto`-approved entry.
 
 ## Alternatives considered
 - Per-unit criterion: rejected; it measures transaction cost, not isolation cost.

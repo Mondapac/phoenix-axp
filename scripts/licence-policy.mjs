@@ -1,16 +1,17 @@
 // The licence policy of ADR-0009, as pure functions: `check-licences.mjs` applies it to the
 // pnpm listings, and apps/api/test/licences.spec.ts proves each rule on fixtures.
 //
-//   - ALLOWED licences (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC) pass silently
-//     (ADR-0009 decision 1).
+//   - ALLOWED licences (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC: ADR-0009 decision 1;
+//     0BSD, CC0-1.0, Unlicense, BlueOak-1.0.0, Python-2.0: ADR-0022 decision 7) pass silently.
+//     An exception for an allowed licence is refused as unneeded.
 //   - DENIED families (GPL, LGPL, AGPL, SSPL, BUSL, the Sustainable Use and similar licences)
 //     always fail, even when listed as an exception (ADR-0009 decision 2). They are recognised
 //     by their SPDX ids and by their names written out anywhere in the declared licence
 //     ("GNU General Public License v3", "Server Side Public License", "LicenseRef-GPL", ...),
 //     so a non-SPDX spelling cannot turn a denied licence into one that an exception passes.
-//   - Every other licence, the permissive variants (MIT-0, 0BSD, BlueOak, Unlicense, CC0, ...)
-//     included, fails unless config/licence-exceptions.json lists that package under that exact
-//     licence, with a reason, the approver `cto` and a date (ADR-0009 decision 2 and its
+//   - Every other licence, MIT-0, MPL-2.0 and EPL-2.0 included (ADR-0022 decision 7 keeps
+//     MPL-2.0 and EPL-2.0 case by case, for dev tools or unmodified use only), fails unless
+//     config/licence-exceptions.json lists that package under that exact licence, with a reason, the approver `cto` and a date (ADR-0009 decision 2 and its
 //     Consequences: "CI lists them as failures and `cto` approves each one explicitly").
 //   - A package with no or an unknown licence always fails (ADR-0009 decision 3).
 //   - The whole dependency tree is checked, dev dependencies included (ADR-0009 decision 3).
@@ -22,7 +23,20 @@
 // part passes; `WITH` and anything unparsed need an exception. An OR with an allowed choice
 // passes even when another choice is denied: "MIT OR GPL-3.0" is taken under MIT.
 
-export const ALLOWED = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC']);
+export const ALLOWED = new Set([
+  // ADR-0009 decision 1.
+  'MIT',
+  'Apache-2.0',
+  'BSD-2-Clause',
+  'BSD-3-Clause',
+  'ISC',
+  // ADR-0022 decision 7 (owner decision P4, limited widening).
+  '0BSD',
+  'CC0-1.0',
+  'Unlicense',
+  'BlueOak-1.0.0',
+  'Python-2.0',
+]);
 
 /** Refused whatever the exceptions file says: incompatible with a proprietary product. */
 export const DENIED =
