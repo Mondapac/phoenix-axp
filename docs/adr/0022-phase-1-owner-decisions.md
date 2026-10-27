@@ -1,12 +1,12 @@
-# ADR-0022: Phase 1 Follow-up Decisions — Isolation Overhead, AD Sync Interval, Font Licence
+# ADR-0022: Phase 1 Owner Decisions — Public Sign-up, Isolation Overhead, AD Sync, Font Licence
 
-**Status:** Accepted — 2026-10-27 (owner decisions on cards P5, P6 and P7 of the Phase 1 review)
+**Status:** Accepted — 2026-10-27 (owner decisions on cards P1, P5, P6 and P7 of the Phase 1 review)
 **Amends:** ADR-0002 (isolation overhead criterion), ADR-0009 (licence allow-list, fonts only)
 **Relates to:** ADR-0004, ADR-0020, `docs/reviews/poc-1-tenant-isolation.md`,
 `docs/reviews/poc-2-hybrid-login.md`, `docs/reviews/poc-4-rtl-portal.md`
 
 ## Context
-The Phase 0 PoCs left three questions open (Phase 1 review, cards P5 to P7):
+The Phase 1 review asked how public users sign up (card P1). The Phase 0 PoCs left three questions open (Phase 1 review, cards P5 to P7):
 - PoC 1 showed that RLS policies cost within noise, but a transaction per tiny unit of work costs
   more than 15% on sub-millisecond reads. The criterion in ADR-0002 did not say what it measures.
 - PoC 2 showed that Keycloak sends no back-channel when an account is disabled in AD; the core
@@ -27,11 +27,18 @@ The Phase 0 PoCs left three questions open (Phase 1 review, cards P5 to P7):
    unmodified, and self-hosted from our own servers; no external font CDN. Code under OFL-1.1, or
    any other use, still needs a reviewed exception under ADR-0009.
 
+4. **Public sign-up (P1).** Public users (`portal-user`) can sign up with a mobile number
+   (one-time SMS code) or an email address. Each tenant chooses mobile, email or both. The SMS
+   gateway sits behind a port; each tenant connects its own provider, and there is no default
+   provider.
+
 ## Consequences
 - PoC 1's per-request result meets the criterion; the per-unit numbers stay in the report as
   context, not as a failure.
 - Slice 1.5 builds the sync job, the tenant setting and "sync now". The longest delay between an
   AD disable and the next refused request is the tenant's interval (5 minutes by default).
+- Slices 1.5 and 1.8 build both sign-up paths, the tenant setting and the SMS port, with rate
+  limiting and the self-hosted CAPTCHA.
 - Slice 1.9 may ship Vazirmatn. The licence gate gets a font-only rule for OFL-1.1 when the first
   font package lands (until then no OFL package is in the tree).
 
