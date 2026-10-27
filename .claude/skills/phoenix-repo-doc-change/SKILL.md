@@ -48,8 +48,9 @@ Work runs in parallel tracks, each on its own branch and write area
 ## Pushing and PRs (owner decision 2026-10-26)
 - Claude pushes its own branch (`git push -u origin <branch>`) and opens the PR (`gh pr create`)
   with a short English description, the related ADRs and phase, and the review status.
-- Only the owner merges. Never merge, never push to `main`, never force-push a pushed branch
-  (merge `main` into it instead).
+- Merge per ADR-0021: the thread that owns the PR merges it, coordinated by the coordinator,
+  once CI is green and the required reviews are recorded; merge commits only. Never push to
+  `main` directly, never force-push a pushed branch (merge `main` into it instead).
 - Phase 0 PoC branches are not opened for merge: results go to `docs/reviews/` in a docs PR.
 
 ## After pushing

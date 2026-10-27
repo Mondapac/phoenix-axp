@@ -37,8 +37,8 @@ skip steps under time pressure.
 - **Every new endpoint**: input validation, structured logging with correlation id, OpenAPI.
 - **Migrations** follow database-designer's design, are reversible (`down.sql`), add RLS for
   tenant-scoped tables, and get database-designer's sign-off before merge.
-- **Conventional Commits**; one feature = one branch = one PR; push the branch and open the PR,
-  never merge.
+- **Conventional Commits**; one feature = one branch = one PR; push the branch and open the PR;
+  merge only per ADR-0021.
 
 ## Definition of Done (from CLAUDE.md — do not skip)
 Tests (unit + at least one integration, two tenants) pass; migrations reversible; OpenAPI

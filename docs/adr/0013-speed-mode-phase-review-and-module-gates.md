@@ -30,6 +30,7 @@ see and decide every phase before it is built.
 4. **Parallel tracks:** at most four (`backend`, `process`, `frontend`, `product`), each with its
    own branch and write area; the board is `docs/process/tracks.md` in the repo.
 5. **Push model:** Claude pushes its branch and opens the PR; only the owner merges.
+   *(Amended by ADR-0021: the thread that owns a PR merges it, coordinated by the coordinator.)*
 6. **Phase 0 PoCs** are run-and-report only: results in `docs/reviews/`, code not merged; Phase 1
    code is built from the approved design.
 
