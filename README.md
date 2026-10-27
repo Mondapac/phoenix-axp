@@ -27,6 +27,11 @@ pnpm dev                          # API on http://localhost:3000, GET /health/re
 pnpm dev:worker                   # the worker role, in a second terminal
 ```
 
+`.env.example` sets `NODE_ENV=development`. Keep it set: while a port is bound to a fail-closed
+placeholder (ADR-0010; today identity's authorisation check and tenancy's site-ancestry
+reader), the API and the worker start only when `NODE_ENV` is explicitly `development` or
+`test`, and refuse a production start.
+
 Every tenant-scoped request names its tenant in the `x-tenant-id` header. There is no default
 tenant: the tenants a deployment serves are `HOSTED_TENANTS`, each with a file in
 `config/tenants/` (two fixtures: `demo-fa`, Persian/Jalali in Asia/Tehran, and `demo-en`,
@@ -50,7 +55,11 @@ English/Gregorian in America/Toronto).
 ## Layout
 
 - `apps/api/src/platform/`: the platform layer; `apps/api/src/modules/`: business modules
-  (none yet). Boundaries are enforced by `eslint.config.mjs`,
+  (none yet). Every use case extends `UseCase` from `platform/authz` and declares a static
+  `access` rule (`permissions`, `anonymous`, `own-resources` or `system`); the `UseCaseGate`
+  checks it on every entry, and `apps/api/test/authz/use-cases.spec.ts` fails a use case
+  without one. Components not built yet, and their triggers, are in
+  `docs/platform-deferred.md`. Boundaries are enforced by `eslint.config.mjs`,
   `apps/api/.dependency-cruiser.cjs` and `scripts/check-prisma-boundaries.mjs`, and proven by
   the fixtures in `apps/api/test/boundary-fixtures/`.
 - `prisma/schema/`: one file and one PostgreSQL schema per module; `prisma/migrations/`.

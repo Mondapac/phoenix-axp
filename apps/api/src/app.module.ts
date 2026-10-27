@@ -1,6 +1,7 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import type { DestinationStream } from 'pino';
+import { AuthzModule } from './platform/authz/authz.module';
 import { ActorGuard } from './platform/call-context/actor.guard';
 import { ClockModule } from './platform/clock/clock.module';
 import type { AppConfig } from './platform/config/app-config';
@@ -47,6 +48,9 @@ export class AppModule {
         TenantConfigModule,
         TenantContextModule,
         PersistenceModule,
+        // No identity or tenancy module yet: the authorisation check and the site-ancestry
+        // reader are fail-closed placeholders (ADR-0010), so a production start is refused.
+        AuthzModule.register(),
         WorkerModule,
         HealthModule,
       ],

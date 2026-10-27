@@ -57,6 +57,11 @@ export interface AppConfig {
    */
   readonly appRole: AppRole;
   readonly nodeEnv: 'development' | 'test' | 'production';
+  /**
+   * Whether `NODE_ENV` was set at all. An unset `NODE_ENV` reads as `development` for logging,
+   * but counts as a production start for the placeholder check (Phoenix ADR-0010 decision 4).
+   */
+  readonly nodeEnvExplicit: boolean;
   readonly port: number;
   readonly logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   /** Tenants this deployment serves (ADR-02). Never empty, never defaulted. */
@@ -97,6 +102,7 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
   return Object.freeze({
     appRole: parsed.data.APP_ROLE,
     nodeEnv: parsed.data.NODE_ENV,
+    nodeEnvExplicit: env.NODE_ENV !== undefined,
     port: parsed.data.PORT,
     logLevel: parsed.data.LOG_LEVEL,
     hostedTenants: Object.freeze([...parsed.data.HOSTED_TENANTS]),

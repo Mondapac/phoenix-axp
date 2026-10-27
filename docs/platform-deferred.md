@@ -10,7 +10,6 @@ trigger that brings each one in. When a trigger fires, port the component from t
 | --- | --- | --- |
 | `events` and outbox (ADR-05) | Event envelope, `defineEvent`, a `<module>.outbox` table per module, the relay in the worker (`FOR UPDATE SKIP LOCKED`), the in-process `EventBus`, `inbox` idempotency | The first module that publishes or consumes a domain event |
 | `audit` (ADR-09) | `platform.audit_log` (append-only by trigger), `AuditWriter` in the use-case transaction with a closed action catalogue, the hash-chain sealer in the worker, `audit-verify` | The first state-changing use case of a business module (and before any customer pilot) |
-| `authz` (ADR-03) | The use-case gate, permissions and roles per population, the `UseCase.execute` entry and its lint and dependency rules | The first business use case (identity, Phase 1) |
 | identity integration (ADR-03) | The `Authenticator` building `AuthenticatedActor` from a Keycloak session; `ActorGuard` accepts no session until then and answers 401 `session.invalid` to any `Authorization` header | The identity module, Phase 1 |
 | `scheduler` (ADR-05) | Fixed-interval jobs under `pg_try_advisory_xact_lock` in the worker | The first periodic job (the outbox relay or the audit sealer) |
 | worker jobs | The worker today starts, logs a heartbeat and stops cleanly on SIGTERM | The first job or consumer (outbox relay, scheduler) |
@@ -21,7 +20,6 @@ trigger that brings each one in. When a trigger fires, port the component from t
 | `rate-limit` (ADR-11) | Rate limits with `rate-limiter-flexible` on Valkey | The first public unauthenticated write (sign-in, sign-up) or before the first public deployment, whichever comes first |
 | `i18n` | Message catalogues and locale negotiation against the tenant's `supportedLocales` | The first user-facing text produced by the API |
 | reviewed raw reads (Mondapac ADR-0030) | `RawReadPort` and a closed, reviewed list of read-only statements for modules; today raw SQL is allowed only in the platform files of `RAW_SQL_FILES` in `scripts/check-prisma-boundaries.mjs` | The first read a module cannot express through Prisma |
-| `placeholders` (Mondapac ADR-0031) | `@FailClosedPlaceholder` facades that always refuse; production refuses to start with one bound | The first facade a module depends on before it is built |
 | `extensions` | Extension points for tenant-specific apps (ADR-07) | The Objects and custom-apps phase |
 | client address | `platform/http/client-address.ts`, the one reader of the socket address behind trusted proxies | The first feature that records or limits by client address (rate limits, audit) |
 
@@ -37,3 +35,34 @@ trigger that brings each one in. When a trigger fires, port the component from t
   tenant-scoped request; `HOSTED_TENANTS` lists the tenants of a deployment.
 - **Market and vertical literal bans** became one tenant-literal ban, built from
   `config/tenants/*.json` (ids, locales, time zones).
+- **`authz` (Phase 1, slice 1.1).** Ported from Mondapac `platform/authz` with these changes:
+  - Scopes are `platform`, `tenant` and `site` (ADR-0004 decision 7 as amended by ADR-0018
+    decision 6), not `platform` and `seller`; a scope names the population that may hold its
+    keys (`platform-operator`, or `tenant-staff` for tenant and site keys). A portal user
+    (ADR-0019) holds no key and no role: the gate refuses it under every `permissions` rule,
+    and `GrantPolicy` refuses to grant it any role.
+  - The gate itself refuses an unknown key (ADR-0004 decision 6) and a key outside the actor's
+    population before it asks the authorisation check, so the permission registry is a gate
+    input; Mondapac left both to identity's check.
+  - There is no seller state: `whenSellerNotApproved`, `access.seller-not-approved` and their
+    CI checks are gone, so the checked-in list `test/contracts/access-declarations.json` holds
+    exactly the non-`permissions` rules. A rule's keys must be of one population (Mondapac: of
+    one scope), so a rule may combine tenant and site keys.
+  - The step-up guard and registry are not ported (Mondapac's seller OTP policy; MFA is
+    Keycloak's, ADR-0004 decision 1). The `anonymous`/`system` over-HTTP list check is not
+    ported yet: it reads controllers, and no module has one.
+  - The role model (`GrantScope`, role scopes and kinds), `GrantPolicy` and `LastHolderPolicy`
+    live in `platform/authz/roles/` until the identity module, which will own the Role and
+    RoleAssignment aggregates, exists. A site grant carries `includeDescendants`; access flows
+    only downward; a site grantor grants only within its own subtree.
+  - Two ports have no implementation yet, each bound to a fail-closed placeholder:
+    `AuthorisationCheck` (identity; every authenticated actor gets `access.unavailable`) and
+    `SiteAncestryReader` (tenancy's `site_ancestry`; no site is within any subtree, so a
+    subtree grant covers its own site only). `AuthzModule.register({ authorisation,
+    siteAncestry })` takes the implementing modules. Organisation scoping waits for the
+    tenancy module's Organization tree.
+- **`placeholders` (slice 1.1).** Ported with `SiteAncestryReader` as its trigger, with only
+  `@FailClosedPlaceholder`: Mondapac's `@PermissiveInterim` is not ported (ADR-0010 decisions 2
+  and 3). A production start is refused while any placeholder is bound, and a start counts as
+  non-production only when `NODE_ENV` is set explicitly to `development` or `test`. Until
+  identity and tenancy bind their ports, the API and the worker refuse to start in production.

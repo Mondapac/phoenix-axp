@@ -24,6 +24,7 @@ describe('loadAppConfig', () => {
     expect(config).toEqual({
       appRole: 'api',
       nodeEnv: 'development',
+      nodeEnvExplicit: false,
       port: 3000,
       logLevel: 'info',
       hostedTenants: ['demo-fa', 'demo-en'],
@@ -34,6 +35,13 @@ describe('loadAppConfig', () => {
     });
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.hostedTenants)).toBe(true);
+  });
+
+  it('records whether NODE_ENV was set, for the placeholder check (ADR-0010 decision 4)', () => {
+    expect(loadAppConfig({ HOSTED_TENANTS: 'demo-fa' }).nodeEnvExplicit).toBe(false);
+    expect(
+      loadAppConfig({ HOSTED_TENANTS: 'demo-fa', NODE_ENV: 'development' }).nodeEnvExplicit,
+    ).toBe(true);
   });
 
   it('has no default tenant: HOSTED_TENANTS is required and never empty', () => {

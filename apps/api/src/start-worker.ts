@@ -1,10 +1,14 @@
 import type { INestApplicationContext } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { ModulesContainer, NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { databaseAccepted } from './check-database-role';
 import type { AppConfig } from './platform/config/app-config';
 import { DatabaseProbe } from './platform/persistence/database-probe';
+import {
+  boundPlaceholders,
+  placeholdersAccepted,
+} from './platform/placeholders/bound-placeholders';
 import { WorkerRuntime } from './platform/worker/worker-runtime';
 import type { StartOptions } from './start-api';
 
@@ -33,7 +37,12 @@ export async function startWorker(
   const logger = context.get(Logger);
   context.useLogger(logger);
 
-  if (!(await databaseAccepted(context.get(DatabaseProbe), logger))) {
+  // Phoenix ADR-0010 decision 4: the bound placeholder set is logged, and a production start
+  // with one bound is refused.
+  if (
+    !placeholdersAccepted(boundPlaceholders(context.get(ModulesContainer)), config, logger) ||
+    !(await databaseAccepted(context.get(DatabaseProbe), logger))
+  ) {
     await context.close();
     return undefined;
   }

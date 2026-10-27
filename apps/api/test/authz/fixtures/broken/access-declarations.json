@@ -1,0 +1,6 @@
+[
+  { "name": "beta.listed-as-system", "rule": "system" },
+  { "name": "beta.overrides-execute", "rule": "system" },
+  { "name": "beta.removed", "rule": "system" },
+  { "name": "beta.sign-out", "rule": "own-resources" }
+]

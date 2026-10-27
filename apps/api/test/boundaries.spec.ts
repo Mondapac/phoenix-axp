@@ -133,16 +133,20 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'kernel-testing-only-in-tests',
         'module-internals-are-private',
         'module-public-api-only',
+        'modules-reach-authz-through-its-barrel',
         'no-circular',
         'persistence-internals-are-private',
         'persistence-root-is-private',
         'platform-does-not-import-modules',
         'prisma-only-in-infrastructure',
+        'repositories-stay-behind-use-cases',
         'request-actor-is-attached-by-the-actor-guard',
         'temporal-only-through-kernel',
         'tenant-context-is-attached-by-the-guard',
         'tenant-context-only-through-the-decorator',
         'tenant-exemption-is-platform-only',
+        'use-case-gate-is-built-by-authz',
+        'use-cases-are-the-only-way-in',
       ]);
       expect(rules.filter((rule) => rule.severity !== 'error')).toEqual([]);
       expect(cruise.summary.violations.filter((v) => v.rule.severity !== 'error')).toEqual([]);
@@ -169,6 +173,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'kernel-testing-only-in-tests: src/platform/binds-test-fake.ts',
         'module-internals-are-private: src/platform/reaches-into-module.ts',
         'module-public-api-only: src/modules/alpha/application/reaches-into-module.ts',
+        'modules-reach-authz-through-its-barrel: src/modules/alpha/application/reaches-use-case-gate.ts',
         'no-circular: src/modules/alpha/domain/circular-a.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-service.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-via-barrel.ts',
@@ -176,6 +181,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'platform-does-not-import-modules: src/platform/imports-module-index.ts',
         'platform-does-not-import-modules: src/platform/reaches-into-module.ts',
         'prisma-only-in-infrastructure: src/modules/alpha/presentation/uses-prisma.ts',
+        'repositories-stay-behind-use-cases: src/modules/alpha/presentation/jobs/reaches-repository.ts',
         'request-actor-is-attached-by-the-actor-guard: src/modules/alpha/presentation/attaches-actor.ts',
         'temporal-only-through-kernel: src/platform/uses-js-temporal-polyfill.ts',
         'temporal-only-through-kernel: src/platform/uses-temporal-polyfill.ts',
@@ -186,6 +192,11 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'tenant-context-only-through-the-decorator: src/modules/alpha/presentation/exempt-controller.ts',
         'tenant-exemption-is-platform-only: src/modules/alpha/presentation/exempt-controller.ts',
         'tenant-exemption-is-platform-only: src/platform/tenant-context/index.ts',
+        'use-case-gate-is-built-by-authz: src/modules/alpha/application/reaches-use-case-gate.ts',
+        'use-case-gate-is-built-by-authz: src/platform/builds-use-case-gate.ts',
+        'use-cases-are-the-only-way-in: src/modules/alpha/infrastructure/alpha.facade.ts',
+        'use-cases-are-the-only-way-in: src/modules/alpha/presentation/reaches-application-service.ts',
+        'use-cases-are-the-only-way-in: src/modules/beta/index.ts',
       ]);
     });
 
@@ -225,6 +236,14 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       'src/platform/uses-database-probe.ts',
       // A platform entry adapter builds actors and call contexts.
       'src/platform/scheduler/builds-system-context.ts',
+      // platform/authz builds the gate; an entry point reaches application/ through a use
+      // case; the module's Nest module binds a repository implementation; a use case reads its
+      // repository port.
+      'src/platform/authz/authz.module.ts',
+      'src/modules/alpha/presentation/calls-use-case.ts',
+      'src/modules/alpha/alpha.module.ts',
+      'src/modules/alpha/application/use-cases/find-thing.use-case.ts',
+      'src/modules/alpha/infrastructure/prisma-thing.repository.ts',
     ])('accepts the allowed file %s', (file) => {
       expect(cruise.modules.map((module) => module.source)).toContain(file);
       expect(found.filter((violation) => violation.endsWith(`: ${file}`))).toEqual([]);
@@ -610,6 +629,28 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ],
       ['src/modules/identity/application/access/session-authenticator.ts', []],
       ['src/platform/mints-authenticated-actor.ts', []],
+      // use-case-entry-is-the-gate (ADR-0004 decision 4): no execute override in use-cases/;
+      // no `handle` reached on another object, by destructuring or by reflection in any file
+      // of a module.
+      [
+        'src/modules/alpha/application/use-cases/overrides-execute.ts',
+        syntax('use-case-entry-is-the-gate', 3),
+      ],
+      [
+        'src/modules/alpha/application/use-cases/calls-handle.ts',
+        syntax('use-case-entry-is-the-gate', 4),
+      ],
+      ['src/modules/alpha/presentation/calls-handle.ts', syntax('use-case-entry-is-the-gate')],
+      ['src/modules/alpha/application/use-cases/allowed-use-case.ts', []],
+      [
+        'src/modules/alpha/application/calls-handler-object.ts',
+        syntax('use-case-entry-is-the-gate'),
+      ],
+      [
+        'src/modules/alpha/infrastructure/calls-handle.facade.ts',
+        syntax('use-case-entry-is-the-gate'),
+      ],
+      ['src/modules/alpha/application/reflects-handle.ts', syntax('use-case-entry-is-the-gate', 7)],
       // Only the guard attaches a TenantContext, in every part of the API.
       [
         'src/platform/attaches-tenant-context.ts',
@@ -642,6 +683,18 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ['src/modules/alpha/application/clean.ts', []],
     ])('%s reports exactly %j', (file, expected) => {
       expect(rulesIn(file)).toEqual([...expected].sort());
+    });
+
+    it('names each use-case-entry-is-the-gate message', () => {
+      expect(textsIn('src/modules/alpha/application/use-cases/overrides-execute.ts')).toEqual(
+        Array(3).fill('use-case-entry-is-the-gate: a use case never overrides execute.'),
+      );
+      expect(textsIn('src/modules/alpha/application/use-cases/calls-handle.ts')).toEqual(
+        Array(4).fill('use-case-entry-is-the-gate: handle is called only by UseCase.execute.'),
+      );
+      expect(textsIn('src/modules/alpha/application/reflects-handle.ts')).toEqual(
+        Array(7).fill(expect.stringMatching(/^use-case-entry-is-the-gate: /)),
+      );
     });
 
     it('names each wall-clock read', () => {
