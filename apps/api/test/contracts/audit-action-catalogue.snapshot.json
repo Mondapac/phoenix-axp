@@ -1,5 +1,73 @@
 [
   {
+    "action": "forms.form-revision.saved",
+    "targetType": "forms.form-revision",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "formId": "id",
+      "number": "integer"
+    }
+  },
+  {
+    "action": "forms.form.created",
+    "targetType": "forms.form",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "allowOnBehalf": "boolean",
+      "audience": "enumOf(anyone|portal-user|staff|staff-roles)",
+      "retentionDays": "optional(integer)",
+      "roleIds": "listOf(id, max 32)",
+      "siteId": "id"
+    }
+  },
+  {
+    "action": "forms.form.published",
+    "targetType": "forms.form",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "revisionId": "optional(id)",
+      "status": "enumOf(draft|published|retired)"
+    },
+    "after": {
+      "number": "integer",
+      "revisionId": "id"
+    }
+  },
+  {
+    "action": "forms.form.retired",
+    "targetType": "forms.form",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "revisionId": "id"
+    },
+    "after": null
+  },
+  {
+    "action": "forms.form.updated",
+    "targetType": "forms.form",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "allowOnBehalf": "boolean",
+      "audience": "enumOf(anyone|portal-user|staff|staff-roles)",
+      "retentionDays": "optional(integer)",
+      "roleIds": "listOf(id, max 32)"
+    },
+    "after": {
+      "allowOnBehalf": "boolean",
+      "audience": "enumOf(anyone|portal-user|staff|staff-roles)",
+      "nameChanged": "boolean",
+      "retentionDays": "optional(integer)",
+      "roleIds": "listOf(id, max 32)"
+    }
+  },
+  {
     "action": "identity.account.created",
     "targetType": "identity.account",
     "targetId": "id",
