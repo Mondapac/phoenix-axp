@@ -5,8 +5,14 @@ import type { AuditWriter } from '../../../../platform/audit/audit-writer';
 import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work';
 import { FORMS_FORMS_DESIGN } from '../../contracts/permissions';
 import { FORM_UPDATED } from '../../domain/audit-actions';
+import { sameSettings } from '../../domain/form-settings';
 import { parseName } from '../../domain/values';
-import { FORM_NOT_FOUND, type FormNotFound, type InvalidValue } from '../failures';
+import {
+  FORM_NOT_FOUND,
+  type FormNotFound,
+  type InvalidValue,
+  type SettingsNeedPublisher,
+} from '../failures';
 import type { FormRepository } from '../form.repository';
 import { parseSettings, settingsAudit, type FormSettingsInput } from '../form-settings-input';
 
@@ -17,12 +23,12 @@ export interface UpdateFormInput extends FormSettingsInput {
   readonly name: string;
 }
 
-export type UpdateFormFailure = InvalidValue | FormNotFound;
+export type UpdateFormFailure = InvalidValue | FormNotFound | SettingsNeedPublisher;
 
 /**
- * Renames a form and replaces its submission policy and retention. The key and the site do
- * not change; a published form keeps serving its revision. A shorter retention applies to the
- * submissions the retention job (slice 2.5) finds past it.
+ * Renames a form and, while it is a draft, replaces its submission policy and retention. Once
+ * published, those two belong to a publisher (`UpdateFormSettings`); here they must then stay
+ * as they are. The key and the site do not change.
  */
 export class UpdateForm extends UseCase<UpdateFormInput, void, UpdateFormFailure> {
   static override readonly access: AccessDeclaration = {
@@ -54,6 +60,9 @@ export class UpdateForm extends UseCase<UpdateFormInput, void, UpdateFormFailure
     return this.unitOfWork.run<void, UpdateFormFailure>(tenant, async () => {
       const form = await this.forms.find(tenant, input.formId);
       if (form === null) return err(FORM_NOT_FOUND);
+      if (form.status !== 'draft' && !sameSettings(form, settings.value)) {
+        return err({ code: 'forms.form.settings-need-publisher' } as const);
+      }
       await this.forms.saveState(
         tenant,
         form.id,

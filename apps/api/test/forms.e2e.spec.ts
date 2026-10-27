@@ -21,7 +21,7 @@ describe('the forms studio API (HTTP)', () => {
   });
 
   describe.each(TEST_TENANTS)('in tenant %s', (tenant) => {
-    const call = (method: 'get' | 'post' | 'patch', path: string) =>
+    const call = (method: 'get' | 'post' | 'patch' | 'put', path: string) =>
       request(app.getHttpServer())[method](path).set('x-tenant-id', tenant);
     const ID = '01890a5d-ac96-774b-bcce-b302099a8057';
     const policy = { audience: 'anyone', roleIds: [], allowOnBehalf: false };
@@ -31,6 +31,7 @@ describe('the forms studio API (HTTP)', () => {
       ['get', `/forms/forms/${ID}`, undefined],
       ['post', '/forms/forms', { siteId: ID, key: 'visit', name: 'ملاقات', policy }],
       ['patch', `/forms/forms/${ID}`, { version: 1, name: 'x', policy }],
+      ['put', `/forms/forms/${ID}/settings`, { version: 1, policy }],
       [
         'post',
         `/forms/forms/${ID}/revisions`,

@@ -9,6 +9,11 @@ export type FormNotFound = { readonly code: 'forms.form.not-found' };
 export type FormRevisionNotFound = { readonly code: 'forms.form-revision.not-found' };
 export type SiteNotFound = { readonly code: 'forms.site.not-found' };
 export type KeyTaken = { readonly code: 'forms.form.key-taken' };
+/**
+ * Who may submit a published or retired form, and how long its personal data is kept, is a
+ * publisher's decision (security review M2): a designer changes them only on a draft.
+ */
+export type SettingsNeedPublisher = { readonly code: 'forms.form.settings-need-publisher' };
 
 export type { AlreadyPublished, InvalidSchema, InvalidValue, NotPublished };
 

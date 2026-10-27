@@ -19,6 +19,7 @@ import { ListForms } from '../../src/modules/forms/application/use-cases/list-fo
 import { PublishForm } from '../../src/modules/forms/application/use-cases/publish-form.use-case';
 import { RetireForm } from '../../src/modules/forms/application/use-cases/retire-form.use-case';
 import { SaveFormRevision } from '../../src/modules/forms/application/use-cases/save-form-revision.use-case';
+import { UpdateFormSettings } from '../../src/modules/forms/application/use-cases/update-form-settings.use-case';
 import { UpdateForm } from '../../src/modules/forms/application/use-cases/update-form.use-case';
 import { ViewFormRevision } from '../../src/modules/forms/application/use-cases/view-form-revision.use-case';
 import { ViewForm } from '../../src/modules/forms/application/use-cases/view-form.use-case';
@@ -158,6 +159,7 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
       ),
       createForm: new CreateForm(gate, uow, forms, reader, audit, clock, ids),
       updateForm: new UpdateForm(gate, uow, forms, audit, clock),
+      updateSettings: new UpdateFormSettings(gate, uow, forms, audit, clock),
       saveRevision: new SaveFormRevision(gate, uow, forms, checker, audit, clock, ids),
       publishForm: new PublishForm(gate, uow, forms, audit, clock),
       retireForm: new RetireForm(gate, uow, forms, audit, clock),
@@ -431,6 +433,54 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
         policy: anyone,
       }),
     ).rejects.toBeInstanceOf(StaleAggregateError);
+  });
+
+  it('leaves the settings of a published form to a publisher (security review M2)', async () => {
+    const formId = await form();
+    await useCases.publishForm.execute(context, {
+      formId,
+      version: 1,
+      revisionId: (await revision(formId)).id,
+    });
+    const recorded = audit.entries.length;
+    // A designer may still rename it, with the same settings.
+    expect(
+      await useCases.updateForm.execute(context, {
+        formId,
+        version: 2,
+        name: 'نام تازه',
+        policy: anyone,
+      }),
+    ).toEqual({ ok: true, value: undefined });
+    for (const change of [
+      { policy: { ...anyone, audience: 'staff' } },
+      { policy: anyone, retention: { kind: 'fixed', days: 30 } },
+    ]) {
+      expect(
+        await useCases.updateForm.execute(context, { formId, version: 3, name: 'x', ...change }),
+      ).toEqual({ ok: false, error: { code: 'forms.form.settings-need-publisher' } });
+    }
+    expect(audit.entries.length).toBe(recorded + 1);
+    expect(
+      await useCases.updateSettings.execute(context, {
+        formId,
+        version: 3,
+        policy: { ...anyone, audience: 'staff' },
+        retention: { kind: 'fixed', days: 30 },
+      }),
+    ).toEqual({ ok: true, value: undefined });
+    expect(await view(formId)).toMatchObject({
+      name: 'نام تازه',
+      status: 'published',
+      policy: { audience: 'staff' },
+      retention: { kind: 'fixed', days: 30 },
+      version: 4,
+    });
+    expect(audit.entries.at(-1)).toMatchObject({
+      action: 'forms.form.updated',
+      before: { audience: 'anyone', retentionDays: null },
+      after: { audience: 'staff', retentionDays: 30, nameChanged: false },
+    });
   });
 
   it('lists the forms of a site and of a status', async () => {

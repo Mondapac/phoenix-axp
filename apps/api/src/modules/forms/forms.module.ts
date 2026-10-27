@@ -13,6 +13,7 @@ import { ListForms } from './application/use-cases/list-forms.use-case';
 import { PublishForm } from './application/use-cases/publish-form.use-case';
 import { RetireForm } from './application/use-cases/retire-form.use-case';
 import { SaveFormRevision } from './application/use-cases/save-form-revision.use-case';
+import { UpdateFormSettings } from './application/use-cases/update-form-settings.use-case';
 import { UpdateForm } from './application/use-cases/update-form.use-case';
 import { ViewFormRevision } from './application/use-cases/view-form-revision.use-case';
 import { ViewForm } from './application/use-cases/view-form.use-case';
@@ -53,6 +54,7 @@ const FORMS = FORM_REPOSITORY;
     useCase(ViewFormRevision, [FORMS]),
     useCase(CreateForm, [FORMS, SITE_ANCESTRY_READER, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
     useCase(UpdateForm, [FORMS, AUDIT_WRITER, CLOCK]),
+    useCase(UpdateFormSettings, [FORMS, AUDIT_WRITER, CLOCK]),
     useCase(SaveFormRevision, [FORMS, FORM_SCHEMA_CHECKER, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
     useCase(PublishForm, [FORMS, AUDIT_WRITER, CLOCK]),
     useCase(RetireForm, [FORMS, AUDIT_WRITER, CLOCK]),

@@ -9,6 +9,17 @@ import type { Result } from '@phoenix/shared-kernel';
 /** The largest canonical JSON text of each document, in UTF-16 code units (256 KiB). */
 export const MAX_DOCUMENT_LENGTH = 256 * 1024;
 
+/**
+ * The most object members (at any depth) and the most `$ref`s a
+ * data schema may hold: they bound the compiler's work (security review H1). A large form has
+ * a few hundred fields of a handful of keywords each.
+ */
+export const MAX_SCHEMA_MEMBERS = 20_000;
+export const MAX_SCHEMA_REFS = 500;
+
+/** The only meta-schema a data schema may name: JSON Schema draft-07, the one Ajv checks. */
+export const DRAFT_07 = 'http://json-schema.org/draft-07/schema#';
+
 export type SchemaProblem =
   /** Not a plain JSON object, or not representable as canonical JSON. */
   | 'not-an-object'
@@ -19,6 +30,10 @@ export type SchemaProblem =
   | 'external-ref'
   /** `$async` schemas are refused: validation is synchronous. */
   | 'async-schema'
+  /** A `$schema` other than draft-07. */
+  | 'unsupported-draft'
+  /** More members or `$ref`s than the compiler is allowed to work through. */
+  | 'too-complex'
   /** Refused by the JSON Schema meta-schema. */
   | 'meta-schema'
   /** Valid by the meta-schema, but refused by the validator (strict mode, unknown format). */
@@ -73,17 +88,28 @@ function* walk(value: unknown, pointer: string): Generator<[string, string, unkn
 }
 
 /**
- * The data schema's own rules: an object at the root with `properties`, references only
- * inside the document, no asynchronous keywords.
+ * The data schema's own rules: an object at the root with `properties`, draft-07 only,
+ * references only inside the document, no asynchronous keywords, and bounded size.
  */
 export function checkDataSchemaShape(schema: unknown): Result<JsonObject, InvalidSchema> {
   if (!isJsonObject(schema)) return invalidSchema('jsonSchema', 'not-an-object');
   if (schema.type !== 'object' || !isJsonObject(schema.properties)) {
     return invalidSchema('jsonSchema', 'root-not-object');
   }
+  if (schema.$schema !== undefined && schema.$schema !== DRAFT_07) {
+    return invalidSchema('jsonSchema', 'unsupported-draft', '/$schema');
+  }
+  let members = 0;
+  let refs = 0;
   for (const [key, at, value] of walk(schema, '')) {
-    if (key === '$ref' && (typeof value !== 'string' || !value.startsWith('#'))) {
-      return invalidSchema('jsonSchema', 'external-ref', at);
+    members += 1;
+    if (members > MAX_SCHEMA_MEMBERS) return invalidSchema('jsonSchema', 'too-complex');
+    if (key === '$ref') {
+      if (typeof value !== 'string' || !value.startsWith('#')) {
+        return invalidSchema('jsonSchema', 'external-ref', at);
+      }
+      refs += 1;
+      if (refs > MAX_SCHEMA_REFS) return invalidSchema('jsonSchema', 'too-complex', at);
     }
     if (key === '$async') return invalidSchema('jsonSchema', 'async-schema', at);
   }

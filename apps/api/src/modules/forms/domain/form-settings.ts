@@ -75,3 +75,18 @@ export const retentionDaysOf = (retention: Retention): number | null =>
 
 export const retentionOf = (days: number | null): Retention =>
   days === null ? DEFAULT_RETENTION : { kind: 'fixed', days };
+
+/** Whether two settings are the same (role order aside). */
+export function sameSettings(
+  a: { readonly policy: SubmissionPolicy; readonly retention: Retention },
+  b: { readonly policy: SubmissionPolicy; readonly retention: Retention },
+): boolean {
+  const roles = new Set(a.policy.roleIds);
+  return (
+    a.policy.audience === b.policy.audience &&
+    a.policy.allowOnBehalf === b.policy.allowOnBehalf &&
+    a.policy.roleIds.length === b.policy.roleIds.length &&
+    b.policy.roleIds.every((id) => roles.has(id)) &&
+    retentionDaysOf(a.retention) === retentionDaysOf(b.retention)
+  );
+}

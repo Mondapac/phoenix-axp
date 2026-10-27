@@ -18,6 +18,7 @@ const FAILURE_STATUS: Readonly<Record<string, number>> = Object.freeze({
   'forms.form.key-taken': 409,
   'forms.form.already-published': 409,
   'forms.form.not-published': 409,
+  'forms.form.settings-need-publisher': 409,
   ...ACCESS_DENIED_STATUS,
 });
 

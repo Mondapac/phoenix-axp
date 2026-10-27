@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { CallContext } from '@phoenix/shared-kernel';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import { ListForms } from '../application/use-cases/list-forms.use-case';
 import { PublishForm } from '../application/use-cases/publish-form.use-case';
 import { RetireForm } from '../application/use-cases/retire-form.use-case';
 import { SaveFormRevision } from '../application/use-cases/save-form-revision.use-case';
+import { UpdateFormSettings } from '../application/use-cases/update-form-settings.use-case';
 import { UpdateForm } from '../application/use-cases/update-form.use-case';
 import { ViewFormRevision } from '../application/use-cases/view-form-revision.use-case';
 import { ViewForm } from '../application/use-cases/view-form.use-case';
@@ -41,6 +42,7 @@ const updateBody = z.strictObject({
   name: z.string().max(1024),
   ...settings,
 });
+const settingsBody = z.strictObject({ version: z.number().int().min(1), ...settings });
 // The documents are checked by the use case, which answers with the problem and its place.
 const revisionBody = z.strictObject({ jsonSchema: z.unknown(), uiSchema: z.unknown() });
 const publishBody = z.strictObject({
@@ -58,6 +60,7 @@ export class FormsController {
     private readonly viewForm: ViewForm,
     private readonly createForm: CreateForm,
     private readonly updateForm: UpdateForm,
+    private readonly updateFormSettings: UpdateFormSettings,
     private readonly saveFormRevision: SaveFormRevision,
     private readonly viewFormRevision: ViewFormRevision,
     private readonly publishForm: PublishForm,
@@ -95,6 +98,23 @@ export class FormsController {
     const id = idParam<'Form'>(formId, FORM_NOT_FOUND);
     answer(
       await this.updateForm.execute(context, { formId: id, ...parseRequest(updateBody, body) }),
+    );
+  }
+
+  /** The policy and retention of a form in any status: a publisher's change. */
+  @Put('forms/:formId/settings')
+  @HttpCode(204)
+  async updateSettings(
+    @Call() context: CallContext,
+    @Param('formId') formId: string,
+    @Body() body: unknown,
+  ): Promise<void> {
+    const id = idParam<'Form'>(formId, FORM_NOT_FOUND);
+    answer(
+      await this.updateFormSettings.execute(context, {
+        formId: id,
+        ...parseRequest(settingsBody, body),
+      }),
     );
   }
 
