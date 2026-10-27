@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "types": ["node", "jest"],
+    "paths": {
+      "@phoenix/shared-kernel": ["../shared-kernel/src/index.ts"],
+      "@phoenix/shared-kernel/persian-text": ["../shared-kernel/src/persian-text.ts"]
+    }
+  },
+  "include": ["src"]
+}

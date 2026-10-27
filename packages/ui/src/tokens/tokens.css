@@ -1,0 +1,116 @@
+/* Generated from panel-tokens.ts by `pnpm --filter @phoenix/ui tokens`. Do not edit. */
+
+:root {
+  color-scheme: light;
+  --px-radius-control: 0.5rem;
+  --px-radius-card: 0.75rem;
+  --px-radius-pill: 999px;
+  --px-sidebar-width: 17.5rem;
+  --px-sidebar-collapsed-width: 4.5rem;
+  --px-header-height: 4.5rem;
+  --px-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --px-shadow-popup: 0 8px 24px rgba(16, 24, 40, 0.12), 0 2px 6px rgba(16, 24, 40, 0.08);
+  --px-color-page: #f4f5f7;
+  --px-color-surface: #ffffff;
+  --px-color-raised: #ffffff;
+  --px-color-subtle: #f0f1f4;
+  --px-color-hover: #e9ebef;
+  --px-color-fg: #16181d;
+  --px-color-fg-muted: #5a606b;
+  --px-color-line: #e3e6eb;
+  --px-color-line-strong: #868d99;
+  --px-color-accent: #2456d6;
+  --px-color-accent-hover: #1c45ad;
+  --px-color-on-accent: #ffffff;
+  --px-color-accent-subtle: #e9effd;
+  --px-color-accent-fg: #1d48b5;
+  --px-color-link: #2456d6;
+  --px-color-focus: #2456d6;
+  --px-color-critical: #c0261b;
+  --px-color-critical-hover: #9e1f16;
+  --px-color-on-critical: #ffffff;
+  --px-color-critical-bg: #fdeceb;
+  --px-color-success: #17793f;
+  --px-color-success-bg: #e6f5ec;
+  --px-color-warning: #8f5a00;
+  --px-color-warning-bg: #fdf3e1;
+  --px-color-info: #0d6c8f;
+  --px-color-info-bg: #e3f3f9;
+  --px-color-sidebar: #ffffff;
+  --px-color-sidebar-fg: #3d434d;
+  --px-color-sidebar-active: #e9effd;
+  --px-color-sidebar-active-fg: #1d48b5;
+  --px-color-overlay: rgba(14, 16, 20, 0.45);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --px-color-page: #0e1014;
+  --px-color-surface: #16191f;
+  --px-color-raised: #1d2129;
+  --px-color-subtle: #20242c;
+  --px-color-hover: #272c35;
+  --px-color-fg: #eceef2;
+  --px-color-fg-muted: #a3a9b4;
+  --px-color-line: #2a2f38;
+  --px-color-line-strong: #6b7380;
+  --px-color-accent: #5b8cff;
+  --px-color-accent-hover: #7aa2ff;
+  --px-color-on-accent: #0b1020;
+  --px-color-accent-subtle: #1b2744;
+  --px-color-accent-fg: #a8c2ff;
+  --px-color-link: #8eb0ff;
+  --px-color-focus: #8eb0ff;
+  --px-color-critical: #ff8a80;
+  --px-color-critical-hover: #ffa59d;
+  --px-color-on-critical: #1f0605;
+  --px-color-critical-bg: #3a1513;
+  --px-color-success: #5fd38d;
+  --px-color-success-bg: #102e1d;
+  --px-color-warning: #f2b84b;
+  --px-color-warning-bg: #33260c;
+  --px-color-info: #62c6eb;
+  --px-color-info-bg: #0e2a35;
+  --px-color-sidebar: #121419;
+  --px-color-sidebar-fg: #b7bcc6;
+  --px-color-sidebar-active: #1b2744;
+  --px-color-sidebar-active-fg: #a8c2ff;
+  --px-color-overlay: rgba(0, 0, 0, 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+    --px-color-page: #0e1014;
+    --px-color-surface: #16191f;
+    --px-color-raised: #1d2129;
+    --px-color-subtle: #20242c;
+    --px-color-hover: #272c35;
+    --px-color-fg: #eceef2;
+    --px-color-fg-muted: #a3a9b4;
+    --px-color-line: #2a2f38;
+    --px-color-line-strong: #6b7380;
+    --px-color-accent: #5b8cff;
+    --px-color-accent-hover: #7aa2ff;
+    --px-color-on-accent: #0b1020;
+    --px-color-accent-subtle: #1b2744;
+    --px-color-accent-fg: #a8c2ff;
+    --px-color-link: #8eb0ff;
+    --px-color-focus: #8eb0ff;
+    --px-color-critical: #ff8a80;
+    --px-color-critical-hover: #ffa59d;
+    --px-color-on-critical: #1f0605;
+    --px-color-critical-bg: #3a1513;
+    --px-color-success: #5fd38d;
+    --px-color-success-bg: #102e1d;
+    --px-color-warning: #f2b84b;
+    --px-color-warning-bg: #33260c;
+    --px-color-info: #62c6eb;
+    --px-color-info-bg: #0e2a35;
+    --px-color-sidebar: #121419;
+    --px-color-sidebar-fg: #b7bcc6;
+    --px-color-sidebar-active: #1b2744;
+    --px-color-sidebar-active-fg: #a8c2ff;
+    --px-color-overlay: rgba(0, 0, 0, 0.6);
+  }
+}

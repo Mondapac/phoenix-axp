@@ -22,6 +22,10 @@
     "./authenticated-actor": {
       "types": "./dist/authenticated-actor.d.ts",
       "default": "./dist/authenticated-actor.js"
+    },
+    "./persian-text": {
+      "types": "./dist/persian-text.d.ts",
+      "default": "./dist/persian-text.js"
     }
   },
   "files": [

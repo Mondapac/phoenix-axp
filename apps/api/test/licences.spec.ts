@@ -196,6 +196,18 @@ describe('the licence gate (scripts/check-licences.mjs, ADR-0009)', () => {
     ]);
   });
 
+  it('passes OFL-1.1 for a font package only (ADR-0022 decision 3)', () => {
+    const font = gate({ 'OFL-1.1': [pkg('@fontsource-variable/vazirmatn')] }, []);
+    expect(font).toMatchObject({ status: 0, problems: [] });
+    expect(font.out).toContain('font files only, self-hosted');
+    expect(gate({ 'OFL-1.1': [pkg('@fontsource/vazirmatn')] }, []).status).toBe(0);
+    expect(gate({ 'OFL-1.1': [pkg('some-icon-kit')] }, []).problems).toEqual([
+      'some-icon-kit@1.0.0 (OFL-1.1): not allowed by ADR-0009; needs a cto-approved entry in ' +
+        'config/licence-exceptions.json',
+    ]);
+    expect(gate({ 'OFL-1.1 AND MIT': [pkg('@fontsource/x')] }, []).status).toBe(1);
+  });
+
   it('refuses an exception without the cto approval, a date, a reason or with an extra field', () => {
     const entries = [
       { ...approved('a', '0BSD'), approver: 'backend' },

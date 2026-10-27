@@ -17,6 +17,9 @@
 //     An exception whose reason is DEV_ONLY_REASON fails when that package ships (is in the
 //     production closure).
 //   - An exception that matches no package fails, so the reviewed list never outlives its use.
+//   - SIL OFL-1.1 passes for font packages only (ADR-0022 decision 3): a package of the
+//     FONT_PACKAGE family, whose files are fonts used unmodified and served from our own origin.
+//     OFL-1.1 on any other package still needs an exception.
 //
 // An SPDX expression passes when one alternative of an OR passes, and an AND only when every
 // part passes; `WITH` and anything unparsed need an exception. An OR with an allowed choice
@@ -34,6 +37,14 @@ export const DENIED =
  */
 export const DENIED_WORDS =
   /General\s+Public\s+Licen[cs]e|Lesser\s+General\s+Public|Affero|Business\s+Source|Server\s+Side\s+Public|Sustainable\s+Use|Commons[\s-]+Clause|LicenseRef-[\w.+-]*GPL/i;
+
+/** ADR-0022 decision 3: the font licence, and the packages that hold font files only. */
+export const FONT_LICENCE = 'OFL-1.1';
+export const FONT_PACKAGE = /^@fontsource(-variable)?\/[a-z0-9-]+$/;
+
+/** Whether a package passes as a font under the font licence (ADR-0022 decision 3). */
+export const isFontPackage = (name, licence) =>
+  licence.trim() === FONT_LICENCE && FONT_PACKAGE.test(name);
 
 /** The reason that marks an exception as dev-only: such a package may never ship. */
 export const DEV_ONLY_REASON = 'dev-only, not shipped';
@@ -191,6 +202,10 @@ export function checkLicences({ all, production, exceptions }) {
     const ships = shipped.has(key);
     const verdict = verdictOf(pkg.licence);
     if (verdict === 'pass') continue;
+    if (isFontPackage(pkg.name, pkg.licence)) {
+      applied.push(`${label}: font files only, self-hosted (ADR-0022 decision 3)`);
+      continue;
+    }
     if (verdict === 'denied') {
       failures.push(`${label}: forbidden by ADR-0009, whatever the exceptions file says`);
       continue;
