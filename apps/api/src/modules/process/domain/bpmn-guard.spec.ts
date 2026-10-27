@@ -122,6 +122,14 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
     });
   });
 
+  it('refuses a child element inside an expression', () => {
+    const body = `<startEvent id="start"/><sequenceFlow id="f" sourceRef="start" targetRef="end"><conditionExpression><documentation>$</documentation>{a.b()}</conditionExpression></sequenceFlow><endEvent id="end"/>`;
+    expect(refusal(model(body))).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'documentation',
+    });
+  });
+
   it.each([
     ['an engine object', '${execution}'],
     ['the host environment', '${systemEnvironment}'],
@@ -194,6 +202,24 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
     it('accepts a loop back to a user task (a rework step)', () => {
       const body = `${APPROVAL}<sequenceFlow id="rework" sourceRef="decide" targetRef="approve"/>`;
       expect(refusal(model(body))).toBeNull();
+    });
+
+    it('refuses a timer start event: only the core starts instances (re-review H1)', () => {
+      const body = `<startEvent id="start"><timerEventDefinition><timeDate>2020-01-01T00:00:00Z</timeDate></timerEventDefinition></startEvent>
+        <sequenceFlow id="f1" sourceRef="start" targetRef="end"/><endEvent id="end"/>`;
+      expect(refusal(model(body))).toEqual({
+        code: 'process.bpmn.forbidden-construct',
+        field: 'startEvent',
+      });
+    });
+
+    it('refuses a token pump through a boundary timer back into its own task (re-review H1)', () => {
+      const body = `<startEvent id="start"/><sequenceFlow id="f1" sourceRef="start" targetRef="u"/>
+        <userTask id="u"/>
+        <boundaryEvent id="b" attachedToRef="u" cancelActivity="false"><timerEventDefinition><timeDuration>PT0S</timeDuration></timerEventDefinition></boundaryEvent>
+        <sequenceFlow id="f2" sourceRef="b" targetRef="split"/><parallelGateway id="split"/>
+        <sequenceFlow id="f3" sourceRef="split" targetRef="u"/><sequenceFlow id="f4" sourceRef="split" targetRef="u"/>`;
+      expect(refusal(model(body))).toEqual({ code: 'process.bpmn.unbounded-flow' });
     });
 
     it('refuses a flow that names a node the model does not hold', () => {

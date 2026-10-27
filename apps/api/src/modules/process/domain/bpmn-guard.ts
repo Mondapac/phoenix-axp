@@ -17,7 +17,9 @@ import type { Result } from '@phoenix/shared-kernel';
  *   engine object; never in an attribute, a name or a form key;
  * - element ids and form keys of plain characters, sized for the core's columns;
  * - a flow the engine cannot spin in: at most MAX_FLOW_NODES nodes, every loop passes a user
- *   task, and no repeating timer (one tenant's model must not hold the shared engine);
+ *   task (a boundary event of that task does not count as passing it), no repeating timer, and
+ *   no start event definition: only the core starts instances (one tenant's model must not
+ *   hold the shared engine);
  * - exactly one executable process, whose id is the published process key.
  *
  * It is a scanner of the XML grammar, not a parser: anything it cannot read is refused. Pure,
@@ -270,9 +272,10 @@ interface Flow {
 }
 
 /**
- * Whether the flow cannot spin in the engine: within MAX_FLOW_NODES, and without its user tasks
- * the graph has no cycle (a loop through gateways, events or manual tasks runs without a wait
- * state, inside one engine transaction or as a busy timer). A user task waits for a person.
+ * Whether the flow cannot spin in the engine: within MAX_FLOW_NODES, and without the flows out of
+ * its user tasks the graph has no cycle (a loop through gateways, events or manual tasks runs
+ * without a wait state, inside one engine transaction or as a busy timer). A user task waits
+ * for a person; a boundary event on it does not.
  */
 function flowBounded(flow: Flow): boolean {
   if (flow.nodes.size > MAX_FLOW_NODES) return false;
@@ -285,8 +288,11 @@ function flowBounded(flow: Flow): boolean {
     outgoing.set(source, [...(outgoing.get(source) ?? []), target]);
     incoming.set(target, incoming.get(target)! + 1);
   }
+  // A boundary event fires while its host waits, without a person: its edge from the host stays.
   for (const [boundary, host] of flow.attached) {
     if (!flow.nodes.has(boundary) || !flow.nodes.has(host)) return false;
+    outgoing.set(host, [...(outgoing.get(host) ?? []), boundary]);
+    incoming.set(boundary, incoming.get(boundary)! + 1);
   }
   const ready = [...flow.nodes.keys()].filter((id) => incoming.get(id) === 0);
   let visited = 0;
@@ -379,6 +385,14 @@ export function checkBpmn(xml: string, processKey: string): Result<void, BpmnRef
     rootSeen = true;
     const element = localName(name);
     if (!ALLOWED_ELEMENTS.has(element)) return forbidden(element);
+    const parent = open[open.length - 1]?.element;
+    // Only the core starts an instance, by its business key: a timer start event would have the
+    // engine start instances on its own, outside the relay and its checks.
+    if (parent === 'startEvent' && element.endsWith('EventDefinition')) {
+      return forbidden('startEvent');
+    }
+    // An expression is the element's text alone; the engine never reads one around a child.
+    if (parent !== undefined && EXPRESSION_ELEMENTS.has(parent)) return forbidden(element);
 
     const attributes = new Map<string, string>();
     for (const attribute of attributeText.matchAll(ATTRIBUTE)) {

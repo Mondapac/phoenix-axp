@@ -25,6 +25,7 @@ import { COMMAND_LEASE_MS } from '../../src/modules/process/domain/engine-comman
 import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node-bridge-hashing';
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
 import { CallLostError, FakeProcessEngine } from '../support/fake-process-engine';
+import { realFlowableScenarios } from './process-flowable.scenarios';
 import { TEST_TENANT_CONFIG_DIRS, TEST_TENANTS, testTenantId } from '../support/test-config';
 import {
   createPersistence,
@@ -701,3 +702,6 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
     });
   });
 });
+
+// The same bridge on the real engine, after the fake engine's scenarios (see that file).
+realFlowableScenarios();
