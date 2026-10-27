@@ -14,6 +14,16 @@ import { TenantConfigModule } from './platform/tenant-config/tenant-config.modul
 import { TenantContextGuard } from './platform/tenant-context/tenant-context.guard';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
 import { WorkerModule } from './platform/worker/worker.module';
+// SPIKE (PoC 2): identity, authz, site and content wired in when IDENTITY_SPIKE=on.
+import { AuthzModule } from './platform/authz/authz.module';
+import { ContentModule } from './modules/content';
+import { IdentityModule } from './modules/identity';
+import { SiteModule } from './modules/site';
+
+const SPIKE_MODULES =
+  process.env.IDENTITY_SPIKE === 'on'
+    ? [AuthzModule, SiteModule, IdentityModule, ContentModule]
+    : [];
 
 /**
  * Every global guard of the application, in the order they run. TenantContextGuard is first,
@@ -49,6 +59,7 @@ export class AppModule {
         PersistenceModule,
         WorkerModule,
         HealthModule,
+        ...SPIKE_MODULES,
       ],
       providers: [
         ...GLOBAL_GUARDS.map((guard) => ({ provide: APP_GUARD, useClass: guard })),

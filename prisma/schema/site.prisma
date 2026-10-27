@@ -1,0 +1,40 @@
+// SPIKE (PoC 1, slice 0.6; ADR-0018): the site tree of a tenant. Not merged; Phase 1 copies it.
+
+/// A site or portal of a tenant. Sites form a tree inside the tenant (ADR-0018 decision 2).
+model Site {
+  id           String         @id @db.Uuid
+  tenantId     String         @map("tenant_id") @db.VarChar(32)
+  /// The parent site in the same tenant; null for a root site.
+  parentSiteId String?        @map("parent_site_id") @db.Uuid
+  slug         String         @db.VarChar(64)
+  name         String         @db.VarChar(200)
+  /// Distance from the root (root = 0); the ceiling is tenant configuration (default 8).
+  depth        Int            @db.SmallInt
+  createdAt    DateTime       @map("created_at") @db.Timestamptz(3)
+  parent       Site?          @relation("SiteParent", fields: [tenantId, parentSiteId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "site_parent_fkey")
+  children     Site[]         @relation("SiteParent")
+  ancestors    SiteAncestry[] @relation("AncestryDescendant")
+  descendants  SiteAncestry[] @relation("AncestryAncestor")
+
+  @@unique([tenantId, id], map: "site_tenant_id_id_key")
+  @@unique([tenantId, slug], map: "site_tenant_id_slug_key")
+  @@index([tenantId, parentSiteId], map: "site_tenant_id_parent_idx")
+  @@map("site")
+  @@schema("site")
+}
+
+/// The closure table of the site tree: one row per (ancestor, descendant) pair, self included
+/// at depth 0 (ADR-0018 decision 2).
+model SiteAncestry {
+  tenantId     String @map("tenant_id") @db.VarChar(32)
+  ancestorId   String @map("ancestor_id") @db.Uuid
+  descendantId String @map("descendant_id") @db.Uuid
+  depth        Int    @db.SmallInt
+  ancestor     Site   @relation("AncestryAncestor", fields: [tenantId, ancestorId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict, map: "site_ancestry_ancestor_fkey")
+  descendant   Site   @relation("AncestryDescendant", fields: [tenantId, descendantId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict, map: "site_ancestry_descendant_fkey")
+
+  @@id([tenantId, ancestorId, descendantId], map: "site_ancestry_pkey")
+  @@index([tenantId, descendantId, depth], map: "site_ancestry_tenant_id_descendant_idx")
+  @@map("site_ancestry")
+  @@schema("site")
+}

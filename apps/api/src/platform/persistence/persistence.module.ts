@@ -9,6 +9,10 @@ import type { ModelMap } from './model-map';
 import { PrismaRoot } from './prisma-root';
 import { PrismaService } from './prisma.service';
 import { PrismaUnitOfWork } from './prisma-unit-of-work';
+import { AdapterSessionUnitOfWork } from './adapter-session-unit-of-work';
+
+// SPIKE (PoC 1 candidate): UNIT_TENANT_SESSION=adapter sets the tenant in the driver adapter.
+const ADAPTER_SESSION = process.env.UNIT_TENANT_SESSION === 'adapter';
 
 /** The generated map, checked against the shape the guard reads. */
 const modelMap: ModelMap = MODEL_MAP;
@@ -26,7 +30,8 @@ const modelMap: ModelMap = MODEL_MAP;
     {
       provide: PrismaRoot,
       inject: [APP_CONFIG],
-      useFactory: (config: AppConfig) => new PrismaRoot(config),
+      useFactory: (config: AppConfig) =>
+        new PrismaRoot(config, { tenantSessionInAdapter: ADAPTER_SESSION }),
     },
     {
       provide: GUARDED_CLIENT,
@@ -37,7 +42,10 @@ const modelMap: ModelMap = MODEL_MAP;
     {
       provide: UNIT_OF_WORK,
       inject: [GUARDED_CLIENT],
-      useFactory: (client: GuardedClient) => new PrismaUnitOfWork(client, modelMap),
+      useFactory: (client: GuardedClient) =>
+        ADAPTER_SESSION
+          ? new AdapterSessionUnitOfWork(client)
+          : new PrismaUnitOfWork(client, modelMap),
     },
     {
       provide: DatabaseProbe,

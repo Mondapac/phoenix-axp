@@ -6,6 +6,7 @@ import { buildOpenApiDocument } from './openapi';
 import type { AppConfig } from './platform/config/app-config';
 import { APP_CONFIG } from './platform/config/config.module';
 import { answerBodyError } from './platform/http/body-errors';
+import { backchannelFormBody } from './platform/http/backchannel-form-body';
 import { securityHeaders } from './platform/http/security-headers';
 import { HTTP_LOGGER } from './platform/logging/logging.module';
 
@@ -40,6 +41,9 @@ export function configureApp(app: NestExpressApplication): void {
   // JSON only, at most 64 KiB, objects and arrays only. No CORS middleware until origins exist.
   // inflate: false - a compressed body is refused with 415, never decompressed.
   app.useBodyParser('json', { limit: '64kb', strict: true, inflate: false });
+  // SPIKE (PoC 2): OIDC back-channel logout posts a form (logout_token=...). Parsed on that one
+  // route only, and only when the spike is on; every other route still refuses form bodies.
+  if (process.env['IDENTITY_SPIKE'] === 'on') app.use(backchannelFormBody);
   app.use(answerBodyError);
 
   if (config.apiDocsEnabled) {

@@ -1,0 +1,22 @@
+// SPIKE (PoC 1, slice 0.6): a representative content table. Not merged.
+
+/// A content item owned by one site (ADR-0018 decision 4: owner_site_id).
+model ContentItem {
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  /// The owning site, a plain id: the site tree belongs to another module (no cross-schema FK).
+  ownerSiteId String   @map("owner_site_id") @db.Uuid
+  title       String   @db.VarChar(300)
+  body        String
+  /// draft | published | archived
+  status      String   @db.VarChar(16)
+  version     Int
+  createdAt   DateTime @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, id], map: "content_item_tenant_id_id_key")
+  @@index([tenantId, ownerSiteId, createdAt(sort: Desc)], map: "content_item_tenant_site_created_idx")
+  @@index([tenantId, status], map: "content_item_tenant_status_idx")
+  @@map("content_item")
+  @@schema("content")
+}

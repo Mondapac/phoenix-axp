@@ -30,25 +30,27 @@ describe.each(TEST_TENANTS)('the call context of a request of %s', (code) => {
     return request;
   }
 
-  it('attaches the anonymous actor of the tenant', () => {
+  it('attaches the anonymous actor of the tenant', async () => {
     const request = scopedRequest();
 
-    expect(guard.canActivate(httpContext(ScopedController, request))).toBe(true);
+    await expect(guard.canActivate(httpContext(ScopedController, request))).resolves.toBe(true);
     const actor = actorOf(request);
     expect(actor).toEqual({ kind: 'anonymous', tenantId: code });
     expect(isMinted(actor)).toBe(true);
   });
 
-  it('refuses a request with an Authorization header: no credential is ignored', () => {
+  it('refuses a request with an Authorization header: no credential is ignored', async () => {
     const request = scopedRequest({ authorization: 'Bearer something' });
 
-    expect(() => guard.canActivate(httpContext(ScopedController, request))).toThrow(HttpException);
+    await expect(guard.canActivate(httpContext(ScopedController, request))).rejects.toThrow(
+      HttpException,
+    );
     expect(() => actorOf(request)).toThrow(MissingActorError);
   });
 
-  it('builds a minted CallContext from the tenant, the actor and the correlation id', () => {
+  it('builds a minted CallContext from the tenant, the actor and the correlation id', async () => {
     const request = scopedRequest();
-    guard.canActivate(httpContext(ScopedController, request));
+    await guard.canActivate(httpContext(ScopedController, request));
 
     const call = callContextOf(request);
     expect(call.tenant.tenantId).toBe(code);
@@ -57,13 +59,13 @@ describe.each(TEST_TENANTS)('the call context of a request of %s', (code) => {
     expect(isMinted(call)).toBe(true);
   });
 
-  it('throws without a correlation id or an actor; it never defaults', () => {
+  it('throws without a correlation id or an actor; it never defaults', async () => {
     const noActor = scopedRequest();
     expect(() => callContextOf(noActor)).toThrow(MissingActorError);
 
     const noId: { headers: object; id?: unknown } = { headers: {} };
     attachTenantContext(noId, testTenantContext(code));
-    guard.canActivate(httpContext(ScopedController, noId));
+    await guard.canActivate(httpContext(ScopedController, noId));
     expect(() => callContextOf(noId)).toThrow(MissingCorrelationIdError);
   });
 
@@ -78,9 +80,11 @@ describe.each(TEST_TENANTS)('the call context of a request of %s', (code) => {
 });
 
 describe('ActorGuard on an exempt controller', () => {
-  it('attaches nothing and needs no tenant', () => {
+  it('attaches nothing and needs no tenant', async () => {
     const request = { headers: {} };
-    expect(new ActorGuard().canActivate(httpContext(HealthController, request))).toBe(true);
+    await expect(
+      new ActorGuard().canActivate(httpContext(HealthController, request)),
+    ).resolves.toBe(true);
     expect(() => actorOf(request)).toThrow(MissingActorError);
   });
 });

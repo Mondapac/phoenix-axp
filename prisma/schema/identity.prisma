@@ -1,0 +1,77 @@
+// SPIKE (PoC 1 role grants; PoC 2 accounts and sessions). Not merged; Phase 1 copies it.
+
+/// A staff account (ADR-0019): one per employee, from the directory or local. Keycloak holds the
+/// credentials; the core holds the account's status, roles and sessions.
+model StaffAccount {
+  id         String         @id @db.Uuid
+  tenantId   String         @map("tenant_id") @db.VarChar(32)
+  /// Keycloak's `sub` for this user in the tenant's realm.
+  subject    String         @db.VarChar(255)
+  username   String         @db.VarChar(255)
+  /// directory | local
+  source     String         @db.VarChar(16)
+  /// active | disabled
+  status     String         @db.VarChar(16)
+  version    Int
+  createdAt  DateTime       @map("created_at") @db.Timestamptz(3)
+  disabledAt DateTime?      @map("disabled_at") @db.Timestamptz(3)
+  sessions   StaffSession[]
+
+  @@unique([tenantId, id], map: "staff_account_tenant_id_id_key")
+  @@unique([tenantId, subject], map: "staff_account_tenant_id_subject_key")
+  @@unique([tenantId, username], map: "staff_account_tenant_id_username_key")
+  @@map("staff_account")
+  @@schema("identity")
+}
+
+/// An opaque server-side session (ADR-0004 decision 2; Mondapac ADR-0018 decision 2). Only the
+/// SHA-256 of the token is stored.
+model StaffSession {
+  id           String       @id @db.Uuid
+  tenantId     String       @map("tenant_id") @db.VarChar(32)
+  accountId    String       @map("account_id") @db.Uuid
+  tokenHash    Bytes        @map("token_hash")
+  /// Keycloak's session id (`sid`), for back-channel logout.
+  idpSessionId String?      @map("idp_session_id") @db.VarChar(255)
+  createdAt    DateTime     @map("created_at") @db.Timestamptz(3)
+  expiresAt    DateTime     @map("expires_at") @db.Timestamptz(3)
+  account      StaffAccount @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Cascade, onUpdate: Restrict, map: "staff_session_account_fkey")
+
+  @@unique([tenantId, tokenHash], map: "staff_session_tenant_id_token_hash_key")
+  @@index([tenantId, accountId], map: "staff_session_tenant_account_idx")
+  @@index([tenantId, idpSessionId], map: "staff_session_tenant_idp_session_idx")
+  @@map("staff_session")
+  @@schema("identity")
+}
+
+/// A role of the tenant: a named set of permission keys.
+model Role {
+  id          String      @id @db.Uuid
+  tenantId    String      @map("tenant_id") @db.VarChar(32)
+  key         String      @db.VarChar(64)
+  permissions String[]    @db.VarChar(128)
+  grants      RoleGrant[]
+
+  @@unique([tenantId, id], map: "role_tenant_id_id_key")
+  @@unique([tenantId, key], map: "role_tenant_id_key_key")
+  @@map("role")
+  @@schema("identity")
+}
+
+/// A role granted to a principal, tenant-wide (siteId null) or at one site, for that site only
+/// or for its subtree too (ADR-0018 decision 6).
+model RoleGrant {
+  id                 String   @id @db.Uuid
+  tenantId           String   @map("tenant_id") @db.VarChar(32)
+  principalId        String   @map("principal_id") @db.Uuid
+  roleId             String   @map("role_id") @db.Uuid
+  siteId             String?  @map("site_id") @db.Uuid
+  includeDescendants Boolean  @map("include_descendants")
+  createdAt          DateTime @map("created_at") @db.Timestamptz(3)
+  role               Role     @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "role_grant_role_fkey")
+
+  @@unique([tenantId, id], map: "role_grant_tenant_id_id_key")
+  @@index([tenantId, principalId], map: "role_grant_tenant_principal_idx")
+  @@map("role_grant")
+  @@schema("identity")
+}

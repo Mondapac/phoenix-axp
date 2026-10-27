@@ -1,0 +1,52 @@
+# Test directory of the demo-fa tenant ("the ministry's Active Directory").
+# employeeType=disabled marks a disabled account; Keycloak's federation filters it out with
+# (!(employeeType=disabled)), the generic-LDAP stand-in for Active Directory's
+# (!(userAccountControl:1.2.840.113556.1.4.803:=2)).
+dn: dc=phoenix,dc=test
+objectClass: top
+objectClass: domain
+dc: phoenix
+
+dn: ou=people,dc=phoenix,dc=test
+objectClass: top
+objectClass: organizationalUnit
+ou: people
+
+dn: uid=alice,ou=people,dc=phoenix,dc=test
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: alice
+cn: Alice Directory
+sn: Directory
+givenName: Alice
+mail: alice@ministry.test
+employeeType: active
+userPassword: alice-pass
+
+dn: uid=dariush,ou=people,dc=phoenix,dc=test
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: dariush
+cn: Dariush Directory
+sn: Directory
+givenName: Dariush
+mail: dariush@ministry.test
+employeeType: active
+userPassword: dariush-pass
+
+dn: uid=nima,ou=people,dc=phoenix,dc=test
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: nima
+cn: Nima Directory
+sn: Directory
+givenName: Nima
+mail: nima@ministry.test
+employeeType: active
+userPassword: nima-pass

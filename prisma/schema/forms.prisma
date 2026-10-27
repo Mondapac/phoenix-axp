@@ -1,0 +1,16 @@
+// SPIKE (PoC 1, slice 0.6): a representative append-mostly table. Not merged.
+
+/// One submitted form (append-only in the PoC).
+model FormSubmission {
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  siteId      String   @map("site_id") @db.Uuid
+  formKey     String   @map("form_key") @db.VarChar(64)
+  payload     Json
+  submittedAt DateTime @map("submitted_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, id], map: "form_submission_tenant_id_id_key")
+  @@index([tenantId, formKey, submittedAt(sort: Desc)], map: "form_submission_tenant_form_idx")
+  @@map("form_submission")
+  @@schema("forms")
+}

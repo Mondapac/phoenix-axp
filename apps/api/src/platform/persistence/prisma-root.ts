@@ -4,6 +4,7 @@ import type { PoolConfig } from 'pg';
 import { PrismaClient, type Prisma } from '../../generated/prisma/client';
 import type { AppConfig } from '../config/app-config';
 import { CONNECTION_WAIT_MS } from '../unit-of-work/unit-of-work';
+import { withTenantSession } from './tenant-session-adapter';
 
 /** How long an idle pooled connection is kept . */
 export const POOL_IDLE_TIMEOUT_MS = 30_000;
@@ -30,6 +31,8 @@ export function poolConfigOf(
 /** Client options a test may add (query events, a longer connection wait); never the adapter. */
 export type PrismaRootOptions = Omit<Prisma.PrismaClientOptions, 'adapter' | 'accelerateUrl'> & {
   readonly connectionWaitMs?: number;
+  /** SPIKE (PoC 1 candidate): the adapter sets the pending unit's tenant after BEGIN. */
+  readonly tenantSessionInAdapter?: boolean;
 };
 
 /**
@@ -43,9 +46,14 @@ export class PrismaRoot extends PrismaClient implements OnModuleDestroy {
 
   constructor(
     config: AppConfig,
-    { connectionWaitMs = CONNECTION_WAIT_MS, ...options }: PrismaRootOptions = {},
+    {
+      connectionWaitMs = CONNECTION_WAIT_MS,
+      tenantSessionInAdapter = false,
+      ...options
+    }: PrismaRootOptions = {},
   ) {
-    super({ ...options, adapter: new PrismaPg(poolConfigOf(config, connectionWaitMs)) });
+    const adapter = new PrismaPg(poolConfigOf(config, connectionWaitMs));
+    super({ ...options, adapter: tenantSessionInAdapter ? withTenantSession(adapter) : adapter });
     this.connectionWaitMs = connectionWaitMs;
   }
 

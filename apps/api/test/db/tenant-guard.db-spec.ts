@@ -76,7 +76,13 @@ describe('tenant guard (database integration)', () => {
         return Promise.resolve(Object.keys(view));
       });
 
-      expect(keys).toEqual({ ok: true, value: ['isolationProbe'] });
+      // SPIKE: the spike's models (site, content, forms, identity) are delegates too; the view
+      // still has only model delegates, never a $-door.
+      expect(keys).toEqual({
+        ok: true,
+        value: expect.arrayContaining(['isolationProbe', 'site', 'staffSession']) as unknown,
+      });
+      expect(keys.ok && keys.value.filter((key) => key.startsWith('$'))).toEqual([]);
     });
 
     it("never sees the other tenant's rows, even by id", async () => {

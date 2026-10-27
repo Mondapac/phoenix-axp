@@ -1,0 +1,3 @@
+"phoenix_api" "phoenix_api"
+"phoenix_migrator" "phoenix_migrator"
+"pgbadmin" "pgbadmin-poc"
