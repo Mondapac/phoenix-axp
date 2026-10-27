@@ -108,7 +108,7 @@ const tenantLiterals = (count = 1): string[] => syntax('no-tenant-literals', cou
 const kernelImports = (count = 1): string[] =>
   times(count, 'no-restricted-imports: kernel-imports-only-itself');
 
-describe('architecture boundaries (ADR-01, ADR-02)', () => {
+describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
   describe('dependency-cruiser', () => {
     let cruise: CruiseResult;
     let found: string[];
@@ -283,7 +283,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ).toEqual({ status: 0, problems: [] });
     });
 
-    it('accepts the passing fixture: keys with tenantId (also not leading and name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, raw SQL and the driver in the platform files, identical outboxes, an inbox, the outbox exception and the audit folder', () => {
+    it('accepts the passing fixture: keys and indexes led by tenantId (also name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, raw SQL and the driver in the platform files, identical outboxes, an inbox, the outbox exception and the audit folder', () => {
       expect(
         checkPrisma(
           path.join(PRISMA_FIXTURES, 'passing/schema'),
@@ -305,10 +305,16 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'beta.prisma: enum BetaKind is in schema "alpha", but this file owns "beta"',
           'alpha.prisma: AlphaNeither is neither tenant-scoped (tenantId) nor exempt ("/// @tenant-scope none: <reason>")',
           'alpha.prisma: AlphaBoth has tenantId and also an exemption line',
-          'alpha.prisma: AlphaBadKeys @unique on ref does not contain tenantId',
-          'alpha.prisma: AlphaBadKeys @@id([kind, code]) does not contain tenantId',
-          'alpha.prisma: AlphaBadKeys @@unique([kind, ref]) does not contain tenantId',
-          'alpha.prisma: AlphaIntId @id on id does not contain tenantId',
+          'alpha.prisma: AlphaBadKeys @unique on ref does not lead with tenantId',
+          'alpha.prisma: AlphaBadKeys @@id([kind, code]) does not lead with tenantId',
+          'alpha.prisma: AlphaBadKeys @@unique([kind, ref]) does not lead with tenantId',
+          'alpha.prisma: AlphaIntId @id on id does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant.tenantId maps to column "tenant", expected "tenant_id"',
+          'alpha.prisma: AlphaTrailingTenant @@unique([id, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@unique([kind, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@index([code]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@index([kind, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingId @@id([kind, tenantId]) does not lead with tenantId',
           'alpha.prisma: AlphaChildNoTenant.parent relates two tenant-scoped models without tenantId in both fields and references',
           'alpha.prisma: AlphaChildMisaligned.parent pairs tenantId with another column (tenantId is at different positions in fields and references)',
           'alpha.prisma: AlphaScopedChild.parent relates a tenant-scoped model to the exempt model AlphaExemptParent; exempt and tenant-scoped models may not relate',
@@ -386,7 +392,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         compoundSelectors: [
           { name: 'tenantId_id', fields: ['tenantId', 'id'] },
           { name: 'byCode', fields: ['tenantId', 'code'] },
-          { name: 'kind_tenantId', fields: ['kind', 'tenantId'] },
+          { name: 'tenantId_kind', fields: ['tenantId', 'kind'] },
         ],
         foreignKeys: [],
       });
@@ -550,6 +556,23 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       textsIn(file).map((text) => text.split(':')[0] ?? text);
     const rulesIn = (file: string): string[] => messagesIn(file).map(label).sort();
     const textsIn = (file: string): string[] => messagesIn(file).map((m) => m.message);
+
+    it('has a fixture that breaks every design rule named in eslint.config.mjs', () => {
+      // Every restricted-syntax, -imports or -properties message carries its rule name
+      // ("<design-rule>: ..."); a rule added without a fixture that fires it fails here (QA
+      // review 2.6).
+      const config = readFileSync(path.join(REPO_ROOT, 'eslint.config.mjs'), 'utf8');
+      const declared = [
+        ...new Set([...config.matchAll(/[`'"]([a-z]+(?:-[a-z]+)+): /g)].map((m) => m[1]!)),
+      ].sort();
+      const messages = [...results.values()].flat().map((message) => message.message);
+      const fired = new Set(
+        declared.filter((rule) => messages.some((text) => text.includes(`${rule}: `))),
+      );
+
+      expect(declared.length).toBeGreaterThanOrEqual(8);
+      expect(declared.filter((rule) => !fired.has(rule))).toEqual([]);
+    });
 
     it('reports every message of every fixture as an error', () => {
       const notErrors = [...results].flatMap(([file, messages]) =>

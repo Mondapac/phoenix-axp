@@ -2,7 +2,7 @@
 // decision 1). The publishing module declares each event with `defineEvent` in its
 // `domain/events/` and re-exports it from `contracts/`; its aggregates produce a
 // `PendingEvent` with `record`; only the platform's outbox writer turns that into a
-// `DomainEvent`, stamping the id, the tenant and the correlation id (ADR-05).
+// `DomainEvent`, stamping the id, the tenant and the correlation id (ADR-0006).
 //
 // Payload fields come from a closed vocabulary (P 5.3): no kind takes an arbitrary string, so
 // a reason, a name, an email or a role name cannot be declared (Mondapac ADR-0009 decision 6, R5). A new

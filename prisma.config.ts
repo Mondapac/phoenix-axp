@@ -1,6 +1,6 @@
 import { defineConfig } from 'prisma/config';
 
-// Prisma CLI configuration (ADR-02). The schema is split into one file per module under
+// Prisma CLI configuration (ADR-0003). The schema is split into one file per module under
 // prisma/schema/. Every prisma command connects as the migration role, through
 // MIGRATION_DATABASE_URL from the environment or a local .env file; it never falls back to
 // DATABASE_URL, the application's login.

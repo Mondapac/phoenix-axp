@@ -31,6 +31,11 @@ pnpm dev                          # API on http://localhost:3000, GET /health/re
 pnpm dev:worker                   # the worker role, in a second terminal
 ```
 
+The database roles (`phoenix_migrator`, `phoenix_api` in group `phoenix_app`) come from
+`scripts/db/bootstrap-dev.sql`, which the Postgres container runs once on a fresh volume. On a
+volume created before that file, or after it changes, run `pnpm db:bootstrap`; a migration or
+start-up error about a missing role means exactly this.
+
 `.env.example` sets `NODE_ENV=development`. Keep it set: while a port is bound to a fail-closed
 placeholder (ADR-0010; today identity's authorisation check and tenancy's site-ancestry
 reader), the API and the worker start only when `NODE_ENV` is explicitly `development` or
@@ -47,9 +52,9 @@ English/Gregorian in America/Toronto).
 | ------------------------- | --------------------------------------------------------------- |
 | `pnpm verify`             | Everything CI checks, in order (the commands below)             |
 | `pnpm typecheck`          | TypeScript, every package                                       |
-| `pnpm lint`               | ESLint (boundary rules included) and Prettier                   |
+| `pnpm lint`               | ESLint (boundary rules included), Prettier and the four-digit ADR reference check |
 | `pnpm boundaries`         | dependency-cruiser and the Prisma schema and model-owner checks |
-| `pnpm licences`           | Licence gate on production dependencies                         |
+| `pnpm licences`           | Licence gate (ADR-0009) on the full dependency tree; reviewed exceptions in `config/licence-exceptions.json` |
 | `pnpm test`               | Unit and HTTP tests                                             |
 | `pnpm test:db`            | Database tests (needs PostgreSQL and `MIGRATION_DATABASE_URL`)  |
 | `pnpm db:check-reversible`| Every migration goes up, down and up again                      |

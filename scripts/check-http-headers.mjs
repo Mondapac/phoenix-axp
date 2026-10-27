@@ -1,4 +1,4 @@
-// The header assertion of the CI boot probe (ADR-11, HTTP hardening): the built API, as started
+// The header assertion of the CI boot probe (HTTP hardening): the built API, as started
 // in CI, sends the security headers on a 200, a 404 and a 400. The 400 is the JSON parser's;
 // the tenant guard's 400 is asserted by test/http-hardening.e2e.spec.ts.
 // Usage: node scripts/check-http-headers.mjs [base URL], default http://localhost:3000.

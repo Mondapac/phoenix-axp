@@ -35,7 +35,7 @@ export interface AppModuleOptions {
 }
 
 /**
- * Composition root of the modular monolith (ADR-01). Registers the platform runtime; the
+ * Composition root of the modular monolith (ADR-0001). Registers the platform runtime; the
  * business modules arrive from Phase 1. Both process roles build this same graph.
  */
 @Module({})

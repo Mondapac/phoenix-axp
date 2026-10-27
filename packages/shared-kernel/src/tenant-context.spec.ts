@@ -8,7 +8,7 @@ function tenantId(text: string): TenantId {
   return result.value;
 }
 
-// Two tenants, as every tenant-scoped test must cover (ADR-02; a test that passes for one
+// Two tenants, as every tenant-scoped test must cover (ADR-0002; a test that passes for one
 // tenant only is a bug).
 const TENANTS = ['demo-fa', 'demo-en'] as const;
 

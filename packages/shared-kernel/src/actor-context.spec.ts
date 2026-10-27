@@ -6,7 +6,7 @@ import { isMinted } from './minted';
 import { mintTenantContext, parseTenantId } from './tenant-context';
 import type { TenantContext } from './tenant-context';
 
-// Both tenant fixtures (ADR-02): a test that passes for one tenant only is a bug.
+// Both tenant fixtures (ADR-0002): a test that passes for one tenant only is a bug.
 const TENANTS = ['demo-fa', 'demo-en'] as const;
 
 function tenant(code: string): TenantContext {

@@ -13,7 +13,7 @@ import { HealthResponse } from './health-response';
 // This file may import the tenant exemption, so it exports the controller only (asserted in
 // apps/api/test/boundaries.spec.ts).
 
-/** Platform probes. Exempt from tenant resolution (ADR-02): no x-tenant-id. */
+/** Platform probes. Exempt from tenant resolution (ADR-0002): no x-tenant-id. */
 @ApiTags('platform')
 @NoTenantContext()
 @Controller('health')

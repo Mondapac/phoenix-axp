@@ -6,7 +6,7 @@ import type { EventDelivery } from '../events/event-delivery';
  * Defaults: read-write, READ COMMITTED (the database default; nothing is sent for it), 5000 ms.
  *
  * Every unit, the read-only one included, is one transaction whose first statement sets
- * `app.tenant_id` for Postgres row-level security (ADR-02). This departs from Mondapac
+ * `app.tenant_id` for Postgres row-level security (ADR-0002). This departs from Mondapac
  * Mondapac ADR-0025, where a read-only unit opened no transaction: a transaction-local setting needs
  * a transaction, and a session-level one could leak to the next borrower of the connection.
  */

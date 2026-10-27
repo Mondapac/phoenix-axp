@@ -2,8 +2,9 @@ packages:
   - apps/*
   - packages/*
 
-# Dependency build scripts are denied by default (supply-chain hygiene, ADR-11). List a
-# package under onlyBuiltDependencies only after reviewing why it needs an install script.
+# Dependency build scripts are denied by default (supply-chain hygiene, ADR-0014 decision 2 and
+# ADR-0009 decision 4). List a package under onlyBuiltDependencies only after reviewing why it
+# needs an install script.
 ignoredBuiltDependencies:
   - '@parcel/watcher'
   - unrs-resolver
