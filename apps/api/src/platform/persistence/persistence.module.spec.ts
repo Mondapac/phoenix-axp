@@ -1,10 +1,13 @@
 import { MODULE_METADATA } from '@nestjs/common/constants';
 import { testAppConfig } from '../../../test/support/test-config';
+import { CAPTCHA_SPENT_STORE } from '../captcha/proof-of-work';
 import { InvalidUnitOfWorkOptionsError } from '../unit-of-work/errors';
 import { EVENT_BUS, OUTBOX_RELAY } from '../events/event-bus';
 import { EVENT_DISPATCHER } from '../events/event-delivery';
 import { OUTBOX_WRITER } from '../events/outbox-writer';
+import { RATE_LIMIT_STORE } from '../rate-limit/rate-limiter';
 import { JOB_LOCK } from '../scheduler/job-lock';
+import { SUBJECT_KEY_STORE } from '../subject-keys/subject-key-store';
 import { UNIT_OF_WORK, type UnitOfWorkOptions } from '../unit-of-work/unit-of-work';
 import { DatabaseProbe } from './database-probe';
 import { GUARDED_CLIENT } from './guarded-client';
@@ -20,7 +23,7 @@ describe('PersistenceModule (P 3.3)', () => {
     )[]
   ).map((provider) => ('provide' in provider ? provider.provide : provider));
 
-  it('exports the door for modules, the UnitOfWork port, the probe and the event and scheduler ports, and nothing else', () => {
+  it('exports the door for modules, the UnitOfWork port, the probe, the event and scheduler ports and the platform stores, and nothing else', () => {
     expect(Reflect.getMetadata(MODULE_METADATA.EXPORTS, PersistenceModule)).toEqual([
       PrismaService,
       UNIT_OF_WORK,
@@ -29,6 +32,9 @@ describe('PersistenceModule (P 3.3)', () => {
       OUTBOX_RELAY,
       EVENT_DISPATCHER,
       JOB_LOCK,
+      SUBJECT_KEY_STORE,
+      RATE_LIMIT_STORE,
+      CAPTCHA_SPENT_STORE,
     ]);
   });
 

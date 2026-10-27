@@ -10,6 +10,9 @@ import { accessByRevision, viewsOf, type SubmissionView, type VisibleField } fro
 import type { SubmissionAccess } from '../submission-access';
 import type { InboxCursor, SubmissionRecord, SubmissionRepository } from '../submission.repository';
 
+/** The position after which a page starts, as the controller parses it. */
+export type { InboxCursor };
+
 export interface ListFormSubmissionsInput {
   readonly formId: Id<'Form'>;
   /** The position after the last item of the previous page; null for the first page. */

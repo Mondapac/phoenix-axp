@@ -4,7 +4,6 @@ import type { Clock } from '@phoenix/shared-kernel';
 import { CLOCK } from '../clock/clock.module';
 import type { AppConfig } from '../config/app-config';
 import { APP_CONFIG } from '../config/config.module';
-import { PrismaRateLimitStore } from '../persistence/rate-limit/prisma-rate-limit-store';
 import { registerJobsFrom, type JobContext, type JobDefinition } from '../scheduler/job-registry';
 import { UNIT_OF_WORK, type UnitOfWork } from '../unit-of-work/unit-of-work';
 import {
@@ -39,7 +38,6 @@ function pruneJob(unitOfWork: UnitOfWork, store: RateLimitStore, clock: Clock): 
 @Global()
 @Module({
   providers: [
-    { provide: RATE_LIMIT_STORE, useClass: PrismaRateLimitStore },
     {
       provide: RATE_LIMITER,
       inject: [UNIT_OF_WORK, RATE_LIMIT_STORE, CLOCK, APP_CONFIG],

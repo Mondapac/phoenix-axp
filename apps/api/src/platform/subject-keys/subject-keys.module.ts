@@ -1,7 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import type { AppConfig } from '../config/app-config';
 import { APP_CONFIG } from '../config/config.module';
-import { PrismaSubjectKeyStore } from '../persistence/subject-keys/prisma-subject-key-store';
 import { SubjectKeyCipher } from './subject-key-cipher';
 import { SUBJECT_KEY_STORE, type SubjectKeyStore } from './subject-key-store';
 import { SUBJECT_KEY_SERVICE, SubjectKeyService } from './subject-key.service';
@@ -15,7 +14,6 @@ import { SUBJECT_KEY_SERVICE, SubjectKeyService } from './subject-key.service';
 @Global()
 @Module({
   providers: [
-    { provide: SUBJECT_KEY_STORE, useClass: PrismaSubjectKeyStore },
     {
       provide: SUBJECT_KEY_SERVICE,
       inject: [APP_CONFIG, SUBJECT_KEY_STORE],

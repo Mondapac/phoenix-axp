@@ -4,7 +4,6 @@ import type { Clock } from '@phoenix/shared-kernel';
 import { CLOCK } from '../clock/clock.module';
 import type { AppConfig } from '../config/app-config';
 import { APP_CONFIG } from '../config/config.module';
-import { PrismaCaptchaSpentStore } from '../persistence/captcha/prisma-captcha-spent-store';
 import { registerJobsFrom, type JobDefinition } from '../scheduler/job-registry';
 import { UNIT_OF_WORK, type UnitOfWork } from '../unit-of-work/unit-of-work';
 import {
@@ -36,7 +35,6 @@ function pruneJob(unitOfWork: UnitOfWork, store: CaptchaSpentStore, clock: Clock
 @Global()
 @Module({
   providers: [
-    { provide: CAPTCHA_SPENT_STORE, useClass: PrismaCaptchaSpentStore },
     {
       provide: CAPTCHA_SERVICE,
       inject: [APP_CONFIG, UNIT_OF_WORK, CAPTCHA_SPENT_STORE, CLOCK],

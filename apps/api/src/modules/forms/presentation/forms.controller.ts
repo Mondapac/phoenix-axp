@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from 
 import { ApiTags } from '@nestjs/swagger';
 import { parseId, Temporal } from '@phoenix/shared-kernel';
 import type { CallContext } from '@phoenix/shared-kernel';
-import type { InboxCursor } from '../application/submission.repository';
+import type { InboxCursor } from '../application/use-cases/list-form-submissions.use-case';
 import { z } from 'zod';
 import { Call } from '../../../platform/call-context/call-context.decorator';
 import { CreateForm } from '../application/use-cases/create-form.use-case';
