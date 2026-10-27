@@ -8,7 +8,7 @@ Iran) and as SaaS from ONE codebase.
 Conventions are adapted from the MondaPac Marketplace Platform
 (github.com/Mondapac/mondapac-marketplace-platform; owner decision 2026-10-26: copy directly,
 adapt). "(MP ADR-xxxx)" means that repository's ADR. Accepted decisions: docs/adr/0001..0015,
-0018, 0019 and 0020 (0018 to 0020 amend earlier ones; index: docs/adr/README.md). Follow them;
+0018 to 0021 (0018 to 0021 amend earlier ones; index: docs/adr/README.md). Follow them;
 change one only through a new ADR or an "Amended by" note.
 
 ## Non-negotiables
@@ -164,8 +164,12 @@ Update this section in the same PR when a script changes.
     `product`, each on its own branch and write area. The board is `docs/process/tracks.md`;
     read it at session start, update your own row at session end (skill
     `phoenix-track-session`). Shared files change only in a small PR announced on the board.
-16. Push model (owner decision 2026-10-26): Claude pushes its branch and opens the PR; only the
-    owner merges. Never merge, never push to `main`, never force-push a pushed branch.
+16. Push and merge model (owner decision 2026-10-27, ADR-0021): Claude pushes its branch and
+    opens the PR. The thread that owns a PR merges it, coordinated by the project's coordinator
+    session, only when CI is green on the head, the required reviews are recorded (combined
+    QA + QC; security for the mandatory paths), the PR merges without conflicts and no blocker is
+    open; it then tells the coordinator. Merge commits only, never squash. Never push to `main`
+    directly, never force-push a pushed branch (merge `main` into it instead).
 17. Skills: before producing output, check `docs/process/skills-map.md` and load the mapped
     skill. Project skills (`.claude/skills/`): `phoenix-repo-doc-change`, `phoenix-module-gate`,
     `phoenix-role-review`, `phoenix-track-session`, `phoenix-phase-review`. Project rules and
@@ -181,8 +185,8 @@ Until the owner lifts it:
 - One complete feature per PR (schema + use case + API + tests).
 - No design documents beyond tier A briefs and gates; read existing docs by section (grep).
 - Board and status docs updated once a day.
-- No single-open-migration-PR rule: rebase right before merge, regenerate the migration if
-  needed; a merged migration is never edited.
+- No single-open-migration-PR rule: merge `main` into the branch right before merge (never rebase a pushed branch),
+  regenerate the migration if needed; a merged migration is never edited.
 - Figma-first is paused: UI from existing tokens and components; new components go in code first.
 - At most four parallel tracks and one decision card per day for the owner (except the phase
   review day).

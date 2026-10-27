@@ -45,11 +45,13 @@ Work runs in parallel tracks, each on its own branch and write area
   session's attribution lines.
 - Check `git status --short` before committing; never commit secrets, scratch files or outputs.
 
-## Pushing and PRs (owner decision 2026-10-26)
+## Pushing and PRs (owner decisions 2026-10-26 and 2026-10-27)
 - Claude pushes its own branch (`git push -u origin <branch>`) and opens the PR (`gh pr create`)
   with a short English description, the related ADRs and phase, and the review status.
-- Only the owner merges. Never merge, never push to `main`, never force-push a pushed branch
-  (merge `main` into it instead).
+- Merge per ADR-0021: the thread that owns the PR merges it, coordinated by the coordinator,
+  once CI is green on the head, the required reviews are recorded, the PR merges without
+  conflicts and no blocker is open; merge commits only; tell the coordinator once it is in. Never push to
+  `main` directly, never force-push a pushed branch (merge `main` into it instead).
 - Phase 0 PoC branches are not opened for merge: results go to `docs/reviews/` in a docs PR.
 
 ## After pushing

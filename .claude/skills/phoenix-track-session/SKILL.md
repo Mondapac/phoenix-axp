@@ -11,7 +11,8 @@ branch and its own worktree or clone. The rules are in `docs/process/parallel-tr
 
 Sessions cannot see each other. The board `docs/process/tracks.md` (in the repo) is their only
 shared memory, so a session that skips it works on stale assumptions. Claude pushes branches and
-opens PRs; only the owner merges, approves gates and phases. Everything a session needs from the
+opens PRs; the thread that owns a PR merges it under the coordinator once CI and the required
+reviews pass (ADR-0021). Only the owner approves gates and phases. Everything a session needs from the
 owner goes into one ordered queue on the board.
 
 ## Start of a session
@@ -51,7 +52,8 @@ owner goes into one ordered queue on the board.
 
 1. **Hand over the branch** following `phoenix-repo-doc-change`: bring it up to date with
    `origin/main` (merge, do not rewrite pushed history), run `pnpm verify` for code changes,
-   push the branch and open the PR. Never merge.
+   push the branch and open the PR. Merge only per ADR-0021 (CI green, reviews recorded, no
+   blocker, coordinator informed, merge commit).
 2. **Update the board** (once a day under speed mode). The board is a file in the repo, so
    board updates travel in a PR too: read the latest version on `origin/main` (and any open board
    PR) immediately before writing, change only your own row and your own owner-queue items (new

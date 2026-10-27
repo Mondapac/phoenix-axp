@@ -10,7 +10,7 @@
 | فاز جاری | ۱ — هسته؛ **شروع‌شده** با دستور صاحب پروژه ۲۰۲۶-۱۰-۲۷ (برش‌های 1.1 تا 1.3؛ [مرور فاز ۱](../phases/phase-1-review.md)، کارت‌های P1 تا P7 باز) |
 | فاز ۰ | پایه‌گذاری؛ تأیید ۲۰۲۶-۱۰-۲۶ ([مرور فاز ۰](../phases/phase-0-review.md)). هر چهار PoC انجام و گزارش شد (PR #4)؛ بستن فاز پس از merge PRهای #1، #2 و #4 و بررسی باقر |
 | `main` | `75fc6d4` commit اولیه |
-| مدل push | Claude شاخه را push می‌کند و PR می‌سازد؛ فقط صاحب پروژه merge می‌کند |
+| مدل push | Claude شاخه را push می‌کند و PR می‌سازد؛ رشتهٔ صاحب PR با هماهنگی هماهنگ‌کننده merge می‌کند (ADR-0021) |
 
 ## مسیرها
 | مسیر | worktree | شاخه | PR | کار فعلی | منتظرِ |
@@ -19,7 +19,7 @@
 | `product` | `phoenix-axp-reports` | `docs/phase-0-poc-reports` | #4 | گزارش چهار PoC (برش 0.6 تا 0.9)، **انجام‌شده** | merge |
 | `backend` | `phoenix-axp-backend` | `chore/skeleton` | #2 | برش 0.3 تا 0.5 (اسکلت، پایهٔ platform، Docker Compose) | اصلاح دروازهٔ مجوزها (ADR-0009) و بازبینی امنیتی، سپس merge |
 | `backend` | `phoenix-axp-phase1` | `feat/phase-1-platform` (روی `chore/skeleton`) | #5 | برش 1.1 تا 1.3 (authz، events، audit) | بازبینی امنیتی؛ پس از merge #2 هدف PR به `main` |
-| `backend` | — | `claude/project-thread-s01c02` (روی `chore/skeleton`) | #3 | برش 1.7 (storage)، ترد دیگر فاز ۱ | rebase پس از merge #5 |
+| `backend` | — | `claude/project-thread-s01c02` (روی `chore/skeleton`) | #3 | برش 1.7 (storage)، ترد دیگر فاز ۱ | ادغام `main` در شاخه (merge، بدون rebase) پس از merge #5 |
 | `process` | `phoenix-axp-poc-flowable` | `spike/poc-3-flowable-bridge` | — (merge نمی‌شود، D5) | PoC 3 (برش 0.8)، **انجام‌شده** @ `03c8fc8` | کار اصلی در فاز ۲ |
 | `frontend` | `phoenix-axp-poc-rtl` | `spike/poc-4-rtl-portal` | — (merge نمی‌شود، D5) | PoC 4 (برش 0.9)، **انجام‌شده** @ `1fa15c0` | برش 1.9 پس از P7 (فونت) |
 
@@ -38,7 +38,8 @@
 | 0018 | درخت سایت، اشتراک محتوا و دامنهٔ نقش زیردرخت | `product` | نوشته‌شده در `chore/team-kit` |
 | 0019 | اپراتور = کارمند با نقش، یک حساب برای هر کارمند | `product` | نوشته‌شده در `chore/team-kit` |
 | 0020 | نتیجهٔ PoCهای فاز ۰ و اصلاحات بازبینی (اصلاح 0002، 0004، 0005، 0006، 0010) | `product` | نوشته‌شده در `chore/team-kit` |
-| 0021 | آزاد بعدی | — | — |
+| 0021 | مدل merge: رشتهٔ صاحب PR | `product` | نوشته‌شده |
+| 0022 | آزاد بعدی | — | — |
 
 ## درخواست‌های بین مسیرها
 | از | به | درخواست | تاریخ |

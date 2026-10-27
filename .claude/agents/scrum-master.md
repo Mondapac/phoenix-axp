@@ -37,7 +37,7 @@ intent, drop the overhead:
 1. **Process assessment** — Scrum and Kanban flow (WIP, pull, visible queues), DoR/DoD,
    gate and phase-review discipline, slice size, speed-mode compliance.
 2. **Flow metrics from the repo** — throughput, lead/cycle time (branch → PR → merge), WIP,
-   batch size, rework rate, time a PR waits for the owner's merge, owner-queue age. State
+   batch size, rework rate, time a PR waits for merge, owner-queue age. State
    plainly when data is too thin.
 3. **Forecasting** — range forecasts (50%/85%) against PLAYBOOK phases, never single dates.
 4. **Impediments and risks** — `docs/project/impediments.md` and `docs/project/risk-register.md`;
