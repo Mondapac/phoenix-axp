@@ -7,10 +7,12 @@ import { ClockModule } from './platform/clock/clock.module';
 import type { AppConfig } from './platform/config/app-config';
 import { ConfigModule } from './platform/config/config.module';
 import { HealthModule } from './platform/health/health.module';
+import { EventsModule } from './platform/events/events.module';
 import { ConflictFilter } from './platform/http/conflict-filter';
 import { IdsModule } from './platform/ids/ids.module';
 import { LoggingModule } from './platform/logging/logging.module';
 import { PersistenceModule } from './platform/persistence/persistence.module';
+import { SchedulerModule } from './platform/scheduler/scheduler.module';
 import { TenantConfigModule } from './platform/tenant-config/tenant-config.module';
 import { TenantContextGuard } from './platform/tenant-context/tenant-context.guard';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
@@ -47,6 +49,8 @@ export class AppModule {
         IdsModule,
         TenantConfigModule,
         TenantContextModule,
+        EventsModule,
+        SchedulerModule,
         PersistenceModule,
         // No identity or tenancy module yet: the authorisation check and the site-ancestry
         // reader are fail-closed placeholders (ADR-0010), so a production start is refused.

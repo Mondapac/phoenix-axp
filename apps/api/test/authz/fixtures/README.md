@@ -1,7 +1,7 @@
 # Use-case discovery fixtures
 
 Ported from Mondapac `apps/api/test/authz/fixtures/`, without the seller-state cases (Phoenix
-has no seller) and, until slice 1.2 brings the job registry, without the job cases.
+has no seller).
 
 Source trees for `test/authz/use-cases.spec.ts`, the discovery and CI check of Phoenix
 ADR-0004 decision 4 (ported from Mondapac identity design 5.2). Each tree stands in for `apps/api/src/` and holds a `modules/` folder.

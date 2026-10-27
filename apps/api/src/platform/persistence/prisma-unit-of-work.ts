@@ -1,7 +1,8 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import { isMinted } from '@phoenix/shared-kernel';
+import { isMinted, ok } from '@phoenix/shared-kernel';
 import type { Result, TenantContext } from '@phoenix/shared-kernel';
 import { Prisma } from '../../generated/prisma/client';
+import type { EventDelivery } from '../events/event-delivery';
 import {
   InvalidUnitOfWorkOptionsError,
   NestedUnitOfWorkError,
@@ -14,11 +15,12 @@ import {
   MAX_LOCK_TIMEOUT_MS,
   MAX_UNIT_TIMEOUT_MS,
   UNIT_ATTEMPTS,
+  type HandledOnce,
   type UnitOfWork,
   type UnitOfWorkOptions,
 } from '../unit-of-work/unit-of-work';
 import { classifyConflict } from './conflict-classifier';
-import { modelDelegatesOf, type GuardedClient } from './guarded-client';
+import { modelDelegatesOf, type GuardedClient, type TenantTransaction } from './guarded-client';
 import type { ModelMap } from './model-map';
 import {
   lockTimeoutStatement,
@@ -26,6 +28,12 @@ import {
   setTenantStatement,
   type RawRunner,
 } from './session-statements';
+import {
+  issuedDeliveryFor,
+  markDelivered,
+  recordInInbox,
+  settleDelivery,
+} from './outbox/delivery-ledger';
 import { OpenUnit, unitStorage } from './unit-store';
 
 /** Carries an `err` result out of the transaction callback, so that nothing commits (P 3.1 row 3). */
@@ -162,5 +170,41 @@ export class PrismaUnitOfWork implements UnitOfWork {
         unit?.close();
       }
     }
+  }
+
+  /**
+   * Ported from Mondapac (P 6.4; ADR-05): the inbox row, the work when the row is new, and the
+   * mark of the delivery, in one read-write unit of the delivery's tenant; on a retry of the
+   * unit all three run again. The delivery is settled only after the commit, so the dispatcher
+   * sees a failed handler.
+   */
+  async runOnce<T, E>(
+    tenant: TenantContext,
+    delivery: EventDelivery,
+    work: () => Promise<Result<T, E>>,
+    options: Omit<UnitOfWorkOptions, 'readOnly'> = {},
+  ): Promise<Result<HandledOnce<T>, E>> {
+    if ((options as UnitOfWorkOptions).readOnly === true) {
+      throw new InvalidUnitOfWorkOptionsError('read-only-run-once');
+    }
+    if (!isMinted(tenant)) throw new UnmintedTenantContextError();
+    const record = issuedDeliveryFor(delivery, tenant);
+    const result = await this.run(
+      tenant,
+      async (): Promise<Result<HandledOnce<T>, E>> => {
+        const view = unitStorage.getStore()!.view as TenantTransaction;
+        let outcome: HandledOnce<T> = { handled: false };
+        if (await recordInInbox(view, this.map, delivery, record)) {
+          const done = await work();
+          if (!done.ok) return done;
+          outcome = { handled: true, value: done.value };
+        }
+        await markDelivered(view, delivery, record);
+        return ok(outcome);
+      },
+      options,
+    );
+    if (result.ok) settleDelivery(delivery);
+    return result;
   }
 }

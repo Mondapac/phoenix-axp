@@ -7,9 +7,8 @@ import {
   type ListedDeclaration,
 } from './use-case-discovery';
 
-// Ported from Mondapac apps/api/test/authz/use-cases.spec.ts, without the seller-state and job
-// cases (jobs join with slice 1.2). The CI check of Phoenix ADR-0004 decision 4: every use case
-// of the API is found by its path, carries a valid declaration of its own (a use case without
+// Ported from Mondapac apps/api/test/authz/use-cases.spec.ts, without the seller-state cases.
+// The CI check of Phoenix ADR-0004 decision 4: every use case of the API is found by its path, carries a valid declaration of its own (a use case without
 // an access rule fails here), and every non-permission rule is on the checked-in list, so each
 // one is seen in review. To
 // accept a new entry, add it to test/contracts/access-declarations.json, sorted by name.
@@ -97,6 +96,7 @@ describe('use-case discovery fixtures', () => {
         `file-misnamed ${useCases}/Bad_Name.use-case.ts Bad_Name.use-case.ts`,
         `file-misnamed ${useCases}/helpers.ts helpers.ts`,
         `file-misnamed ${useCases}/nested/deep.use-case.ts deep.use-case.ts`,
+        'job-outside-presentation modules/beta/beta.module.ts',
         'key-retired modules/beta/contracts/index.ts beta.things.purge',
         `key-undeclared ${useCases}/undeclared-key.use-case.ts beta.things.unknown`,
         // A platform key and a tenant key in one rule: no population holds both.

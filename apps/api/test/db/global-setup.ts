@@ -52,15 +52,18 @@ export default async function globalSetup(): Promise<void> {
   });
 
   await createCopy(name, 'LOCKING');
+  await createCopy(name, 'DELIVERY');
 }
 
 /**
  * A copy of the migrated run database for one spec file that must not meet the others:
- * `locking`: unit-of-work.db-spec.ts adds test-only triggers that raise serialisation
- * failures, so no other file meets them. Copied before any test connects, since a template
+ * - `locking`: unit-of-work.db-spec.ts adds test-only triggers that raise serialisation
+ *   failures, so no other file meets them.
+ * - `delivery`: event-path.db-spec.ts relays and dispatches every pending row of a tenant, so
+ *   no other file's outbox or delivery rows live there (ported from Mondapac's `delivery` copy). Copied before any test connects, since a template
  * must have no other session.
  */
-async function createCopy(template: string, kind: 'LOCKING'): Promise<void> {
+async function createCopy(template: string, kind: 'LOCKING' | 'DELIVERY'): Promise<void> {
   const name = `${template}_${kind.toLowerCase()}`;
   const admin = new Client({ connectionString: migrationDatabaseUrl() });
   await admin.connect();

@@ -8,11 +8,8 @@ trigger that brings each one in. When a trigger fires, port the component from t
 
 | Component | What it is | Trigger |
 | --- | --- | --- |
-| `events` and outbox (ADR-05) | Event envelope, `defineEvent`, a `<module>.outbox` table per module, the relay in the worker (`FOR UPDATE SKIP LOCKED`), the in-process `EventBus`, `inbox` idempotency | The first module that publishes or consumes a domain event |
 | `audit` (ADR-09) | `platform.audit_log` (append-only by trigger), `AuditWriter` in the use-case transaction with a closed action catalogue, the hash-chain sealer in the worker, `audit-verify` | The first state-changing use case of a business module (and before any customer pilot) |
 | identity integration (ADR-03) | The `Authenticator` building `AuthenticatedActor` from a Keycloak session; `ActorGuard` accepts no session until then and answers 401 `session.invalid` to any `Authorization` header | The identity module, Phase 1 |
-| `scheduler` (ADR-05) | Fixed-interval jobs under `pg_try_advisory_xact_lock` in the worker | The first periodic job (the outbox relay or the audit sealer) |
-| worker jobs | The worker today starts, logs a heartbeat and stops cleanly on SIGTERM | The first job or consumer (outbox relay, scheduler) |
 | `storage` (ADR-11) | The `ObjectStore` port and its SeaweedFS S3 adapter (SeaweedFS is already in `docker-compose.yml`) | The first feature that stores a file |
 | `subject-keys` | Per-subject encryption keys for personal data fields, the key wrapper and its port | The first personal data field that must be erasable (identity or forms) |
 | `ai` (ADR-10) | `platform/ai/model-gateway`, the only caller of a model, with the provider SDK confined to that folder | Phase 5, the first AI feature |
@@ -66,3 +63,26 @@ trigger that brings each one in. When a trigger fires, port the component from t
   and 3). A production start is refused while any placeholder is bound, and a start counts as
   non-production only when `NODE_ENV` is set explicitly to `development` or `test`. Until
   identity and tenancy bind their ports, the API and the worker refuse to start in production.
+- **`events`, outbox, `scheduler` and the worker loops (slice 1.2).** Ported from Mondapac
+  `platform/events`, `platform/scheduler`, `platform/persistence/outbox`,
+  `platform/persistence/advisory-job-lock.ts` and `platform/worker`, Market adapted to Tenant,
+  with these changes:
+  - Every event, delivery and job carries exactly one `tenant_id`, and its handler or job runs
+    as that tenant's system actor in a unit of that tenant. The inbox key is
+    `(tenant_id, event_id, handler)` and the delivery key `(tenant_id, event_id, subscriber)`:
+    ADR-0006 decision 5 names `(event_id, handler)`; the tenant leads every key (ADR-0002), so
+    Mondapac's `EVENT_KEYED` exception to the leading-tenant rule is not needed.
+  - The relay and the dispatcher work through the base client as the application login, so
+    under row-level security every transaction they open sets `app.tenant_id` first, and each
+    tenant is claimed in its own transaction. Mondapac's dispatcher ran its give-back, failure
+    and dead-letter statements outside a transaction; Phoenix wraps each in one.
+  - `unhostedMarketsWithRows` (a start-time warning about rows of tenants this deployment does
+    not host) is not ported: the application login cannot see another tenant's rows. It is an
+    operator query, as the migration role.
+  - Timestamps are `timestamptz(3)`. The advisory-lock keys are hashed from `phoenix.job:<name>`.
+  - The test-only `probe` schema (`prisma/schema/probe.prisma`: an outbox, an inbox and a
+    receipt table, writable by no module) proves the event path end to end against PostgreSQL
+    (`apps/api/test/db/event-path.db-spec.ts`) until a business module publishes. Remove it in
+    the change that adds the first module outbox, together with its migration's tables.
+  - `outbox` and `inbox` tables are reserved to `platform/persistence/outbox/` (the Prisma
+    boundary check), and every module outbox must have the same columns.

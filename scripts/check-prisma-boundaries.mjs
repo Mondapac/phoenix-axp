@@ -10,7 +10,8 @@
 //   - every @id, @unique, @@id and @@unique of a scoped model contains tenantId, except the
 //     single-column UUID @id;
 //   - every @relation between two scoped models has tenantId in both `fields` and
-//     `references`, at the same position; a scoped and an exempt model never relate.
+//     `references`, at the same position; a scoped and an exempt model never relate;
+//   - every outbox model (@@map("outbox")) has the same fields (ported from Mondapac, PM1).
 // Source check, "model to owning module", on apps/api/src/modules/<m>/infrastructure/ and
 // apps/api/src/platform/persistence/: every reference to a Prisma model names a model of the
 // file's own module (platform/ owns platform.prisma). A reference is a property of the model's
@@ -19,6 +20,10 @@
 // name, or an import from its `models/` folder. A non-literal key on the result of a `tx(...)`
 // call (`tx(t)[key]`, `const { [key]: d } = tx(t)`) is refused, because it hides the model it
 // names.
+// Named exception (ported from Mondapac, P 9): files under platform/persistence/outbox/ reach the
+// models mapped to the tables in OUTBOX_TABLES of any module, and those models are reserved to
+// that folder: a module writes its outbox through the OutboxWriter and its inbox through
+// UnitOfWork.runOnce, never by name.
 // Raw SQL: raw SQL members (`$queryRaw`, `$executeRaw` and their Unsafe/Typed forms) and the
 // `pg` driver are used only by the files in RAW_SQL_FILES and DRIVER_FILES. A reviewed raw-read
 // port for modules (Mondapac ADR-0030) is deferred; see docs/platform-deferred.md.
@@ -32,10 +37,20 @@ import { readPrismaSchema } from './prisma-schema.mjs';
 /** The calls whose result is a model view: `PrismaService.tx(tenant)`. */
 const VIEW_CALLS = ['tx'];
 
+/** The tables reserved to platform/persistence/outbox/ (the named exception). */
+const OUTBOX_TABLES = ['outbox', 'inbox'];
+const OUTBOX_FOLDER = 'platform/persistence/outbox/';
+
 /** The only files (relative to the source root) that may run raw SQL. */
 const RAW_SQL_FILES = new Set([
+  'platform/persistence/advisory-job-lock.ts',
   'platform/persistence/database-probe.ts',
   'platform/persistence/guarded-client.ts',
+  // The relay, the bus adapter and the dispatcher claim and mark rows of every module's outbox
+  // and of platform.event_delivery with fixed statements, setting the tenant first (ADR-05).
+  'platform/persistence/outbox/in-process-event-bus.ts',
+  'platform/persistence/outbox/prisma-event-dispatcher.ts',
+  'platform/persistence/outbox/prisma-outbox-relay.ts',
   'platform/persistence/prisma-root.ts',
   'platform/persistence/prisma-unit-of-work.ts',
   'platform/persistence/session-statements.ts',
@@ -150,6 +165,20 @@ for (const model of models) {
   }
 }
 
+// --- Every outbox has the same fields (Mondapac PM1): the relay reads them all alike.
+const outboxes = models.filter((model) => model.table === 'outbox');
+const shape = (model) =>
+  JSON.stringify(
+    model.fields.map((f) => [f.name, f.type, f.list, f.optional, f.attributes]).sort(),
+  );
+for (const model of outboxes.slice(1)) {
+  if (shape(model) !== shape(outboxes[0])) {
+    problems.push(
+      `${model.file}: ${model.name} is an outbox whose fields differ from ${outboxes[0].name}`,
+    );
+  }
+}
+
 // --- Model to owning module, and raw SQL.
 if (existsSync(srcDir)) problems.push(...checkModelOwnership(srcDir));
 if (existsSync(srcDir)) problems.push(...checkRawSql(srcDir));
@@ -198,15 +227,17 @@ function checkModelOwnership(root) {
     const relative = path.relative(root, file).split(path.sep).join('/');
     const owner = moduleOfFile(relative);
     if (owner === undefined) continue;
+    const inOutboxFolder = relative.startsWith(OUTBOX_FOLDER);
     const source = parse(file);
     const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
 
     const report = (node, model, how) => {
-      if (model.module === owner) return;
-      found.push(
-        `${relative}:${lineOf(node)}: ${how} names model ${model.name}, which belongs to ` +
-          `module "${model.module}"`,
-      );
+      const reserved = OUTBOX_TABLES.includes(model.table);
+      if (reserved ? inOutboxFolder : model.module === owner) return;
+      const why = reserved
+        ? `is reserved to ${OUTBOX_FOLDER} (write it through OutboxWriter)`
+        : `belongs to module "${model.module}"`;
+      found.push(`${relative}:${lineOf(node)}: ${how} names model ${model.name}, which ${why}`);
     };
 
     /** Whether `node` is a `tx(...)` call, under any parentheses. */

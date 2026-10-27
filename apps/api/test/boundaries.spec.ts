@@ -281,7 +281,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ).toEqual({ status: 0, problems: [] });
     });
 
-    it('accepts the passing fixture: keys with tenantId (also not leading and name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, and raw SQL and the driver in the platform files', () => {
+    it('accepts the passing fixture: keys with tenantId (also not leading and name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, raw SQL and the driver in the platform files, identical outboxes, an inbox and the outbox exception', () => {
       expect(
         checkPrisma(
           path.join(PRISMA_FIXTURES, 'passing/schema'),
@@ -336,6 +336,11 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'modules/alpha/infrastructure/raw-forms.ts:18: import of the database driver "postgres" outside the files of DRIVER_FILES',
           'modules/alpha/infrastructure/raw-forms.ts:19: import of the database driver "@prisma/adapter-pg" outside the files of DRIVER_FILES',
           'platform/persistence/reaches-module.ts:9: raw SQL outside the files of RAW_SQL_FILES',
+          // Every outbox has the same fields; outbox and inbox models are reserved to
+          // platform/persistence/outbox/, which reaches nothing else of a module.
+          'beta.prisma: BetaOutbox is an outbox whose fields differ from AlphaOutbox',
+          'modules/alpha/infrastructure/writes-own-outbox.ts:6: property ".alphaOutbox" names model AlphaOutbox, which is reserved to platform/persistence/outbox/ (write it through OutboxWriter)',
+          'platform/persistence/outbox/reaches-module.ts:7: property ".betaThing" names model BetaThing, which belongs to module "beta"',
         ].sort(),
       );
     });
@@ -401,6 +406,17 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       });
       expect(map.models.AlphaLookup).toMatchObject({ scope: 'exempt' });
       expect(map.models.PlatformProbe).toMatchObject({ module: 'platform', scope: 'scoped' });
+    });
+
+    it("names each module's outbox and inbox model, by table", () => {
+      const { output } = generate(path.join(FIXTURES, 'prisma/passing/schema'));
+      const map = JSON.parse(output) as { modules: Record<string, unknown> };
+
+      expect(map.modules).toEqual({
+        alpha: { schema: 'alpha', outboxModel: 'AlphaOutbox', inboxModel: null },
+        beta: { schema: 'beta', outboxModel: 'BetaOutbox', inboxModel: 'BetaInbox' },
+        platform: { schema: 'platform', outboxModel: null, inboxModel: null },
+      });
     });
 
     it('fails on a model with neither scope marker or with both', () => {

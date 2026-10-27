@@ -48,14 +48,14 @@ export async function startWorker(
   }
 
   const runtime = context.get(WorkerRuntime);
-  runtime.start();
+  await runtime.start();
   let stopping: Promise<void> | undefined;
   return {
     context,
     runtime,
     stop: () =>
       (stopping ??= (async () => {
-        runtime.stop();
+        await runtime.stop();
         await context.close();
       })()),
   };

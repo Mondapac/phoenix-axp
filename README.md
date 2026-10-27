@@ -5,10 +5,12 @@ This repository is the backend: a NestJS modular monolith (`apps/api`, roles `ap
 `worker`) on PostgreSQL, with a framework-free shared kernel (`packages/shared-kernel`).
 Licence: UNLICENSED (all rights reserved).
 
-Phase 0 holds the skeleton and the platform foundations only: tenant and call contexts, clock,
+Phase 0 holds the skeleton and the platform foundations: tenant and call contexts, clock,
 ids, configuration, logging and HTTP hardening, health, and persistence with three tenant
 isolation layers (a Prisma tenant guard, PostgreSQL row-level security set by the unit of work,
-and silo deployments through `HOSTED_TENANTS`). Business modules come later; the platform pieces
+and silo deployments through `HOSTED_TENANTS`). Phase 1 adds use-case authorisation
+(`platform/authz`), domain events with a per-module outbox and inbox, and the scheduler; the
+worker role runs the outbox relay, the event dispatcher and the scheduled jobs. Business modules come later; the platform pieces
 that wait for their first consumer are listed in [docs/platform-deferred.md](docs/platform-deferred.md).
 
 ## Requirements
@@ -58,7 +60,10 @@ English/Gregorian in America/Toronto).
   (none yet). Every use case extends `UseCase` from `platform/authz` and declares a static
   `access` rule (`permissions`, `anonymous`, `own-resources` or `system`); the `UseCaseGate`
   checks it on every entry, and `apps/api/test/authz/use-cases.spec.ts` fails a use case
-  without one. Components not built yet, and their triggers, are in
+  without one. A use case appends its events to its module's outbox through the `OutboxWriter`
+  that `PersistenceModule.outboxWriterFor(module)` binds; a consuming use case opens
+  `UnitOfWork.runOnce`, which records the module inbox row so a repeated delivery does no work
+  twice. Components not built yet, and their triggers, are in
   `docs/platform-deferred.md`. Boundaries are enforced by `eslint.config.mjs`,
   `apps/api/.dependency-cruiser.cjs` and `scripts/check-prisma-boundaries.mjs`, and proven by
   the fixtures in `apps/api/test/boundary-fixtures/`.
