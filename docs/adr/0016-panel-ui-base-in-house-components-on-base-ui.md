@@ -33,7 +33,8 @@ only, PoC 4 R9) is decided at the Phase 3 review.
 5. **Tokens:** panels use fixed product tokens, with light and dark sets (class strategy,
    default "system"), checked against WCAG 2.1 AA for both themes and the focus ring. A tenant
    changes only its logo and name in the panels; brand tokens apply to the portal.
-6. **Icons and charts:** lucide-react (ISC) only; Recharts (MIT) only. The Persian font stays
+6. **Icons and charts:** lucide-react (ISC) only; Recharts (MIT) only. *(Amended by ADR-0023: charts
+   use Apache ECharts instead of Recharts.)* The Persian font stays
    open question P7 (Vazirmatn, OFL-1.1, self-hosted), and no font is loaded from a foreign host.
 7. **Review:** every panel PR is checked to confirm that no file or fragment was copied from
    the Metronic distribution, along with the frontend quality checklist (375, 768 and 1280 px,
