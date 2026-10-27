@@ -10,7 +10,6 @@ trigger that brings each one in. When a trigger fires, port the component from t
 | --- | --- | --- |
 | audit trail reader | Mondapac's `AuditTrailReader` (`platform/audit/audit-trail-reader.ts` and its Prisma reader): a paged, permission-checked read of a target's audit rows for an admin screen | The first screen or API that shows an audit trail |
 | first `AUDIT_WRITER` binding | `PersistenceModule.auditWriterFor('<module>')` in a module's providers, its actions registered with `AuditActionCatalogue`, and the checked-in `test/contracts/audit-action-catalogue.snapshot.json` | The first state-changing use case of a business module (identity's role seed and grants) |
-| identity integration (ADR-0004) | The `Authenticator` building `AuthenticatedActor` from a Keycloak session; `ActorGuard` accepts no session until then and answers 401 `session.invalid` to any `Authorization` header | The identity module, Phase 1 |
 | `subject-keys` | Per-subject encryption keys for personal data fields, the key wrapper and its port | The first personal data field that must be erasable (identity or forms) |
 | `ai` (ADR-0011) | `platform/ai/model-gateway`, the only caller of a model, with the provider SDK confined to that folder | Phase 5, the first AI feature |
 | `mail` | The mail port and its SMTP adapter (Mailpit locally) | The first message sent to a person (identity verification) |
@@ -55,13 +54,18 @@ trigger that brings each one in. When a trigger fires, port the component from t
   - The role model (`GrantScope`, role scopes and kinds), `GrantPolicy` and `LastHolderPolicy`
     live in `platform/authz/roles/` until the identity module, which will own the Role and
     RoleAssignment aggregates, exists. A site grant carries `includeDescendants`; access flows
-    only downward; a site grantor grants only within its own subtree.
+    only downward; a site grantor grants only within its own subtree. Since slice 1.5 the
+    identity module owns the `role` and `role_assignment` tables; the pure types and policies
+    stay here, because `site-scope.ts` needs `GrantScope` and `platform/` imports no module.
   - Two ports have no implementation yet, each bound to a fail-closed placeholder:
     `AuthorisationCheck` (identity; every authenticated actor gets `access.unavailable`) and
     `SiteAncestryReader` (tenancy's `site_ancestry`; no site is within any subtree, so a
     subtree grant covers its own site only). `AuthzModule.register({ authorisation,
     siteAncestry })` takes the implementing modules. Organisation scoping waits for the
-    tenancy module's Organization tree.
+    tenancy module's Organization tree. Since slices 1.4 and 1.5, tenancy binds the reader and
+    identity binds the check and a third port, the `Authenticator` of the `ActorGuard`
+    (`AuthzModule.register({ authentication, authorisation, siteAncestry })`): no authz
+    placeholder stays bound.
 - **`placeholders` (slice 1.1).** Ported with `SiteAncestryReader` as its trigger, with only
   `@FailClosedPlaceholder`: Mondapac's `@PermissiveInterim` is not ported (ADR-0010 decisions 2
   and 3). A production start is refused while any placeholder is bound, and a start counts as
@@ -133,7 +137,7 @@ it gates; that slice does not merge without it.
 
 | Requirement | Why | Gate |
 | --- | --- | --- |
-| **Session tenant binding** (security review S2-3). Identity's `Authenticator` refuses a session whose tenant differs from the request's tenant (the one `TenantContextGuard` resolved from `x-tenant-id`), with a test on both tenant fixtures. Deployment (Helm, on-prem compose) keeps the API port reachable only from the BFFs; add a `HOST` setting so the API can bind a single interface (today `app.listen(port)` binds all). | `x-tenant-id` is trusted from any caller that reaches the API port (`tenant-context.guard.ts`). Today that only selects a tenant's anonymous surface; once sessions exist, user A of tenant X could send `x-tenant-id: Y` and act in Y. | The identity slice: no session is honoured before the check and its test exist. |
+| **Session tenant binding** (security review S2-3). Done in slice 1.5 for the code: identity's `Authenticator` looks a session up in the request's tenant only, so another tenant's session is not found (test/db/identity.db-spec.ts, both fixtures), and `HOST` binds the API to one interface. Still open: deployment (Helm, on-prem compose) keeps the API port reachable only from the BFFs and sets `HOST`. | `x-tenant-id` is trusted from any caller that reaches the API port (`tenant-context.guard.ts`). Today that only selects a tenant's anonymous surface; once sessions exist, user A of tenant X could send `x-tenant-id: Y` and act in Y. | The identity slice: no session is honoured before the check and its test exist. |
 | **Composite hand-written foreign keys** (security review S2-4). Every foreign key written by hand in a migration between tenant-scoped tables includes `tenant_id` on both sides, as the Prisma-declared ones must (`check-prisma-boundaries`). | PostgreSQL checks a foreign key without row-level security, so an id-only key could point at another tenant's row. | Every migration review. |
 | **Site inputs from the database, and cross-tenant grants refused** (security review S5-7, QA review 5.8). Identity loads the target site in the actor's tenant (so row-level security makes another tenant's site "not found"), computes `siteRelation` from `site_ancestry` and never from input, implements the subtree check of `LastHolderPolicy.canActOn`, and refuses a grant across tenants; each with a test on both tenant fixtures. | `GrantPolicy` and site scope take `placement.scope.siteId`, `placement.siteRelation` and `grantCoversSite(siteId)` from the caller (`authz/roles/grant-policy.ts`, `authz/site-scope.ts`), and the tenant check sits in the unbuilt `AuthorisationCheck`. | The identity and tenancy slices that bind `AuthorisationCheck` and `SiteAncestryReader`. |
 | **Stable subscriber names** (security review S5-8). Snapshot the subscriber names, as the event catalogue is snapshotted, so renaming a subscription fails CI instead of silently changing its inbox key. | The inbox and delivery keys carry the subscriber's name (`delivery-ledger.ts`): a renamed subscription would run its handler again for redelivered events. | The first business-module subscription. |

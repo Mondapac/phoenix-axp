@@ -22,6 +22,8 @@ import { AuthzModule } from '../authz.module';
 import { SITE_ANCESTRY_READER, type SiteAncestryReader } from '../site-scope';
 import { USE_CASE_GATE } from '../use-case-gate.token';
 import { placeholderMarkOf } from '../../placeholders/placeholder-markers';
+import { AUTHENTICATOR } from '../authenticator';
+import { FailClosedAuthenticator } from './fail-closed-authenticator';
 import { FailClosedAuthorisationCheck } from './fail-closed-authorisation-check';
 import { FailClosedSiteAncestryReader } from './fail-closed-site-ancestry-reader';
 
@@ -49,6 +51,13 @@ describe.each(TEST_TENANTS)('the authz placeholders in tenant %s', (code) => {
     ).resolves.toEqual({ allowed: false, denial: { code: 'access.unavailable' } });
   });
 
+  it('rejects every session', async () => {
+    await expect(new FailClosedAuthenticator().authenticate()).resolves.toEqual({
+      ok: false,
+      error: { code: 'credential.rejected' },
+    });
+  });
+
   it('answers that no site is within any subtree', async () => {
     const reader: SiteAncestryReader = new FailClosedSiteAncestryReader();
     await expect(reader.isWithinSubtree(staff, id(3), id(4))).resolves.toBe(false);
@@ -59,6 +68,9 @@ describe('the placeholder marks', () => {
   it('names the port each placeholder stands in for', () => {
     expect(placeholderMarkOf(FailClosedAuthorisationCheck)).toMatchObject({
       port: 'identity.authorisationCheck',
+    });
+    expect(placeholderMarkOf(FailClosedAuthenticator)).toMatchObject({
+      port: 'identity.authenticator',
     });
     expect(placeholderMarkOf(FailClosedSiteAncestryReader)).toMatchObject({
       port: 'tenancy.isWithinSubtree',
@@ -79,9 +91,18 @@ class RealCheck {
     return Promise.resolve({ allowed: true });
   }
 }
+@Injectable()
+class RealAuthenticator {
+  authenticate(): Promise<never> {
+    return Promise.reject(new Error('not called'));
+  }
+}
 @Module({
-  providers: [{ provide: AUTHORISATION_CHECK, useClass: RealCheck }],
-  exports: [AUTHORISATION_CHECK],
+  providers: [
+    { provide: AUTHORISATION_CHECK, useClass: RealCheck },
+    { provide: AUTHENTICATOR, useClass: RealAuthenticator },
+  ],
+  exports: [AUTHORISATION_CHECK, AUTHENTICATOR],
 })
 class IdentityStandIn {}
 
@@ -108,14 +129,22 @@ describe('AuthzModule.register', () => {
     return { found: [...new Set(found)].sort(), gate };
   };
 
-  it('binds both fail-closed placeholders while no implementing module is given', async () => {
+  it('binds every fail-closed placeholder while no implementing module is given', async () => {
     const { found, gate } = await ports({});
-    expect(found).toEqual(['identity.authorisationCheck', 'tenancy.isWithinSubtree']);
+    expect(found).toEqual([
+      'identity.authenticator',
+      'identity.authorisationCheck',
+      'tenancy.isWithinSubtree',
+    ]);
     expect(gate).toBeDefined();
   });
 
   it('binds no placeholder once identity and tenancy provide the ports', async () => {
-    const { found } = await ports({ authorisation: IdentityStandIn, siteAncestry: TenancyStandIn });
+    const { found } = await ports({
+      authentication: IdentityStandIn,
+      authorisation: IdentityStandIn,
+      siteAncestry: TenancyStandIn,
+    });
     expect(found).toEqual([]);
   });
 });

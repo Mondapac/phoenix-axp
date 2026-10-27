@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { parseTenantId } from '@phoenix/shared-kernel';
 import type { TenantId } from '@phoenix/shared-kernel';
@@ -38,6 +39,11 @@ const envSchema = z.object({
   }),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  // The interface the API listens on; every interface unless set (security review S2-3).
+  HOST: z
+    .string()
+    .regex(/^[A-Za-z0-9.:-]+$/, 'must be a host name or an IP address')
+    .optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   HOSTED_TENANTS: hostedTenants,
   API_DOCS_ENABLED: z.enum(['true', 'false']).default('false'),
@@ -57,6 +63,30 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_PUBLIC_ENDPOINT: httpUrl.optional(),
   S3_REGION: z.string().min(1).default('us-east-1'),
+  // Sessions (ADR-0004 decision 2): the key of the CSRF tokens and of the sign-in flows.
+  SESSION_SECRET: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{43,}$/, 'must be at least 32 random bytes, base64url')
+    .optional(),
+  PANEL_ORIGINS: z.string().optional(),
+  STAFF_SESSION_HOURS: z.coerce.number().int().min(1).max(24).default(8),
+  // Keycloak (ADR-0004 decision 1): the URL, the studio client's secret and its callback URL
+  // together, or none.
+  KEYCLOAK_URL: httpUrl.optional(),
+  KEYCLOAK_REALM_TEMPLATE: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]*\{tenant\}[A-Za-z0-9_-]*$/, 'must be a realm name containing {tenant}')
+    .default('phoenix-{tenant}'),
+  KEYCLOAK_STUDIO_CLIENT_ID: z
+    .string()
+    .regex(/^[A-Za-z0-9_.-]{1,64}$/)
+    .default('phoenix-studio'),
+  KEYCLOAK_STUDIO_CLIENT_SECRET: z.string().min(1).optional(),
+  STUDIO_SIGN_IN_CALLBACK_URL: httpUrl.optional(),
+  KEYCLOAK_DIRECTORY_CLAIM: z
+    .string()
+    .regex(/^[A-Za-z0-9_]{1,64}$/)
+    .default('ldap_id'),
 });
 
 /** The variables that switch object storage on, together. */
@@ -65,6 +95,13 @@ const STORAGE_REQUIRED = [
   'S3_BUCKET',
   'S3_ACCESS_KEY_ID',
   'S3_SECRET_ACCESS_KEY',
+] as const;
+
+/** The variables that switch Keycloak sign-in on, together. */
+const KEYCLOAK_REQUIRED = [
+  'KEYCLOAK_URL',
+  'KEYCLOAK_STUDIO_CLIENT_SECRET',
+  'STUDIO_SIGN_IN_CALLBACK_URL',
 ] as const;
 
 /** The migration role's URL: read by the prisma CLI, the scripts and test setup only. */
@@ -83,6 +120,11 @@ export interface AppConfig {
    */
   readonly nodeEnvExplicit: boolean;
   readonly port: number;
+  /**
+   * The interface the API listens on (`HOST`), or null for every interface. A deployment sets
+   * it so that only the BFFs reach the API: they set `x-tenant-id` (security review S2-3).
+   */
+  readonly host: string | null;
   readonly logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   /** Tenants this deployment serves (ADR-0002). Never empty, never defaulted. */
   readonly hostedTenants: readonly TenantId[];
@@ -99,6 +141,48 @@ export interface AppConfig {
    * then every storage call fails. Required in production.
    */
   readonly storage: StorageConfig | null;
+  /** Sessions of every population (ADR-0004 decision 2). */
+  readonly session: SessionConfig;
+  /**
+   * Staff sign-in through Keycloak, or `null` when `KEYCLOAK_*` is unset: then every sign-in
+   * answers `sign-in.unavailable`. Required in production.
+   */
+  readonly keycloak: KeycloakConfig | null;
+}
+
+export interface SessionConfig {
+  /**
+   * The key of the CSRF tokens and of the sign-in flows (`SESSION_SECRET`). A credential: never
+   * log it. Outside production, when unset, a random key per process.
+   */
+  readonly secret: Buffer;
+  /**
+   * The origins of the panels (`PANEL_ORIGINS`): a state-changing request with a session must
+   * carry one of them in `Origin`. Empty refuses every such request.
+   */
+  readonly panelOrigins: readonly string[];
+  /** How long a staff session lives, in hours (`STAFF_SESSION_HOURS`, 1 to 24, default 8). */
+  readonly staffSessionHours: number;
+}
+
+export interface KeycloakConfig {
+  /** Keycloak's base URL, without a trailing slash. */
+  readonly url: string;
+  /**
+   * The realm of a tenant: `{tenant}` is replaced by the tenant id. One realm per tenant (owner
+   * decision P2, ADR-0022); `phoenix-{tenant}` unless set.
+   */
+  readonly realmTemplate: string;
+  readonly studioClientId: string;
+  /** A credential: never log it. */
+  readonly studioClientSecret: string;
+  /** The redirect URI registered on the studio client: the studio BFF's callback route. */
+  readonly studioCallbackUrl: string;
+  /**
+   * The ID-token claim that marks a directory (LDAP/AD) user: a Keycloak user-attribute mapper
+   * of `LDAP_ID`. A user without it is a local user (ADR-0019 decision 3).
+   */
+  readonly directoryClaim: string;
 }
 
 export interface StorageConfig {
@@ -136,7 +220,10 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
         'pnpm db:*, pnpm test:db and pnpm verify only',
     );
   }
-  if (parsed.success) issues.push(...storageIssues(env, parsed.data.NODE_ENV));
+  if (parsed.success) {
+    issues.push(...storageIssues(env, parsed.data.NODE_ENV));
+    issues.push(...sessionIssues(env, parsed.data.NODE_ENV));
+  }
   if (!parsed.success || issues.length > 0) throw new InvalidConfigError(issues);
   const data = parsed.data;
   return Object.freeze({
@@ -144,6 +231,7 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
     nodeEnv: parsed.data.NODE_ENV,
     nodeEnvExplicit: env.NODE_ENV !== undefined,
     port: parsed.data.PORT,
+    host: parsed.data.HOST ?? null,
     logLevel: parsed.data.LOG_LEVEL,
     hostedTenants: Object.freeze([...parsed.data.HOSTED_TENANTS]),
     apiDocsEnabled: parsed.data.API_DOCS_ENABLED === 'true',
@@ -161,7 +249,61 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
             secretAccessKey: data.S3_SECRET_ACCESS_KEY,
           })
         : null,
+    session: Object.freeze({
+      secret:
+        data.SESSION_SECRET === undefined
+          ? randomBytes(32)
+          : Buffer.from(data.SESSION_SECRET, 'base64url'),
+      panelOrigins: Object.freeze(originsOf(data.PANEL_ORIGINS)),
+      staffSessionHours: data.STAFF_SESSION_HOURS,
+    }),
+    keycloak:
+      data.KEYCLOAK_URL && data.KEYCLOAK_STUDIO_CLIENT_SECRET && data.STUDIO_SIGN_IN_CALLBACK_URL
+        ? Object.freeze({
+            url: data.KEYCLOAK_URL.replace(/\/+$/, ''),
+            realmTemplate: data.KEYCLOAK_REALM_TEMPLATE,
+            studioClientId: data.KEYCLOAK_STUDIO_CLIENT_ID,
+            studioClientSecret: data.KEYCLOAK_STUDIO_CLIENT_SECRET,
+            studioCallbackUrl: data.STUDIO_SIGN_IN_CALLBACK_URL,
+            directoryClaim: data.KEYCLOAK_DIRECTORY_CLAIM,
+          })
+        : null,
   });
+}
+
+/** `PANEL_ORIGINS` as a list: comma-separated, trimmed, empty entries dropped. */
+function originsOf(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+}
+
+const ORIGIN = /^https?:\/\/[a-z0-9.-]+(:[0-9]{1,5})?$/;
+
+/**
+ * Keycloak's variables all or none, all in production; a session secret in production; panel
+ * origins that are origins (scheme, host, port), https in production.
+ */
+function sessionIssues(env: Record<string, string | undefined>, nodeEnv: string): string[] {
+  const production = nodeEnv === 'production';
+  const issues: string[] = [];
+  if (production && !env.SESSION_SECRET) {
+    issues.push('SESSION_SECRET: required in production (sessions, ADR-0004)');
+  }
+  for (const origin of originsOf(env.PANEL_ORIGINS)) {
+    if (!ORIGIN.test(origin) || (production && !origin.startsWith('https://'))) {
+      issues.push(`PANEL_ORIGINS: "${origin}" must be an origin${production ? ' over https' : ''}`);
+    }
+  }
+  const missing = KEYCLOAK_REQUIRED.filter((name) => !env[name]);
+  if (missing.length === 0 || (missing.length === KEYCLOAK_REQUIRED.length && !production)) {
+    return issues;
+  }
+  const reason = production
+    ? 'required in production (staff sign-in, ADR-0004)'
+    : `${KEYCLOAK_REQUIRED.join(', ')} are set together (staff sign-in, ADR-0004)`;
+  return [...issues, ...missing.map((name) => `${name}: ${reason}`)];
 }
 
 /** All of STORAGE_REQUIRED or none of them; all of them in production. */

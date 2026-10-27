@@ -1,0 +1,107 @@
+// The identity module (schema "identity"; Phase 1 slice 1.5): staff accounts, their opaque
+// server-side sessions, roles and role assignments (ADR-0004 as amended by ADR-0019 and
+// ADR-0020; ADR-0018 decision 6). Keycloak holds credentials and answers "who are you" only;
+// this schema holds who may do what. The CHECKs, the grants and the row-level security policies
+// are hand-written in the migration. Shape copied from the PoC 2 spike (identity.prisma).
+
+/// An account of one person in one tenant (ADR-0019: one account per employee). Staff accounts
+/// come from the tenant's directory (created on first sign-in, with no roles) or are local
+/// (created in studio before the first sign-in).
+model Account {
+  /// UUIDv7 from the IdGenerator.
+  id          String           @id @db.Uuid
+  tenantId    String           @map("tenant_id") @db.VarChar(32)
+  /// platform-operator | tenant-staff | portal-user. Fixed for the account's life.
+  population  String           @db.VarChar(32)
+  /// directory | local (ADR-0019 decision 3).
+  source      String           @db.VarChar(16)
+  /// The identity provider's subject (`sub`) of this person; null for a local account that has
+  /// not signed in yet. Set once, never changed.
+  subject     String?          @db.VarChar(255)
+  /// The sign-in name, lower case: how a local account is matched on its first sign-in. Never
+  /// logged, audited or put in an event.
+  username    String           @db.VarChar(255)
+  /// active | disabled
+  status      String           @db.VarChar(16)
+  version     Int
+  createdAt   DateTime         @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @map("updated_at") @db.Timestamptz(3)
+  sessions    Session[]
+  assignments RoleAssignment[]
+
+  @@unique([tenantId, id], map: "account_tenant_id_id_key")
+  @@unique([tenantId, subject], map: "account_tenant_id_subject_key")
+  @@unique([tenantId, username], map: "account_tenant_id_username_key")
+  @@map("account")
+  @@schema("identity")
+}
+
+/// An opaque server-side session (ADR-0004 decision 2): only the SHA-256 of the token is stored,
+/// and nothing about it is cached. Ending a session deletes its row.
+model Session {
+  id           String   @id @db.Uuid
+  tenantId     String   @map("tenant_id") @db.VarChar(32)
+  accountId    String   @map("account_id") @db.Uuid
+  /// SHA-256 of the session token: 32 bytes.
+  tokenHash    Bytes    @map("token_hash")
+  /// The identity provider's session id (`sid`), for back-channel logout.
+  idpSessionId String?  @map("idp_session_id") @db.VarChar(255)
+  createdAt    DateTime @map("created_at") @db.Timestamptz(3)
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(3)
+  account      Account  @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "session_account_fkey")
+
+  @@unique([tenantId, id], map: "session_tenant_id_id_key")
+  @@unique([tenantId, tokenHash], map: "session_tenant_id_token_hash_key")
+  @@index([tenantId, accountId], map: "session_tenant_id_account_id_idx")
+  @@index([tenantId, idpSessionId], map: "session_tenant_id_idp_session_id_idx")
+  @@map("session")
+  @@schema("identity")
+}
+
+/// A role of the tenant: a named set of permission keys (ADR-0004 decision 7). A system role
+/// holds every key of its scope by definition and stores none.
+model Role {
+  id             String           @id @db.Uuid
+  tenantId       String           @map("tenant_id") @db.VarChar(32)
+  /// Unique in the tenant, kebab case.
+  key            String           @db.VarChar(64)
+  /// system | default | custom
+  kind           String           @db.VarChar(16)
+  /// platform | tenant | site
+  scope          String           @db.VarChar(16)
+  /// The keys the role confers; empty for a system role. A key the registry does not declare
+  /// grants nothing.
+  permissionKeys String[]         @map("permission_keys") @db.VarChar(128)
+  version        Int
+  createdAt      DateTime         @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @map("updated_at") @db.Timestamptz(3)
+  assignments    RoleAssignment[]
+
+  @@unique([tenantId, id], map: "role_tenant_id_id_key")
+  @@unique([tenantId, key], map: "role_tenant_id_key_key")
+  @@map("role")
+  @@schema("identity")
+}
+
+/// A role granted to an account, at the role's own level (ADR-0018 decision 6): tenant-wide, or
+/// at one site of the tenancy module (an id, not a foreign key: no relation crosses schemas),
+/// for that site only or for its subtree too.
+model RoleAssignment {
+  id                 String   @id @db.Uuid
+  tenantId           String   @map("tenant_id") @db.VarChar(32)
+  accountId          String   @map("account_id") @db.Uuid
+  roleId             String   @map("role_id") @db.Uuid
+  /// platform | tenant | site; equals the role's scope.
+  level              String   @db.VarChar(16)
+  siteId             String?  @map("site_id") @db.Uuid
+  includeDescendants Boolean  @map("include_descendants")
+  createdAt          DateTime @map("created_at") @db.Timestamptz(3)
+  account            Account  @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "role_assignment_account_fkey")
+  role               Role     @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "role_assignment_role_fkey")
+
+  @@unique([tenantId, id], map: "role_assignment_tenant_id_id_key")
+  @@index([tenantId, accountId], map: "role_assignment_tenant_id_account_id_idx")
+  @@index([tenantId, roleId], map: "role_assignment_tenant_id_role_id_idx")
+  @@map("role_assignment")
+  @@schema("identity")
+}

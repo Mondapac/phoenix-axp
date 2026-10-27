@@ -1,1 +1,6 @@
-[]
+[
+  { "name": "identity.begin-staff-sign-in", "rule": "anonymous" },
+  { "name": "identity.complete-staff-sign-in", "rule": "anonymous" },
+  { "name": "identity.sign-out", "rule": "own-resources" },
+  { "name": "identity.view-own-account", "rule": "own-resources" }
+]
