@@ -25,7 +25,7 @@
 ## فایل‌های مشترک
 - `CLAUDE.md`، `README.md`، `PLAYBOOK-fa.md`، `TEAM-PLAYBOOK-fa.md`، `.claude/`
 - `docs/modules/README.md`، `docs/modules/_template/`، `docs/process/` (از جمله تابلو)
-- شماره‌گذاری `docs/adr/` و `docs/adr/README.md`، `docs/architecture/`، `docs/spec/`
+- شماره‌گذاری `docs/adr/` و `docs/adr/README.md`، `docs/phases/`
 - `package.json` ریشه، `pnpm-lock.yaml`، `pnpm-workspace.yaml`، `tsconfig*.json`، `eslint.config.mjs`، `prisma.config.ts` و فایل‌های نقطه‌دار ریشه
 - `.github/workflows/`، `docker-compose.yml`، `.env.example`
 - ترتیب migrationها در `prisma/`
