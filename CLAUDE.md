@@ -29,6 +29,8 @@ change one only through a new ADR or an "Amended by" note.
   AGPL, SSPL, BUSL and "sustainable use" licences are forbidden; CI checks licences.
 - **No hard dependency on a foreign SaaS or cloud service:** every external service sits behind
   a port with a self-hosted adapter (offline installs must work).
+- **In-house panel UI** (ADR-0016): `packages/ui` components on Base UI; no code, CSS, tokens,
+  icons or assets from Metronic or any other template (look and page structure as reference only).
 - **Persian and RTL from day one** (ADR-0008): logical CSS only, Jalali calendar, Persian digits,
   Persian text normalisation (ی/ي, ک/ك, ZWNJ) in search.
 
