@@ -7,17 +7,21 @@ Iran) and as SaaS from ONE codebase.
 
 Conventions are adapted from the MondaPac Marketplace Platform
 (github.com/Mondapac/mondapac-marketplace-platform; owner decision 2026-10-26: copy directly,
-adapt). "(MP ADR-xxxx)" means that repository's ADR. Phase 0 decisions are Accepted in
-docs/adr/0001..0015 (index: docs/adr/README.md). Follow them; change one only through a new
-ADR or an "Amended by" note.
+adapt). "(MP ADR-xxxx)" means that repository's ADR. Accepted decisions: docs/adr/0001..0015,
+0018, 0019 and 0020 (0018 to 0020 amend earlier ones; index: docs/adr/README.md). Follow them;
+change one only through a new ADR or an "Amended by" note.
 
 ## Non-negotiables
 - **Tenant is the first-class dimension** (MondaPac's Market rules applied to `tenant_id`,
   ADR-0002): every request, job and consumed event resolves to exactly one tenant; there is no
-  default tenant; a deployment rejects tenants not in `HOSTED_TENANTS`. Site sits under Tenant;
-  Organization (a tree) owns resources and scopes roles.
-- **Three populations** with separate sign-in and sessions: `platform-operator`, `tenant-staff`,
-  `portal-user`.
+  default tenant; a deployment rejects tenants not in `HOSTED_TENANTS`. One tenant per ministry
+  (or customer organisation); tenants share nothing. Site is a tree under Tenant (ADR-0018:
+  closure table, sharing only inside the tenant); Organization (a separate tree) owns resources
+  and scopes roles.
+- **Three populations** with separate sign-in and sessions: `platform-operator` (platform team
+  only), `tenant-staff`, `portal-user`. An operator is not a population: it is tenant-staff
+  holding management roles, one account per employee; staff sign in with a directory (AD/LDAP)
+  or a local account, as the tenant allows (ADR-0019).
 - **No literals in the core:** never hardcode a tenant, organisation, content type, language or
   calendar. If you write `if (tenant === 'x')`, stop and flag it to `cto`: it belongs in
   configuration or an extension point.
@@ -41,20 +45,26 @@ ADR or an "Amended by" note.
 - `platform/` holds cross-cutting runtime (authz, call-context, tenant-context, clock, ids,
   unit-of-work, persistence, events, scheduler, worker, audit, subject-keys, i18n, mail,
   storage, rate-limit, http, health, ai, extensions). `platform` never imports a module.
-- Deferral with triggers (ADR-0010): a platform piece lands no later than its first consumer.
-  Unbuilt facades bind to a `@FailClosedPlaceholder`; production refuses to start with any bound.
+- Deferral with triggers (ADR-0010): a platform piece lands no later than its first consumer,
+  or at phase start when the phase review lists it (ADR-0020). Unbuilt facades bind to a
+  `@FailClosedPlaceholder` that always refuses (allowed for a permission check too);
+  production refuses to start with any bound.
 
 ## Persistence (ADR-0003, ADR-0002, ADR-0007)
 - PostgreSQL 17, Prisma 7 with `@prisma/adapter-pg` and `multiSchema`: one DB schema per
   module, one `<module>.prisma` file.
 - Isolation, three layers: Prisma tenant guard (`where.tenantId` must equal the unit's tenant)
-  + PostgreSQL Row-Level Security + silo (separate database or on-prem deployment).
+  + PostgreSQL Row-Level Security, enabled and FORCEd on every tenant table + silo (separate
+  database or on-prem deployment).
 - UUIDv7 ids from `IdGenerator`; `timestamptz` from `Clock` only (no SQL `now()`); `version` on
-  aggregate roots (stale write = `409 conflict.stale`); `tenant_id` leads every index and unique key.
+  aggregate roots (stale write = `409 conflict.stale`); `tenant_id` leads every key and index,
+  except a single-column UUIDv7 `@id` (ADR-0020).
 - Separate migrator and app DB roles; the app is not superuser and checks its role at start-up;
   audit table is INSERT + SELECT only.
-- UnitOfWork: no HTTP, facade, hashing or model call inside a unit. Raw SQL only from the two
-  reviewed statement lists.
+- UnitOfWork: every unit is a transaction, reads included; the tenant is set only with
+  `set_config(..., true)` right after `BEGIN`, never at session level. PgBouncer only in
+  transaction mode (ADR-0020). No HTTP, facade, hashing or model call inside a unit. Raw SQL
+  only from the two reviewed statement lists.
 - Every entity declares a versioning pattern: V1 revisions, V2 effective-dated, V3 snapshot at
   reference (form submissions keep form and process revision + hash), V4 append-only history.
 - Personal data is encrypted under per-subject keys (`SubjectKeyService`); never in events,
@@ -68,8 +78,9 @@ ADR or an "Amended by" note.
 - After sign-in: opaque server-side session in PostgreSQL (only the SHA-256 of the token is
   stored), no session or permission cache, `__Host-` cookies (`SameSite=Strict` for admin),
   CSRF = HMAC of the session token + Origin check, one host per panel; the BFF sets
-  `x-tenant-id` from the host. Disabling a user in LDAP/Keycloak ends core sessions
-  (back-channel logout or sync).
+  `x-tenant-id` from the host. A role revoke or local-account disable applies on the next
+  request; a directory (LDAP/AD) disable applies on the next request after the scheduled
+  per-tenant sync, because Keycloak sends nothing for it (ADR-0020).
 - Authorisation in the application layer: every use case extends `UseCase` and declares a
   static `access` rule (`permissions` | `anonymous` | `own-resources` | `system`). Silence is
   never a default: a use case without a rule fails CI. `UseCaseGate` runs before `handle`;
@@ -79,21 +90,24 @@ ADR or an "Amended by" note.
 - Permission keys `<module>.<resource>.<action>` live in `contracts/permissions.ts` and are
   registered in `platform/authz`; unknown keys grant nothing. Roles: system, default (versioned
   seed) and custom; `GrantPolicy`, `LastHolderPolicy`, protected keys. Role scopes: platform,
-  tenant, site/organisation. Every permission change is audited.
+  tenant, site/organisation; a site grant is `thisSite` or `includeDescendants`, and access
+  flows only downward (ADR-0018). Every permission change is audited.
 
 ## Processes and forms (ADR-0005, ADR-0007)
 - Flowable OSS runs as a separate service. Only the `process` module talks to it, through a
   port. Core -> Flowable via outbox relay with idempotency keys; Flowable -> core via
-  `process.inbox` keyed `(event_id, handler)`. Flowable executes processes, timers and DMN; the
-  core owns task inbox, forms, authorisation and audit.
+  `process.inbox` keyed `(tenant_id, event_id, handler)`. The adapter passes the tenant on every
+  call and re-checks every returned object (ADR-0020). Flowable executes processes, timers and
+  DMN; the core owns task inbox, forms, authorisation and audit.
 - Forms: JSON Schema + UI Schema; published revisions are immutable; each user task points to
   one form revision.
 
 ## Events and audit (ADR-0006, ADR-0015)
 - Type `<module>.<subject>-<past-participle>.v<N>`; payloads via `defineEvent` with a closed
   field vocabulary (no free strings); events carry no actor; handlers run as the system actor.
-- Per-module outbox, relay in the worker (`FOR UPDATE SKIP LOCKED`), at-least-once delivery,
-  per-module inbox for idempotency. Jobs must be safe to run twice.
+- Per-module outbox, relay in the worker (`FOR UPDATE SKIP LOCKED`; a lease, not a row lock,
+  across an external call), at-least-once delivery, per-module inbox keyed
+  `(tenant_id, event_id, handler)` for idempotency (ADR-0020). Jobs must be safe to run twice.
 - `platform.audit_log` is append-only, written in the use case's transaction from a closed
   action catalogue, sealed with a hash chain; `audit-verify` checks it.
 
