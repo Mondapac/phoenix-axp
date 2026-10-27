@@ -9,6 +9,7 @@ import {
 } from '../domain/audit-actions';
 import {
   isSyncDue,
+  isSyncNowAllowed,
   shouldHalt,
   syncChangeOf,
   type DirectoryStatus,
@@ -57,7 +58,10 @@ export class DirectorySyncRunner {
     private readonly clock: Clock,
   ) {}
 
-  /** `scheduled` runs only when due; `requested` ("sync now") runs whenever it can claim. */
+  /**
+   * `scheduled` runs only when due; `requested` ("sync now") runs whenever it can claim, except
+   * within the "sync now" cooldown of the last start.
+   */
   async run(context: CallContext, mode: 'scheduled' | 'requested'): Promise<SyncSummary> {
     const { tenant } = context;
     const claimed = await this.unitOfWork.run<{ previous: SyncOutcome | null } | null, never>(
@@ -68,6 +72,9 @@ export class DirectorySyncRunner {
         if (mode === 'scheduled' && !isSyncDue(state.lastStartedAt, state.intervalMinutes, now)) {
           return ok(null);
         }
+        // "Sync now" right after another start is answered `skipped`: repeated clicks or a
+        // script do not stack full runs on the tenant's Keycloak and directory.
+        if (mode === 'requested' && !isSyncNowAllowed(state.lastStartedAt, now)) return ok(null);
         const won = await this.syncs.claim(tenant, state.lastStartedAt, now);
         return ok(won ? { previous: state.lastOutcome } : null);
       },
@@ -76,6 +83,7 @@ export class DirectorySyncRunner {
     const { previous } = claimed.value;
 
     const accounts = await this.readAll(context);
+    if (accounts === null) return this.finish(context, previous, 'failed', 0, 0, 0);
     const statuses = new Map<string, DirectoryStatus>();
     for (let at = 0; at < accounts.length; at += ASK_BATCH) {
       const batch = accounts.slice(at, at + ASK_BATCH);
@@ -95,52 +103,62 @@ export class DirectorySyncRunner {
       return change === 'none' ? [] : [{ account, change }];
     });
     const toDisable = changes.filter((c) => c.change === 'disable').length;
-    if (shouldHalt(accounts.length, toDisable)) {
+    // Measured over the active accounts: leavers already disabled must not dilute the share.
+    const active = accounts.filter((account) => account.status === 'active').length;
+    if (shouldHalt(active, toDisable)) {
       return this.finish(context, previous, 'halted', accounts.length, 0, 0);
     }
 
     let disabled = 0;
     let enabled = 0;
-    for (let at = 0; at < changes.length; at += APPLY_BATCH) {
-      const applied = await this.unitOfWork.run(tenant, async () => {
-        const now = this.clock.now();
-        const done = { disabled: 0, enabled: 0 };
-        for (const { account, change } of changes.slice(at, at + APPLY_BATCH)) {
-          const status = change === 'disable' ? 'disabled' : 'active';
-          if (
-            !(await this.accounts.setStatusIfUnchanged(
-              tenant,
-              account.id,
-              account.version,
-              status,
-              now,
-            ))
-          ) {
-            continue;
+    try {
+      for (let at = 0; at < changes.length; at += APPLY_BATCH) {
+        const applied = await this.unitOfWork.run(tenant, async () => {
+          const now = this.clock.now();
+          const done = { disabled: 0, enabled: 0 };
+          for (const { account, change } of changes.slice(at, at + APPLY_BATCH)) {
+            const status = change === 'disable' ? 'disabled' : 'active';
+            if (
+              !(await this.accounts.setStatusIfUnchanged(
+                tenant,
+                account.id,
+                account.version,
+                status,
+                now,
+              ))
+            ) {
+              continue;
+            }
+            if (change === 'disable') {
+              const sessionsEnded = await this.sessions.endAllOf(tenant, account.id);
+              await this.audit.record(
+                context,
+                ACCOUNT_DISABLED_BY_DIRECTORY.entry(account.id, { after: { sessionsEnded } }),
+              );
+              done.disabled += 1;
+            } else {
+              await this.audit.record(context, ACCOUNT_ENABLED_BY_DIRECTORY.entry(account.id, {}));
+              done.enabled += 1;
+            }
           }
-          if (change === 'disable') {
-            const sessionsEnded = await this.sessions.endAllOf(tenant, account.id);
-            await this.audit.record(
-              context,
-              ACCOUNT_DISABLED_BY_DIRECTORY.entry(account.id, { after: { sessionsEnded } }),
-            );
-            done.disabled += 1;
-          } else {
-            await this.audit.record(context, ACCOUNT_ENABLED_BY_DIRECTORY.entry(account.id, {}));
-            done.enabled += 1;
-          }
+          return ok(done);
+        });
+        if (applied.ok) {
+          disabled += applied.value.disabled;
+          enabled += applied.value.enabled;
         }
-        return ok(done);
-      });
-      if (applied.ok) {
-        disabled += applied.value.disabled;
-        enabled += applied.value.enabled;
       }
+    } catch (error) {
+      // Earlier batches stay applied; the run is recorded as failed with what it did, then the
+      // job sees the error.
+      await this.finish(context, previous, 'failed', accounts.length, disabled, enabled);
+      throw error;
     }
     return this.finish(context, previous, 'completed', accounts.length, disabled, enabled);
   }
 
-  private async readAll(context: CallContext): Promise<DirectoryAccount[]> {
+  /** Every directory account of the tenant, or null when a page could not be read. */
+  private async readAll(context: CallContext): Promise<DirectoryAccount[] | null> {
     const { tenant } = context;
     const all: DirectoryAccount[] = [];
     for (;;) {
@@ -150,7 +168,7 @@ export class DirectorySyncRunner {
         async () => ok(await this.accounts.directoryAccounts(tenant, after, READ_BATCH)),
         { readOnly: true },
       );
-      if (!page.ok) return all;
+      if (!page.ok) return null;
       all.push(...page.value);
       if (page.value.length < READ_BATCH) return all;
     }

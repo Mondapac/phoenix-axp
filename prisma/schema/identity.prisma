@@ -121,7 +121,7 @@ model DirectorySync {
   accountsChecked   Int       @map("accounts_checked")
   accountsDisabled  Int       @map("accounts_disabled")
   accountsEnabled   Int       @map("accounts_enabled")
-  /// Optimistic concurrency of the interval; a run claim bumps it too.
+  /// Optimistic concurrency of the interval only; a run claims on last_started_at instead.
   version           Int
   updatedAt         DateTime  @map("updated_at") @db.Timestamptz(3)
 

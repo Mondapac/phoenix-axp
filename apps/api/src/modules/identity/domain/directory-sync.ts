@@ -37,6 +37,20 @@ export function isSyncDue(
   );
 }
 
+/** "Sync now" waits this long after the last start of any run. */
+export const SYNC_NOW_COOLDOWN_SECONDS = 30;
+
+export function isSyncNowAllowed(
+  lastStartedAt: Temporal.Instant | null,
+  now: Temporal.Instant,
+): boolean {
+  return (
+    lastStartedAt === null ||
+    lastStartedAt.add({ seconds: SYNC_NOW_COOLDOWN_SECONDS }).epochMilliseconds <=
+      now.epochMilliseconds
+  );
+}
+
 /** How a run ended: applied, stopped by the directory, or stopped by the safety stop. */
 export const SYNC_OUTCOMES = ['completed', 'failed', 'halted'] as const;
 export type SyncOutcome = (typeof SYNC_OUTCOMES)[number];
@@ -58,14 +72,14 @@ export function syncChangeOf(account: AccountStatus, directory: DirectoryStatus)
 }
 
 /**
- * The safety stop of a run: when a large share of the accounts checked would be disabled at
- * once, the directory link is more likely broken (a wrong base DN, an LDAP outage reported as
+ * The safety stop of a run: when a large share of the active accounts checked would be
+ * disabled at once, the directory link is more likely broken (a wrong base DN, an LDAP outage reported as
  * "not found") than the people gone, so the run halts before changing anything and reports
- * `halted`. Applies from {@link HALT_MIN_CHECKED} accounts, above {@link HALT_SHARE}.
+ * `halted`. Applies from {@link HALT_MIN_CHECKED} active accounts, above {@link HALT_SHARE}.
  */
 export const HALT_MIN_CHECKED = 10;
 export const HALT_SHARE = 0.5;
 
-export function shouldHalt(checked: number, toDisable: number): boolean {
-  return checked >= HALT_MIN_CHECKED && toDisable > checked * HALT_SHARE;
+export function shouldHalt(active: number, toDisable: number): boolean {
+  return active >= HALT_MIN_CHECKED && toDisable > active * HALT_SHARE;
 }

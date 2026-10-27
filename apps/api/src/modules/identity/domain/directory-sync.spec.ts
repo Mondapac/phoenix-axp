@@ -2,6 +2,7 @@ import { Temporal } from '@phoenix/shared-kernel';
 import {
   DEFAULT_SYNC_INTERVAL_MINUTES,
   isSyncDue,
+  isSyncNowAllowed,
   parseSyncInterval,
   shouldHalt,
   syncChangeOf,
@@ -27,6 +28,12 @@ describe('the staff directory sync rules', () => {
     expect(isSyncDue(NOW.subtract({ minutes: 4, seconds: 59 }), 5, NOW)).toBe(false);
     expect(isSyncDue(NOW.subtract({ minutes: 5 }), 5, NOW)).toBe(true);
     expect(isSyncDue(NOW.subtract({ minutes: 30 }), 60, NOW)).toBe(false);
+  });
+
+  it('lets "sync now" run 30 seconds after the last start, not sooner', () => {
+    expect(isSyncNowAllowed(null, NOW)).toBe(true);
+    expect(isSyncNowAllowed(NOW.subtract({ seconds: 29 }), NOW)).toBe(false);
+    expect(isSyncNowAllowed(NOW.subtract({ seconds: 30 }), NOW)).toBe(true);
   });
 
   it('makes a directory account follow its directory user', () => {

@@ -518,6 +518,11 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
 
     describe('the directory sync (owner decision P6)', () => {
       const system = testCallContext(tenant, 'system');
+      /** "Sync now" a minute after whatever ran before: past the 30 s cooldown. */
+      const syncNow = (context: CallContext = admin) => {
+        clock.advance(Temporal.Duration.from({ minutes: 1 }));
+        return identity.syncNow.execute(context, undefined);
+      };
       const statusOf = async (accountId: Id<'Account'>) => {
         const listed = await identity.list.execute(admin, undefined);
         if (!listed.ok) throw new Error('list failed');
@@ -531,7 +536,12 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
           ok: true,
           value: { outcome: 'skipped' },
         });
+        // "Sync now" right after a start is skipped; a minute later it runs.
         expect(await identity.syncNow.execute(admin, undefined)).toMatchObject({
+          ok: true,
+          value: { outcome: 'skipped' },
+        });
+        expect(await syncNow()).toMatchObject({
           ok: true,
           value: { outcome: 'completed' },
         });
@@ -554,10 +564,25 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         const plain = await contextOf(
           (await signedIn({ username: unique('plain'), directory: true })).sessionToken,
         );
-        expect(await identity.syncNow.execute(plain, undefined)).toEqual({
-          ok: false,
-          error: { code: 'access.denied' },
-        });
+        for (const refused of [
+          await syncNow(plain),
+          await identity.viewSync.execute(plain, undefined),
+          await identity.setInterval.execute(plain, { version: 1, intervalMinutes: 10 }),
+        ]) {
+          expect(refused).toEqual({ ok: false, error: { code: 'access.denied' } });
+        }
+      });
+
+      it('runs once when two scheduled runs start together', async () => {
+        clock.advance(Temporal.Duration.from({ minutes: 60 }));
+        const runs = await Promise.all([
+          identity.sync.execute(system, undefined),
+          identity.sync.execute(system, undefined),
+        ]);
+        expect(runs.map((run) => run.ok && run.value.outcome).sort()).toEqual([
+          'completed',
+          'skipped',
+        ]);
       });
 
       it('disables a person disabled or gone in AD, ends their sessions, and re-enables them', async () => {
@@ -565,12 +590,16 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         const offName = unique('off');
         const gone = await signedIn({ username: goneName, directory: true });
         const off = await signedIn({ username: offName, directory: true });
-        const local = await identity.create.execute(admin, { username: unique('loc') });
+        const localName = unique('loc');
+        const local = await identity.create.execute(admin, { username: localName });
         if (!local.ok) throw new Error(local.error.code);
+        // A linked local account: the directory never decides about it, even when it says gone.
+        await signedIn({ username: localName, directory: false });
+        directory.statuses.set(`sub-${localName}`, 'missing');
         directory.statuses.set(`sub-${goneName}`, 'missing');
         directory.statuses.set(`sub-${offName}`, 'disabled');
 
-        const ran = await identity.syncNow.execute(admin, undefined);
+        const ran = await syncNow();
         expect(ran).toMatchObject({
           ok: true,
           value: { outcome: 'completed', accountsDisabled: 2 },
@@ -584,7 +613,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         expect(audit.actions()).toContain('identity.account.disabled-by-directory');
 
         directory.statuses.set(`sub-${offName}`, 'enabled');
-        expect(await identity.syncNow.execute(admin, undefined)).toMatchObject({
+        expect(await syncNow()).toMatchObject({
           ok: true,
           value: { outcome: 'completed', accountsDisabled: 0, accountsEnabled: 1 },
         });
@@ -602,7 +631,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         const kept = await signedIn({ username: keptName, directory: true });
         directory.statuses.set(`sub-${keptName}`, 'disabled');
         directory.down = true;
-        expect(await identity.syncNow.execute(admin, undefined)).toMatchObject({
+        expect(await syncNow()).toMatchObject({
           ok: true,
           value: { outcome: 'failed', accountsDisabled: 0 },
         });
@@ -614,7 +643,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
           await signedIn({ username: unique('crowd'), directory: true });
         directory.everyone = 'missing';
         try {
-          expect(await identity.syncNow.execute(admin, undefined)).toMatchObject({
+          expect(await syncNow()).toMatchObject({
             ok: true,
             value: { outcome: 'halted', accountsDisabled: 0 },
           });
@@ -634,14 +663,16 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       it('sets the interval within 1 to 60 minutes, with a version a run does not change', async () => {
         const before = await identity.viewSync.execute(admin, undefined);
         if (!before.ok) throw new Error('view failed');
-        await identity.syncNow.execute(admin, undefined);
+        await syncNow();
         const { version } = before.value;
         // A different value per tenant fixture, so each sees only its own.
         const minutes = 15 + TEST_TENANTS.indexOf(code);
-        expect(await identity.setInterval.execute(admin, { version, intervalMinutes: 0 })).toEqual({
-          ok: false,
-          error: { code: 'identity.value.invalid', field: 'intervalMinutes' },
-        });
+        for (const intervalMinutes of [0, 61]) {
+          expect(await identity.setInterval.execute(admin, { version, intervalMinutes })).toEqual({
+            ok: false,
+            error: { code: 'identity.value.invalid', field: 'intervalMinutes' },
+          });
+        }
         expect(
           await identity.setInterval.execute(admin, { version, intervalMinutes: minutes }),
         ).toEqual({

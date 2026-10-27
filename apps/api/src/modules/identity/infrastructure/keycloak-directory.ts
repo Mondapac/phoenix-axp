@@ -47,7 +47,11 @@ export class KeycloakDirectory implements StaffDirectory {
       while (!failed && next < subjects.length) {
         const subject = subjects[next++]!;
         const status = await this.#statusOfOne(admin, token, subject);
-        if (status === null) failed = true;
+        if (status === 'unauthorised') {
+          // A rotated secret or a revoked role: the next run fetches a new token.
+          this.#tokens.delete(realmIssuer(this.config, tenant));
+          failed = true;
+        } else if (status === null) failed = true;
         else statuses.set(subject, status);
       }
     };
@@ -63,13 +67,18 @@ export class KeycloakDirectory implements StaffDirectory {
     admin: string,
     token: string,
     subject: string,
-  ): Promise<DirectoryStatus | null> {
+  ): Promise<DirectoryStatus | 'unauthorised' | null> {
     const answer = await this.#request(`${admin}/users/${encodeURIComponent(subject)}`, {
       method: 'GET',
       headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
     });
     if (answer === null) return null;
-    if (answer.status === 404) return 'missing';
+    if (answer.status === 401 || answer.status === 403) return 'unauthorised';
+    // Keycloak's own "user not found" carries a JSON error; a bare 404 (a wrong path, a proxy)
+    // is not evidence that the person is gone.
+    if (answer.status === 404) {
+      return isRecord(answer.json) && typeof answer.json.error === 'string' ? 'missing' : null;
+    }
     if (answer.status !== 200 || !isRecord(answer.json)) return null;
     if (answer.json.id !== subject || typeof answer.json.enabled !== 'boolean') return null;
     return answer.json.enabled ? 'enabled' : 'disabled';

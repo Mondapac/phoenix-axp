@@ -305,6 +305,17 @@ describe('loadAppConfig', () => {
       ]);
     });
 
+    it('requires https to Keycloak in production', () => {
+      expect(
+        issuesOf({
+          HOSTED_TENANTS: 'demo-fa',
+          NODE_ENV: 'production',
+          ...PRODUCTION_SESSION,
+          KEYCLOAK_URL: 'http://sso.example.test',
+        }).filter((issue) => issue.startsWith('KEYCLOAK')),
+      ).toEqual(['KEYCLOAK_URL: must be https in production (client secrets, ADR-0004)']);
+    });
+
     it('never puts a secret in an issue', () => {
       const issues = issuesOf({
         HOSTED_TENANTS: 'demo-fa',

@@ -113,6 +113,16 @@ describe.each(TEST_TENANTS)('KeycloakDirectory in tenant %s', (code) => {
     expect((await new UnconfiguredDirectory().statusOf()).ok).toBe(false);
   });
 
+  it('counts only Keycloak\'s own "not found" as gone, and drops a refused token', async () => {
+    const bare = keycloak({ a: { status: 404, json: null } });
+    expect((await bare.directory.statusOf(tenant, ['a'])).ok).toBe(false);
+
+    const { directory, requests } = keycloak({ a: { status: 401, json: { error: 'x' } } });
+    expect((await directory.statusOf(tenant, ['a'])).ok).toBe(false);
+    await directory.statusOf(tenant, ['a']);
+    expect(requests.filter((request) => request.url.endsWith('/token'))).toHaveLength(2);
+  });
+
   it('escapes the subject in the admin URL', async () => {
     const { directory, requests } = keycloak({ '../x': user('../x', true) });
     await directory.statusOf(tenant, ['../x']);

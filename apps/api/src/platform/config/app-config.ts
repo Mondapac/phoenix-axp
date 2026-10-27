@@ -311,6 +311,10 @@ function sessionIssues(env: Record<string, string | undefined>, nodeEnv: string)
     }
   }
   // Without the admin client a directory disable never reaches the core (ADR-0022 decision 6).
+  // Client secrets and the admin bearer token travel to Keycloak: never in clear text.
+  if (production && env.KEYCLOAK_URL && !env.KEYCLOAK_URL.startsWith('https://')) {
+    issues.push('KEYCLOAK_URL: must be https in production (client secrets, ADR-0004)');
+  }
   if (production && !env.KEYCLOAK_ADMIN_CLIENT_SECRET) {
     issues.push('KEYCLOAK_ADMIN_CLIENT_SECRET: required in production (directory sync, ADR-0022)');
   }
