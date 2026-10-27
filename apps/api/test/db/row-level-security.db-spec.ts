@@ -73,12 +73,38 @@ describe('row-level security (database integration, ADR-02)', () => {
       (row) => row.label,
     );
 
-  it('the rows of both tenants exist (seen by the owner, who is not subject to the policy)', async () => {
-    const { rows } = await owner.query<{ tenant_id: string; count: string }>(
-      'SELECT tenant_id, count(*) FROM platform.isolation_probe GROUP BY tenant_id',
-    );
+  it('the rows of both tenants exist (each seen under its own tenant setting)', async () => {
     for (const code of TEST_TENANTS) {
-      expect(Number(rows.find((row) => row.tenant_id === code)?.count)).toBeGreaterThanOrEqual(2);
+      const visible = await inTransaction(async () => {
+        await setTenant(code);
+        return labels();
+      });
+      expect(visible).toEqual(expect.arrayContaining(seeded.get(code)!));
+    }
+  });
+
+  it('the owner (the migration role) is subject to the policy too: FORCE, so it sees no row', async () => {
+    const { rows } = await owner.query<{ count: string }>(
+      'SELECT count(*) FROM platform.isolation_probe',
+    );
+    expect(Number(rows[0]!.count)).toBe(0);
+    await owner.query('BEGIN');
+    try {
+      // Even with a tenant set: the policy names phoenix_app only, so the owner matches none.
+      await owner.query("SELECT pg_catalog.set_config('app.tenant_id', $1, true)", [
+        TEST_TENANTS[0],
+      ]);
+      const seen = await owner.query('SELECT label FROM platform.isolation_probe');
+      expect(seen.rowCount).toBe(0);
+      await expect(
+        owner.query(
+          'INSERT INTO platform.isolation_probe (id, tenant_id, label, created_at) ' +
+            'VALUES (gen_random_uuid(), $1, $2, now())',
+          [TEST_TENANTS[0], uniqueLabel()],
+        ),
+      ).rejects.toMatchObject({ code: SQLSTATE_RLS_VIOLATION });
+    } finally {
+      await owner.query('ROLLBACK');
     }
   });
 
@@ -195,14 +221,14 @@ describe('row-level security (database integration, ADR-02)', () => {
     }
   });
 
-  it('every table with a tenant_id column has row-level security and a tenant policy', async () => {
+  it('every table with a tenant_id column has row-level security (enabled and forced) and a tenant policy', async () => {
     const { rows } = await owner.query<{
       relation: string;
       rls: boolean;
       policies: string[] | null;
     }>(`
       SELECT n.nspname || '.' || c.relname AS relation,
-             c.relrowsecurity AS rls,
+             c.relrowsecurity AND c.relforcerowsecurity AS rls,
              (SELECT array_agg(p.polname::text ORDER BY p.polname)
                 FROM pg_catalog.pg_policy p
                WHERE p.polrelid = c.oid

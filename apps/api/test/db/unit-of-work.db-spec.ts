@@ -78,6 +78,7 @@ describe('UnitOfWork (database integration)', () => {
   let db: Persistence;
   let driver: ReturnType<typeof recordDriverStatements>;
   let owner: Client;
+  let reader: Client;
 
   beforeAll(async () => {
     driver = recordDriverStatements();
@@ -85,19 +86,34 @@ describe('UnitOfWork (database integration)', () => {
     owner = new Client({ connectionString: lockingOwnerTestDatabaseUrl() });
     await owner.connect();
     await owner.query(TEST_ONLY_TRIGGERS);
+    reader = new Client({ connectionString: lockingTestDatabaseUrl() });
+    await reader.connect();
   });
 
   afterAll(async () => {
     await owner.query(DROP_TEST_ONLY_TRIGGERS);
     await owner.end();
+    await reader.end();
     await db.close();
     driver.restore();
   });
 
-  /** Whether a row exists, read by the owner (not subject to row-level security). */
-  const rowExists = async (id: string): Promise<boolean> =>
-    (await owner.query('SELECT 1 FROM platform.isolation_probe WHERE id = $1', [id])).rowCount ===
-    1;
+  /**
+   * Whether a committed row exists, read on a connection of its own as the application login
+   * with the row's tenant set. The owner sees no row: row-level security is forced on it too.
+   */
+  const rowExists = async (row: { id: string; tenantId: string }): Promise<boolean> => {
+    await reader.query('BEGIN READ ONLY');
+    try {
+      await reader.query("SELECT pg_catalog.set_config('app.tenant_id', $1, true)", [row.tenantId]);
+      const found = await reader.query('SELECT 1 FROM platform.isolation_probe WHERE id = $1', [
+        row.id,
+      ]);
+      return found.rowCount === 1;
+    } finally {
+      await reader.query('ROLLBACK');
+    }
+  };
 
   const insert = (tenant: TenantContext, row: ReturnType<typeof probeRow>) =>
     db.service.tx(tenant).isolationProbe.create({ data: row });
@@ -115,7 +131,7 @@ describe('UnitOfWork (database integration)', () => {
         });
 
         expect(result).toEqual({ ok: true, value: 'saved' });
-        await expect(rowExists(row.id)).resolves.toBe(true);
+        await expect(rowExists(row)).resolves.toBe(true);
       });
 
       it('commits nothing for an err result and returns it unchanged', async () => {
@@ -127,7 +143,7 @@ describe('UnitOfWork (database integration)', () => {
         });
 
         expect(result).toEqual({ ok: false, error: refusal });
-        await expect(rowExists(row.id)).resolves.toBe(false);
+        await expect(rowExists(row)).resolves.toBe(false);
       });
 
       it('commits nothing when work throws, and rethrows the error', async () => {
@@ -139,7 +155,7 @@ describe('UnitOfWork (database integration)', () => {
         });
 
         await expect(run).rejects.toBe(failure);
-        await expect(rowExists(row.id)).resolves.toBe(false);
+        await expect(rowExists(row)).resolves.toBe(false);
       });
     });
 
@@ -198,7 +214,7 @@ describe('UnitOfWork (database integration)', () => {
         );
 
         await expect(late).rejects.toThrow(TenantGuardError);
-        await expect(rowExists(row.id)).resolves.toBe(false);
+        await expect(rowExists(row)).resolves.toBe(false);
       });
     });
 
@@ -268,7 +284,7 @@ describe('UnitOfWork (database integration)', () => {
         });
 
         await expect(run).rejects.toThrow(TenantGuardError);
-        await expect(rowExists(row.id)).resolves.toBe(false);
+        await expect(rowExists(row)).resolves.toBe(false);
       });
     });
 
@@ -317,7 +333,7 @@ describe('UnitOfWork (database integration)', () => {
         });
 
         expect(result).toEqual({ ok: true, value: 2 });
-        await expect(rowExists(final.id)).resolves.toBe(true);
+        await expect(rowExists(final)).resolves.toBe(true);
       });
     });
   });
