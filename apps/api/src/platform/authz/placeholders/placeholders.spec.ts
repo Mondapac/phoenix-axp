@@ -20,6 +20,7 @@ import {
 } from '../authorisation-check';
 import { AuthzModule } from '../authz.module';
 import { FIELD_RULE_READER } from '../field-policy';
+import { ROLE_HOLDING_READER } from '../role-holdings';
 import { SITE_ANCESTRY_READER, type SiteAncestryReader } from '../site-scope';
 import { USE_CASE_GATE } from '../use-case-gate.token';
 import { placeholderMarkOf } from '../../placeholders/placeholder-markers';
@@ -27,6 +28,7 @@ import { AUTHENTICATOR } from '../authenticator';
 import { FailClosedAuthenticator } from './fail-closed-authenticator';
 import { FailClosedAuthorisationCheck } from './fail-closed-authorisation-check';
 import { FailClosedFieldRuleReader } from './fail-closed-field-rule-reader';
+import { FailClosedRoleHoldingReader } from './fail-closed-role-holding-reader';
 import { FailClosedSiteAncestryReader } from './fail-closed-site-ancestry-reader';
 
 const id = <K extends string>(n: number): Id<K> => {
@@ -64,6 +66,10 @@ describe.each(TEST_TENANTS)('the authz placeholders in tenant %s', (code) => {
     await expect(new FailClosedFieldRuleReader().grantsFor()).resolves.toEqual([]);
   });
 
+  it('answers no role holding, so no task queue admits anybody', async () => {
+    await expect(new FailClosedRoleHoldingReader().holdingsOf()).resolves.toEqual([]);
+  });
+
   it('answers that no site exists or is within any subtree', async () => {
     const reader: SiteAncestryReader = new FailClosedSiteAncestryReader();
     await expect(reader.isWithinSubtree(staff, id(3), id(4))).resolves.toBe(false);
@@ -81,6 +87,9 @@ describe('the placeholder marks', () => {
     });
     expect(placeholderMarkOf(FailClosedFieldRuleReader)).toMatchObject({
       port: 'identity.fieldRuleReader',
+    });
+    expect(placeholderMarkOf(FailClosedRoleHoldingReader)).toMatchObject({
+      port: 'identity.roleHoldingReader',
     });
     expect(placeholderMarkOf(FailClosedSiteAncestryReader)).toMatchObject({
       port: 'tenancy.isWithinSubtree',
@@ -118,8 +127,9 @@ class RealFieldRules {
     { provide: AUTHORISATION_CHECK, useClass: RealCheck },
     { provide: AUTHENTICATOR, useClass: RealAuthenticator },
     { provide: FIELD_RULE_READER, useClass: RealFieldRules },
+    { provide: ROLE_HOLDING_READER, useClass: RealFieldRules },
   ],
-  exports: [AUTHORISATION_CHECK, AUTHENTICATOR, FIELD_RULE_READER],
+  exports: [AUTHORISATION_CHECK, AUTHENTICATOR, FIELD_RULE_READER, ROLE_HOLDING_READER],
 })
 class IdentityStandIn {}
 
@@ -155,6 +165,7 @@ describe('AuthzModule.register', () => {
       'identity.authenticator',
       'identity.authorisationCheck',
       'identity.fieldRuleReader',
+      'identity.roleHoldingReader',
       'tenancy.isWithinSubtree',
     ]);
     expect(gate).toBeDefined();
@@ -165,6 +176,7 @@ describe('AuthzModule.register', () => {
       authentication: IdentityStandIn,
       authorisation: IdentityStandIn,
       fieldRules: IdentityStandIn,
+      roleHoldings: IdentityStandIn,
       siteAncestry: TenancyStandIn,
     });
     expect(found).toEqual([]);

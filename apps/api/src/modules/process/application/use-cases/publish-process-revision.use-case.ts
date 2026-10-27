@@ -6,6 +6,7 @@ import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work'
 import { PROCESS_DEFINITIONS_PUBLISH } from '../../contracts/permissions';
 import { PROCESS_REVISION_PUBLISHED } from '../../domain/audit-actions';
 import { checkBpmn } from '../../domain/bpmn-guard';
+import { attributesOf } from '../../domain/task-settings';
 import type { EngineCommands } from '../engine-commands';
 import type { BpmnRefusal } from '../failures';
 import type { BridgeHashing } from '../ports/bridge-hashing';
@@ -58,6 +59,10 @@ export class PublishProcessRevision extends UseCase<
     const checked = checkBpmn(input.bpmnXml, input.processKey);
     if (!checked.ok) return Promise.resolve(checked);
     const contentHash = this.hashing.contentHash(input.bpmnXml);
+    // The core's settings of each user task (ADR-0025), applied when the sync sees the task.
+    const taskSettings = Object.fromEntries(
+      [...checked.value.userTasks].map(([taskKey, settings]) => [taskKey, attributesOf(settings)]),
+    );
     const id = this.ids.next<'ProcessRevision'>();
     const { tenant } = context;
 
@@ -67,7 +72,14 @@ export class PublishProcessRevision extends UseCase<
       const revision = (await this.repository.latestRevisionNumber(tenant, input.processKey)) + 1;
       await this.repository.insertRevision(
         tenant,
-        { id, processKey: input.processKey, revision, bpmnXml: input.bpmnXml, contentHash },
+        {
+          id,
+          processKey: input.processKey,
+          revision,
+          bpmnXml: input.bpmnXml,
+          contentHash,
+          taskSettings,
+        },
         this.clock.now(),
       );
       await this.commands.deployRevision(context, { id });

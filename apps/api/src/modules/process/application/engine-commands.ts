@@ -39,25 +39,36 @@ export class EngineCommands {
   }
 
   /**
-   * Asks the engine to complete an open task (slice 2.3 decides who may): the task moves to
-   * `completing` with the command id as its completion key (PoC 3 R4). False when the task is
-   * not open or changed meanwhile; nothing is written then.
+   * Asks the engine to complete an open task (the inbox decides who may): the task moves to
+   * `completing` with the command id as its completion key (PoC 3 R4), held by `assignee` when
+   * given, with the outcome the person picked; the engine receives it as `phoenixOutcome`.
+   * False when the task is not open or changed meanwhile; nothing is written then.
    */
   async completeTask(
     context: CallContext,
     task: TaskRecord,
     variables: EngineVariables,
+    completion: {
+      readonly assigneeAccountId: Id<'Account'> | null;
+      readonly outcome: string | null;
+    } = { assigneeAccountId: null, outcome: null },
   ): Promise<boolean> {
     if (!canRequestCompletion(task)) return false;
     const id = this.ids.next<'EngineCommand'>();
-    if (!(await this.repository.markCompleting(context.tenant, task, id))) return false;
+    if (!(await this.repository.markCompleting(context.tenant, task, id, completion))) {
+      return false;
+    }
     await this.write(
       context.tenant,
       context.correlationId,
       {
         kind: 'complete-task',
         subjectId: task.id,
-        payload: { engineTaskId: task.engineTaskId, variables: { ...variables } },
+        payload: {
+          engineTaskId: task.engineTaskId,
+          variables: { ...variables },
+          ...(completion.outcome === null ? {} : { outcome: completion.outcome }),
+        },
       },
       id,
     );

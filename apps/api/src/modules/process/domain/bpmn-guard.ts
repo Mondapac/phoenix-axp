@@ -1,5 +1,11 @@
 import { err, ok } from '@phoenix/shared-kernel';
 import type { Result } from '@phoenix/shared-kernel';
+import {
+  parseTaskSettings,
+  TASK_SETTING_ATTRIBUTES,
+  type InvalidTaskSetting,
+  type TaskSettings,
+} from './task-settings';
 
 /**
  * The intake check of a BPMN model before it is stored and deployed (ADR-0005; security review
@@ -20,7 +26,8 @@ import type { Result } from '@phoenix/shared-kernel';
  *   task (a boundary event of that task does not count as passing it), no repeating timer, and
  *   no start event definition: only the core starts instances (one tenant's model must not
  *   hold the shared engine);
- * - exactly one executable process, whose id is the published process key.
+ * - exactly one executable process, whose id is the published process key;
+ * - the core's own user task settings (task-settings.ts) on user tasks only, each valid.
  *
  * It is a scanner of the XML grammar, not a parser: anything it cannot read is refused. Pure,
  * no I/O.
@@ -39,7 +46,13 @@ export type BpmnRefusal =
   /** A loop without a user task, or more than MAX_FLOW_NODES nodes. */
   | { readonly code: 'process.bpmn.unbounded-flow' }
   /** `field` is the element or attribute name, or `expression`: never a value. */
-  | { readonly code: 'process.bpmn.forbidden-construct'; readonly field: string };
+  | { readonly code: 'process.bpmn.forbidden-construct'; readonly field: string }
+  | InvalidTaskSetting;
+
+/** What the check read of an accepted model: the core's settings of each user task, by id. */
+export interface CheckedModel {
+  readonly userTasks: ReadonlyMap<string, TaskSettings>;
+}
 
 const MALFORMED: BpmnRefusal = Object.freeze({ code: 'process.bpmn.malformed' });
 const forbidden = (field: string): Result<never, BpmnRefusal> =>
@@ -141,6 +154,7 @@ const ALLOWED_ATTRIBUTES: ReadonlySet<string> = new Set([
   'background-color',
   'border-color',
   'resolution',
+  ...TASK_SETTING_ATTRIBUTES,
 ]);
 
 /** Attributes whose value is fixed: another expression or type language could run a script. */
@@ -315,7 +329,7 @@ interface ProcessSeen {
 }
 
 /** The model as the core stores and deploys it, or why it is refused. */
-export function checkBpmn(xml: string, processKey: string): Result<void, BpmnRefusal> {
+export function checkBpmn(xml: string, processKey: string): Result<CheckedModel, BpmnRefusal> {
   if (new TextEncoder().encode(xml).length > MAX_BPMN_BYTES) {
     return err({ code: 'process.bpmn.too-large' });
   }
@@ -324,6 +338,7 @@ export function checkBpmn(xml: string, processKey: string): Result<void, BpmnRef
   const open: { readonly name: string; readonly element: string; text: string }[] = [];
   const processes: ProcessSeen[] = [];
   const flow: Flow = { nodes: new Map(), edges: [], attached: [] };
+  const userTasks = new Map<string, TaskSettings>();
   let rootSeen = false;
   let at = 0;
   const body = xml.replace(/^\uFEFF/, '');
@@ -413,6 +428,12 @@ export function checkBpmn(xml: string, processKey: string): Result<void, BpmnRef
       if (HAS_EXPRESSION.test(value)) return forbidden('expression');
       if (local === 'id' && !ELEMENT_ID.test(value)) return forbidden('id');
       if (local === 'formKey' && !FORM_KEY.test(value)) return forbidden('formKey');
+      if (TASK_SETTING_ATTRIBUTES.has(local) && element !== 'userTask') return forbidden(local);
+      // The BPMN schema admits a foreign attribute only in a namespace of its own: the engine
+      // refuses an unprefixed one at deployment, so the publication refuses it first.
+      if (TASK_SETTING_ATTRIBUTES.has(local) && !attributeName.includes(':')) {
+        return err({ code: 'process.bpmn.task-setting-invalid', field: local });
+      }
     }
     const id = attributes.get('id');
     if (element === 'process') {
@@ -423,6 +444,11 @@ export function checkBpmn(xml: string, processKey: string): Result<void, BpmnRef
       flow.nodes.set(id, element);
       const host = attributes.get('attachedToRef');
       if (element === 'boundaryEvent' && host !== undefined) flow.attached.push([id, host]);
+    }
+    if (element === 'userTask') {
+      const settings = parseTaskSettings(attributes);
+      if (!settings.ok) return settings;
+      userTasks.set(id!, settings.value);
     }
     if (element === 'sequenceFlow') {
       const source = attributes.get('sourceRef');
@@ -440,5 +466,5 @@ export function checkBpmn(xml: string, processKey: string): Result<void, BpmnRef
     return err({ code: 'process.bpmn.process-key-mismatch' });
   }
   if (!flowBounded(flow)) return err({ code: 'process.bpmn.unbounded-flow' });
-  return ok(undefined);
+  return ok({ userTasks });
 }

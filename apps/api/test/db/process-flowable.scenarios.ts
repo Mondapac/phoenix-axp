@@ -11,6 +11,7 @@ import { checkBpmn } from '../../src/modules/process/domain/bpmn-guard';
 import { FlowableRestEngine } from '../../src/modules/process/infrastructure/flowable/flowable-rest-engine';
 import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node-bridge-hashing';
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
+import { RecordingAuditWriter, testTenantRegistry } from '../support/process-test-support';
 import { TEST_TENANTS } from '../support/test-config';
 import {
   createPersistence,
@@ -43,7 +44,7 @@ if (!configured && process.env.CI !== undefined) {
 const model = (key: string) => `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:flowable="http://flowable.org/bpmn"
-  targetNamespace="http://phoenix.example/bpmn">
+  xmlns:phoenix="urn:phoenix:bpmn" targetNamespace="http://phoenix.example/bpmn">
   <process id="${key}" name="Leave approval" isExecutable="true">
     <startEvent id="start"/>
     <sequenceFlow id="f1" sourceRef="start" targetRef="approve"/>
@@ -52,7 +53,8 @@ const model = (key: string) => `<?xml version="1.0" encoding="UTF-8"?>
       <timerEventDefinition><timeDuration>\${escalateAfter}</timeDuration></timerEventDefinition>
     </boundaryEvent>
     <sequenceFlow id="f2" sourceRef="deadline" targetRef="escalate"/>
-    <userTask id="escalate" name="Escalate" flowable:formKey="leave-decision"/>
+    <userTask id="escalate" name="Escalate" flowable:formKey="leave-decision"
+      phoenix:phoenixDue="P2D" phoenix:phoenixDueDays="working" phoenix:phoenixOutcomes="approve,reject"/>
     <sequenceFlow id="f3" sourceRef="escalate" targetRef="end"/>
     <sequenceFlow id="f4" sourceRef="approve" targetRef="decide"/>
     <exclusiveGateway id="decide" default="rejected"/>
@@ -75,6 +77,8 @@ export function realFlowableScenarios(): void {
       const clock = new SystemClock();
       const ids = new SequenceIdGenerator(clock);
       const system: CallContext = testCallContext(tenant, 'system');
+      const audit = new RecordingAuditWriter();
+      const tenants = testTenantRegistry();
       const engine = new FlowableRestEngine({
         url: URL_VARIABLE ?? '',
         user: process.env.FLOWABLE_TEST_USER ?? 'rest-admin',
@@ -111,7 +115,7 @@ export function realFlowableScenarios(): void {
       async function start(escalateAfter: string): Promise<Id<'ProcessInstance'>> {
         const id = ids.next<'ProcessInstance'>();
         await unit(async () => {
-          await repository.insertInstance(tenant, { id, revisionId }, clock.now());
+          await repository.insertInstance(tenant, { id, revisionId, siteId: null }, clock.now());
           await commands.startInstance(system, id, revisionId, { escalateAfter, days: 3 });
         });
         expect(await relay.runOnce(system)).toMatchObject({ delivered: 1 });
@@ -137,7 +141,15 @@ export function realFlowableScenarios(): void {
         await reader.connect();
         repository = new PrismaProcessRepository(persistence.service);
         commands = new EngineCommands(repository, ids, clock);
-        relay = new CommandRelay(persistence.unitOfWork, repository, commands, engine, ids, clock);
+        relay = new CommandRelay(
+          persistence.unitOfWork,
+          repository,
+          commands,
+          engine,
+          ids,
+          clock,
+          audit,
+        );
         sync = new EngineSync(
           persistence.unitOfWork,
           repository,
@@ -146,6 +158,7 @@ export function realFlowableScenarios(): void {
           new NodeBridgeHashing(),
           ids,
           clock,
+          tenants,
         );
         // History from earlier runs on a long-lived engine is not this run's, and the fake engine's
         // scenarios left their own watermarks: start reading now.
@@ -159,7 +172,7 @@ export function realFlowableScenarios(): void {
           );
           if (!saved) throw new Error('setup: the sync state moved under the test');
         });
-        expect(checkBpmn(model(key), key)).toEqual({ ok: true, value: undefined });
+        expect(checkBpmn(model(key), key).ok).toBe(true);
         revisionId = ids.next<'ProcessRevision'>();
         await unit(async () => {
           await repository.insertRevision(
@@ -170,6 +183,7 @@ export function realFlowableScenarios(): void {
               revision: 1,
               bpmnXml: model(key),
               contentHash: new NodeBridgeHashing().contentHash(model(key)),
+              taskSettings: {},
             },
             clock.now(),
           );

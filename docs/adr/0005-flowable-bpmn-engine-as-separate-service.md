@@ -22,6 +22,7 @@ mature and ships a REST image.
 4. **Responsibilities:** Flowable executes processes, timers and DMN. The core owns the task
    inbox, forms, authorisation, audit and personal data. A task is completed only through a core
    use case that authorises the user; nobody completes tasks in Flowable directly.
+   *(Amended by ADR-0025: the core owns deadlines and escalation of user tasks.)*
 5. **Forms:** each user task points to one immutable form revision (ADR-0007).
 6. **Modeller:** bpmn-js in the studio panel, with the bpmn.io watermark visible per its licence.
 7. **Process variables** carry ids and the minimum needed for routing, not personal data.

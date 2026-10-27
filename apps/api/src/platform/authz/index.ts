@@ -4,7 +4,8 @@
 // permission helpers and registry, the answers, the gate's token and type, the authorisation
 // check's and the authenticator's ports and tokens (identity implements them), the site-ancestry port and token (tenancy
 // implements it) with the subtree helpers, the role model with its policies, and the field
-// policy with its port (identity implements it) and the definition qualifier (ADR-0024). The gate's
+// policy with its port (identity implements it) and the definition qualifier (ADR-0024), and the
+// role-holding port of the task inbox (ADR-0025; identity implements it). The gate's
 // factory, the declaration checks and the placeholders stay inside `platform/`.
 export { ACCESS_DENIED_STATUS, type AccessDenied } from './access-denied';
 export type { AccessDeclaration, AccessRule, PermissionKey } from './access-rule';
@@ -63,6 +64,7 @@ export {
   type FieldRequest,
   type FieldRuleReader,
 } from './field-policy';
+export { ROLE_HOLDING_READER, type RoleHolding, type RoleHoldingReader } from './role-holdings';
 export {
   grantCoversSite,
   SITE_ANCESTRY_READER,
