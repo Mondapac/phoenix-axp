@@ -29,6 +29,12 @@ const PARENT = new Map<Id<'Site'>, Id<'Site'>>([
 class TreeReader implements SiteAncestryReader {
   readonly asked: [string, Id<'Site'>, Id<'Site'>][] = [];
   constructor(private readonly tenant: string) {}
+  siteExists(context: CallContext, siteId: Id<'Site'>): Promise<boolean> {
+    return Promise.resolve(
+      context.tenant.tenantId === this.tenant &&
+        (PARENT.has(siteId) || [...PARENT.values()].includes(siteId)),
+    );
+  }
   isWithinSubtree(context: CallContext, siteId: Id<'Site'>, root: Id<'Site'>): Promise<boolean> {
     this.asked.push([context.tenant.tenantId, siteId, root]);
     if (context.tenant.tenantId !== this.tenant) return Promise.resolve(false);
@@ -68,6 +74,7 @@ describe.each(TEST_TENANTS)('site scope in tenant %s', (code) => {
 
     it('throws when the reader throws: an unanswered question is never access', async () => {
       const broken: SiteAncestryReader = {
+        siteExists: () => Promise.reject(new Error('database down')),
         isWithinSubtree: () => Promise.reject(new Error('database down')),
       };
       await expect(siteRelation(broken, context, BRANCH, REGION)).rejects.toThrow('database down');

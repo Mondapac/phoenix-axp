@@ -3,7 +3,7 @@
     "action": "identity.account.created",
     "targetType": "identity.account",
     "targetId": "id",
-    "actors": ["authenticated"],
+    "actors": ["authenticated", "system"],
     "before": null,
     "after": {
       "source": "enumOf(directory|local)"
@@ -82,6 +82,76 @@
       "accountsEnabled": "integer",
       "outcome": "enumOf(completed|failed|halted)"
     }
+  },
+  {
+    "action": "identity.role.assigned",
+    "targetType": "identity.role-assignment",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "accountId": "id",
+      "includeDescendants": "boolean",
+      "level": "enumOf(platform|tenant|site)",
+      "roleId": "id",
+      "siteId": "optional(id)"
+    }
+  },
+  {
+    "action": "identity.role.created",
+    "targetType": "identity.role",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "permissionKeys": "listOf(permissionKey, max 128)",
+      "scope": "enumOf(tenant|site)"
+    }
+  },
+  {
+    "action": "identity.role.founding-assigned",
+    "targetType": "identity.role-assignment",
+    "targetId": "id",
+    "actors": ["system"],
+    "before": null,
+    "after": {
+      "accountId": "id",
+      "roleId": "id"
+    }
+  },
+  {
+    "action": "identity.role.permissions-changed",
+    "targetType": "identity.role",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "permissionKeys": "listOf(permissionKey, max 128)"
+    },
+    "after": {
+      "permissionKeys": "listOf(permissionKey, max 128)"
+    }
+  },
+  {
+    "action": "identity.role.revoked",
+    "targetType": "identity.role-assignment",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "accountId": "id",
+      "includeDescendants": "boolean",
+      "level": "enumOf(platform|tenant|site)",
+      "roleId": "id",
+      "siteId": "optional(id)"
+    },
+    "after": null
+  },
+  {
+    "action": "identity.role.system-seeded",
+    "targetType": "identity.role",
+    "targetId": "id",
+    "actors": ["system"],
+    "before": null,
+    "after": null
   },
   {
     "action": "identity.session.ended",

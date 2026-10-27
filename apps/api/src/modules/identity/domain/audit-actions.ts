@@ -1,5 +1,6 @@
 import { auditField, defineAuditAction } from '@phoenix/shared-kernel';
 import { ACCOUNT_SOURCES } from './account';
+import { CUSTOM_ROLE_SCOPES, GRANT_LEVELS, MAX_ROLE_PERMISSION_KEYS } from './role';
 import { SYNC_OUTCOMES } from './directory-sync';
 
 // Every audited action of the identity module (Phoenix ADR-0015 decision 2). Ids, sources and
@@ -15,11 +16,14 @@ export const ACCOUNT_PROVISIONED = defineAuditAction({
   after: { boundSubjectId, source: auditField.enumOf(ACCOUNT_SOURCES) },
 });
 
-/** A local staff account created in studio, before its first sign-in. */
+/**
+ * A local staff account created before its first sign-in: in studio, or by the first-
+ * administrator command (system).
+ */
 export const ACCOUNT_CREATED = defineAuditAction({
   action: 'identity.account.created',
   targetType: 'identity.account',
-  actors: ['authenticated'],
+  actors: ['authenticated', 'system'],
   after: { source: auditField.enumOf(ACCOUNT_SOURCES) },
 });
 
@@ -92,6 +96,64 @@ export const DIRECTORY_SYNC_RAN = defineAuditAction({
   },
 });
 
+const permissionKeys = auditField.listOf(auditField.permissionKey(), MAX_ROLE_PERMISSION_KEYS);
+
+/** A custom role defined in studio. Its key is a free string and stays out: the id names it. */
+export const ROLE_CREATED = defineAuditAction({
+  action: 'identity.role.created',
+  targetType: 'identity.role',
+  actors: ['authenticated'],
+  after: { scope: auditField.enumOf(CUSTOM_ROLE_SCOPES), permissionKeys },
+});
+
+export const ROLE_PERMISSIONS_CHANGED = defineAuditAction({
+  action: 'identity.role.permissions-changed',
+  targetType: 'identity.role',
+  actors: ['authenticated'],
+  before: { permissionKeys },
+  after: { permissionKeys },
+});
+
+const grant = {
+  accountId: auditField.id(),
+  roleId: auditField.id(),
+  level: auditField.enumOf(GRANT_LEVELS),
+  siteId: auditField.optional(auditField.id()),
+  includeDescendants: auditField.boolean(),
+};
+
+export const ROLE_ASSIGNED = defineAuditAction({
+  action: 'identity.role.assigned',
+  targetType: 'identity.role-assignment',
+  actors: ['authenticated'],
+  after: grant,
+});
+
+export const ROLE_REVOKED = defineAuditAction({
+  action: 'identity.role.revoked',
+  targetType: 'identity.role-assignment',
+  actors: ['authenticated'],
+  before: grant,
+});
+
+/** The tenant's system role, created by the first-administrator command. */
+export const SYSTEM_ROLE_SEEDED = defineAuditAction({
+  action: 'identity.role.system-seeded',
+  targetType: 'identity.role',
+  actors: ['system'],
+});
+
+/**
+ * The founding grant of the tenant's system role (owner card of slice 1.6): not a GrantPolicy
+ * grant, made by the platform team's command while the tenant has no holder.
+ */
+export const FOUNDING_ADMINISTRATOR_ASSIGNED = defineAuditAction({
+  action: 'identity.role.founding-assigned',
+  targetType: 'identity.role-assignment',
+  actors: ['system'],
+  after: { accountId: auditField.id(), roleId: auditField.id() },
+});
+
 export const IDENTITY_AUDIT_ACTIONS = [
   ACCOUNT_PROVISIONED,
   ACCOUNT_CREATED,
@@ -103,4 +165,10 @@ export const IDENTITY_AUDIT_ACTIONS = [
   ACCOUNT_ENABLED_BY_DIRECTORY,
   DIRECTORY_SYNC_INTERVAL_CHANGED,
   DIRECTORY_SYNC_RAN,
+  ROLE_CREATED,
+  ROLE_PERMISSIONS_CHANGED,
+  ROLE_ASSIGNED,
+  ROLE_REVOKED,
+  SYSTEM_ROLE_SEEDED,
+  FOUNDING_ADMINISTRATOR_ASSIGNED,
 ] as const;

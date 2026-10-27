@@ -14,7 +14,9 @@ export type LastHolder = { readonly code: 'member.last-holder' };
  *
  * The count is only as good as the unit it is read in: every use case that applies this policy,
  * and every writer of role assignments or account status, runs its unit `serializable`, so of
- * two concurrent demotions one is retried and then refused.
+ * two concurrent demotions one is retried and then refused. The directory sync is the
+ * exception: the directory decides who has left, so its disables apply neither this policy nor
+ * a serializable unit (identity's DirectorySyncRunner).
  */
 export const LastHolderPolicy = Object.freeze({
   /** True when losing `accountId` leaves the scope without a holder who can sign in. */

@@ -58,9 +58,10 @@ describe.each(TEST_TENANTS)('the authz placeholders in tenant %s', (code) => {
     });
   });
 
-  it('answers that no site is within any subtree', async () => {
+  it('answers that no site exists or is within any subtree', async () => {
     const reader: SiteAncestryReader = new FailClosedSiteAncestryReader();
     await expect(reader.isWithinSubtree(staff, id(3), id(4))).resolves.toBe(false);
+    await expect(reader.siteExists(staff, id(3))).resolves.toBe(false);
   });
 });
 
@@ -108,6 +109,9 @@ class IdentityStandIn {}
 
 @Injectable()
 class RealReader {
+  siteExists(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
   isWithinSubtree(): Promise<boolean> {
     return Promise.resolve(true);
   }

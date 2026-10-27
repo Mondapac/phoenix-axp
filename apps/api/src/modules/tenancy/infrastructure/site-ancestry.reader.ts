@@ -6,7 +6,8 @@ import { UNIT_OF_WORK, type UnitOfWork } from '../../../platform/unit-of-work/un
 import { SITE_REPOSITORY, type SiteRepository } from '../application/site.repository';
 
 /**
- * The tenancy module's answer to "is site X within the subtree of site Y" for platform/authz
+ * The tenancy module's answer to "is site X within the subtree of site Y" (and "is X a site of
+ * the tenant") for platform/authz
  * (ADR-0018 decisions 2 and 6), replacing the fail-closed placeholder. One read-only unit of
  * its own per question, never inside the caller's; it reads committed state from the closure
  * table under row-level security and caches nothing, so a move is seen by the next question.
@@ -18,6 +19,16 @@ export class ClosureSiteAncestryReader implements SiteAncestryReader {
     @Inject(UNIT_OF_WORK) private readonly unitOfWork: UnitOfWork,
     @Inject(SITE_REPOSITORY) private readonly sites: SiteRepository,
   ) {}
+
+  async siteExists(context: CallContext, siteId: Id<'Site'>): Promise<boolean> {
+    const { tenant } = context;
+    const answer = await this.unitOfWork.run(
+      tenant,
+      async () => ok((await this.sites.find(tenant, siteId)) !== null),
+      { readOnly: true },
+    );
+    return answer.ok && answer.value;
+  }
 
   async isWithinSubtree(
     context: CallContext,
