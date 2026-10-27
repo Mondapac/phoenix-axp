@@ -1,0 +1,37 @@
+{
+  "name": "@phoenix/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PoC 4 spike (slice 0.9): token mapping, Persian text and Jalali helpers, portal blocks and form renderers. Consumed as source by apps/portal. Not for merge (D5).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./blocks": "./src/blocks/index.ts",
+    "./form": "./src/form/index.ts",
+    "./styles.css": "./src/styles.css",
+    "./platform-default.json": "./src/theme/platform-default.json"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test 'src/**/*.spec.ts' 'lint/*.spec.mjs'"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.9.0",
+    "@jsonforms/core": "3.8.0",
+    "@jsonforms/react": "3.8.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "ajv": "8.20.0",
+    "tailwindcss": "4.3.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^10.11.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "@phoenix/shared-kernel": "workspace:*",
+    "@types/node": "^24.19.0"
+  }
+}

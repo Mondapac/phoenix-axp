@@ -5,6 +5,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { portalSyntaxRules } from './packages/ui/lint/portal-rules.mjs';
 
 // Tenant identifiers that must never appear as literals in core code (ADR-02): a tenant's id,
 // locales and time zone are configuration (config/tenants/<id>.json), never a branch or a
@@ -277,6 +278,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/node_modules/**',
       '**/generated/**',
+      '**/.next/**',
+      '**/next-env.d.ts',
       // Deliberate violations used by apps/api/test/boundaries.spec.ts.
       '**/test/boundary-fixtures/**',
     ],
@@ -433,6 +436,37 @@ export default tseslint.config(
   {
     files: ['**/*.mjs', '**/*.cjs', '**/*.js'],
     languageOptions: { globals: { ...globals.node } },
+  },
+  {
+    // PoC 4 spike (slice 0.9): the portal and packages/ui. Logical CSS only, tokens only, no raw
+    // HTML (design doc section 2, ADR-0008 decision 5); the CSS half is lint/check-css.mjs.
+    // Spec files hold raw colours as test data.
+    files: ['apps/portal/**/*.{ts,tsx}', 'packages/ui/**/*.{ts,tsx}'],
+    ignores: ['**/*.spec.ts'],
+    plugins: { '@typescript-eslint': tseslint.plugin },
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: { ...globals.browser },
+    },
+    rules: {
+      'no-restricted-syntax': ['error', ...portalSyntaxRules],
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
+    },
+  },
+  {
+    // node:test's describe/it return promises the runner awaits itself.
+    files: ['packages/ui/**/*.spec.ts'],
+    rules: { '@typescript-eslint/no-floating-promises': 'off' },
+  },
+  {
+    // Browser checks: code inside page.evaluate runs in the page.
+    files: ['apps/portal/e2e/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   prettier,
 );

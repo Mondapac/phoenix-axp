@@ -1,0 +1,22 @@
+{
+  "siteId": "platform-default",
+  "tokens": {
+    "color.page": "#f7f7f5",
+    "color.surface": "#ffffff",
+    "color.subtle": "#eceae4",
+    "color.fg": "#1b1d21",
+    "color.fg-muted": "#55595f",
+    "color.line": "#8a8f98",
+    "color.accent": "#1f4fa3",
+    "color.accent-hover": "#173c7d",
+    "color.on-accent": "#ffffff",
+    "color.link": "#1f4fa3",
+    "color.focus": "#c2410c",
+    "color.critical": "#b42318",
+    "color.critical-bg": "#fdecea",
+    "color.brand": "#1b1d21",
+    "color.on-brand": "#ffffff",
+    "radius.card": "12px",
+    "radius.control": "8px"
+  }
+}

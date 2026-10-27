@@ -1,0 +1,57 @@
+/* Token mapping for the portal (design doc section 2; MP ADR-0033 decision 2). The values come
+ * from the site theme (theme.ts), served per site as /theme.css; this file only gives Tailwind
+ * names to the variables. Tailwind's default palette, radius and font scales are switched off,
+ * so a class that is not a token renders nothing and the lint rule rejects raw colours. */
+@import 'tailwindcss';
+
+@theme inline {
+  --color-*: initial;
+  --radius-*: initial;
+  --color-page: var(--px-color-page);
+  --color-surface: var(--px-color-surface);
+  --color-subtle: var(--px-color-subtle);
+  --color-fg: var(--px-color-fg);
+  --color-fg-muted: var(--px-color-fg-muted);
+  --color-line: var(--px-color-line);
+  --color-accent: var(--px-color-accent);
+  --color-accent-hover: var(--px-color-accent-hover);
+  --color-on-accent: var(--px-color-on-accent);
+  --color-link: var(--px-color-link);
+  --color-focus: var(--px-color-focus);
+  --color-critical: var(--px-color-critical);
+  --color-critical-bg: var(--px-color-critical-bg);
+  --color-brand: var(--px-color-brand);
+  --color-on-brand: var(--px-color-on-brand);
+  --radius-card: var(--px-radius-card);
+  --radius-control: var(--px-radius-control);
+  --color-transparent: transparent;
+}
+
+@source './';
+
+@layer base {
+  html {
+    /* No webfont in the spike: system Persian-capable faces. Font choice is an open item. */
+    font-family: system-ui, 'Segoe UI', Tahoma, 'DejaVu Sans', sans-serif;
+    background: var(--px-color-page);
+    color: var(--px-color-fg);
+    line-height: 1.7;
+  }
+  body {
+    overflow-x: clip;
+  }
+  th {
+    text-align: start;
+  }
+  /* Two-tone ring: the halo keeps it at 3:1 on dark backgrounds such as the brand header
+   * (theme.ts FOCUS_BACKGROUNDS checks every theme for it). */
+  :focus-visible {
+    outline: 3px solid var(--px-color-focus);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--px-color-surface);
+  }
+  a {
+    color: var(--px-color-link);
+    text-underline-offset: 0.2em;
+  }
+}
