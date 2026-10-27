@@ -1,6 +1,7 @@
 // ADR references use Phoenix's four-digit numbers (`ADR-0010`), and the template's are written
-// `Mondapac ADR-0030`. A two-digit reference such as `ADR-12` came from the Phase 0 working
-// notes and points at the wrong Phoenix ADR (QA review 2.4), so it fails `pnpm lint`.
+// `Mondapac ADR-0030`. A two-digit reference (the "ADR" prefix with two digits) came from the
+// Phase 0 working notes and points at the wrong Phoenix ADR (QA review 2.4), so it fails
+// `pnpm lint`.
 // Applied migrations are skipped: a merged migration is never edited (ADR-0003 decision 6).
 //
 // Usage: node scripts/check-adr-references.mjs [<file> ...]   (default: every tracked file)
@@ -10,7 +11,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SKIPPED = [/^prisma\/migrations\//, /^pnpm-lock\.yaml$/, /\.(png|jpe?g|gif|ico|woff2?)$/];
+const SKIPPED = [
+  /^prisma\/migrations\//,
+  /^pnpm-lock\.yaml$/,
+  /\.(png|jpe?g|gif|ico|woff2?)$/,
+  // Its own test, whose samples are the refused forms.
+  /^apps\/api\/test\/adr-references\.spec\.ts$/,
+];
 const BAD_REFERENCE = /\bADRs?[- ](\d{1,3}|\d{5,})(?!\d)/g;
 
 const args = process.argv.slice(2);
