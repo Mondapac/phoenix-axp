@@ -24,6 +24,7 @@ import { PROCESS_AUDIT_ACTIONS } from '../../src/modules/process/domain/audit-ac
 import { COMMAND_LEASE_MS } from '../../src/modules/process/domain/engine-command';
 import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node-bridge-hashing';
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
+import { StaleAggregateError } from '../../src/platform/unit-of-work/errors';
 import { CallLostError, FakeProcessEngine } from '../support/fake-process-engine';
 import { realFlowableScenarios } from './process-flowable.scenarios';
 import { TEST_TENANT_CONFIG_DIRS, TEST_TENANTS, testTenantId } from '../support/test-config';
@@ -297,6 +298,28 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
           key,
         ]),
       ).toEqual([]);
+    });
+
+    it('answers a stale conflict to the second of two publishes of one key at once', async () => {
+      const key = `leave-${code.replace('-', '_')}-${++keys}`;
+      const results = await Promise.allSettled(
+        [0, 1].map(() =>
+          bridge.publish.execute(staff(tenant), { processKey: key, bpmnXml: bpmn(key) }),
+        ),
+      );
+      const published = results.filter((r) => r.status === 'fulfilled' && r.value.ok);
+      const stale = results.filter(
+        (r) => r.status === 'rejected' && r.reason instanceof StaleAggregateError,
+      );
+      // Either both ran one after the other (revisions 1 and 2) or the second read the same
+      // latest number and was refused; never a database error.
+      expect(published.length + stale.length).toBe(2);
+      const revisions = await rowsOf<{ revision: number }>(
+        tenant,
+        'SELECT revision FROM process.process_revision WHERE process_key = $1 ORDER BY revision',
+        [key],
+      );
+      expect(revisions.map((r) => r.revision)).toEqual(published.length === 2 ? [1, 2] : [1]);
     });
 
     it("never starts another tenant's revision", async () => {

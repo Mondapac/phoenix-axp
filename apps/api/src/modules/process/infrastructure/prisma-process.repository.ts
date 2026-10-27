@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Temporal } from '@phoenix/shared-kernel';
 import type { Id, JsonObject, TenantContext } from '@phoenix/shared-kernel';
 import { PrismaService } from '../../../platform/persistence/prisma.service';
+import { StaleAggregateError } from '../../../platform/unit-of-work/errors';
 import type {
   CommandRecord,
   IncidentRecord,
@@ -51,17 +52,23 @@ export class PrismaProcessRepository implements ProcessRepository {
     revision: RevisionRecord & { readonly contentHash: string },
     at: Temporal.Instant,
   ): Promise<void> {
-    await this.prisma.tx(tenant).processRevision.create({
-      data: {
-        tenantId: tenant.tenantId,
-        id: revision.id,
-        processKey: revision.processKey,
-        revision: revision.revision,
-        bpmnXml: revision.bpmnXml,
-        contentHash: revision.contentHash,
-        publishedAt: dateOf(at),
-      },
+    // Two publishes of one key read the same latest number: the second insert waits for the
+    // first and then inserts nothing, which is a stale read (409 conflict.stale), never a 500.
+    const { count } = await this.prisma.tx(tenant).processRevision.createMany({
+      data: [
+        {
+          tenantId: tenant.tenantId,
+          id: revision.id,
+          processKey: revision.processKey,
+          revision: revision.revision,
+          bpmnXml: revision.bpmnXml,
+          contentHash: revision.contentHash,
+          publishedAt: dateOf(at),
+        },
+      ],
+      skipDuplicates: true,
     });
+    if (count !== 1) throw new StaleAggregateError('ProcessRevision', revision.processKey);
   }
 
   async findRevision(tenant: TenantContext, id: string): Promise<RevisionRecord | null> {

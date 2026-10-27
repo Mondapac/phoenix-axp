@@ -62,8 +62,8 @@ export class PublishProcessRevision extends UseCase<
     const { tenant } = context;
 
     return this.unitOfWork.run<PublishedRevision, BpmnRefusal>(tenant, async () => {
-      // Two publishes of one key at once: the unique (tenant, key, revision) refuses the second
-      // as a conflict, and the caller tries again.
+      // Two publishes of one key at once: the unique (tenant, key, revision) makes the second a
+      // stale write (409 conflict.stale, the repository), and the caller tries again.
       const revision = (await this.repository.latestRevisionNumber(tenant, input.processKey)) + 1;
       await this.repository.insertRevision(
         tenant,

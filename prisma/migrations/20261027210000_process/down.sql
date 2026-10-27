@@ -1,4 +1,4 @@
--- Reverses 20261027200000_process: the policies and grants first, then the tables (their
+-- Reverses 20261027210000_process: the policies and grants first, then the tables (their
 -- CHECKs, indexes and foreign keys go with them), then the schema.
 DROP POLICY "process_incident_tenant_isolation" ON "process"."process_incident";
 DROP POLICY "engine_sync_state_tenant_isolation" ON "process"."engine_sync_state";

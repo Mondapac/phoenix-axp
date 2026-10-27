@@ -104,6 +104,7 @@ export class CommandRelay {
             msg: 'process.command.refused',
             tenantId: tenant.tenantId,
             commandId: command.id,
+            correlationId: command.correlationId,
             kind: command.kind,
             code,
           });
@@ -204,6 +205,7 @@ export class CommandRelay {
         msg: 'process.instance.orphans',
         tenantId: tenant.tenantId,
         instanceId: instance.id,
+        correlationId: command.correlationId,
         orphans: orphans.value.length,
       });
     }

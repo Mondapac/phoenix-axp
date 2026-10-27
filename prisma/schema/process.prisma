@@ -53,7 +53,9 @@ model ProcessInstance {
 }
 
 /// The core's mirror of one engine user task, ever (ADR-0005 decision 4). The engine decides that
-/// a task exists and when it ends; the core decides who may act on it (slice 2.3).
+/// a task exists and when it ends; the core decides who may act on it (slice 2.3). Versioning
+/// (ADR-0007): a mutable aggregate with `version` (open, completing, then an end status); its history is
+/// the engine's task history and the incidents.
 model ProcessTask {
   /// UUIDv7 from the IdGenerator.
   id            String          @id @db.Uuid
@@ -81,7 +83,8 @@ model ProcessTask {
 
 /// Core -> engine commands (ADR-0005 decision 3; ADR-0020 decision 7). Written in the unit of
 /// the state change; the relay claims a row with a lease, calls the engine outside any unit,
-/// then acks it in another unit. Not the module's in-process event outbox.
+/// then acks it in another unit. Not the module's in-process event outbox. Versioning (ADR-0007):
+/// a queue row, updated only by its claim, release and ack (`attempts` is the claim's lock).
 model EngineCommand {
   /// UUIDv7 from the IdGenerator; also the completion key of a `complete-task`.
   id            String    @id @db.Uuid
@@ -111,6 +114,7 @@ model EngineCommand {
 
 /// Engine -> core observations already applied, per handler (ADR-0020 decision 8): the inbox of
 /// the bridge. The event id is derived from what was observed, so a repeated poll finds its row.
+/// Versioning (ADR-0007): V4 append-only (INSERT + SELECT only).
 model EngineObservation {
   tenantId   String   @map("tenant_id") @db.VarChar(32)
   eventId    String   @map("event_id") @db.Uuid
@@ -123,7 +127,8 @@ model EngineObservation {
 }
 
 /// The engine sync's watermarks of one tenant (PoC 3 R5): the latest end time, on the engine's
-/// clock, of the ended tasks and the ended instances already read.
+/// clock, of the ended tasks and the ended instances already read. Versioning (ADR-0007): one
+/// mutable row per tenant with `version` (optimistic lock); no history kept.
 model EngineSyncState {
   tenantId            String    @id @map("tenant_id") @db.VarChar(32)
   tasksEndedAfter     DateTime? @map("tasks_ended_after") @db.Timestamptz(3)
