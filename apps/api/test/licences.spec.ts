@@ -5,7 +5,7 @@ import path from 'node:path';
 
 // The licence gate of ADR-0009 (scripts/check-licences.mjs), run as `pnpm licences` runs it but
 // on saved listings, so each rule is proven on a fixture: the closed allowed list (widened by
-// ADR-0022 decision 7), the reviewed
+// ADR-0022 decision 4), the reviewed
 // exceptions file, the full tree with dev dependencies, and the families that always fail.
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
@@ -103,7 +103,7 @@ describe('the licence gate (scripts/check-licences.mjs, ADR-0009)', () => {
   });
 
   it.each(['0BSD', 'CC0-1.0', 'Unlicense', 'BlueOak-1.0.0', 'Python-2.0'])(
-    'passes %s without an exception (ADR-0022 decision 7), shipped or dev-only',
+    'passes %s without an exception (ADR-0022 decision 4), shipped or dev-only',
     (licence) => {
       expect(gate({ [licence]: [pkg('x')] }, [])).toMatchObject({ status: 0, problems: [] });
       expect(gate({ [licence]: [pkg('x')] }, [], {})).toMatchObject({ status: 0, problems: [] });

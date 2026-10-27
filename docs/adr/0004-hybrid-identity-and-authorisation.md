@@ -24,6 +24,7 @@ and transferable.
 3. **Upstream disable.** Disabling a user in LDAP or Keycloak ends core sessions through
    back-channel logout or synchronisation; proven in PoC 2.
    *(Amended by ADR-0020: PoC 2 found that Keycloak sends nothing on a directory disable; it takes effect on the next request after a scheduled per-tenant sync, whose interval is an owner question.)*
+   *(Amended by ADR-0022 decision 6: the interval is configurable per tenant, default 5 minutes.)*
 4. **Authorisation in the application layer:** every use case extends `UseCase` with a static
    `access` rule — `permissions`, `anonymous`, `own-resources` or `system`. Silence is never a
    default; a use case without a rule fails CI. `UseCaseGate` runs before `handle`; controller

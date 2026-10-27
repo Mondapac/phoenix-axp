@@ -27,7 +27,7 @@ change one only through a new ADR or an "Amended by" note.
   configuration or an extension point.
 - **Proprietary licence** (ADR-0009, allow-list widened by ADR-0022): dependencies must be MIT,
   Apache-2.0, BSD, ISC, 0BSD, CC0-1.0, Unlicense, BlueOak-1.0.0 or Python-2.0. MPL-2.0 and
-  EPL-2.0 only with a reviewed exception (dev tools or unmodified use). GPL, AGPL, SSPL, BUSL and
+  EPL-2.0 only with a case-by-case reviewed exception. GPL, AGPL, SSPL, BUSL and
   "sustainable use" licences are forbidden; CI checks licences.
 - **No hard dependency on a foreign SaaS or cloud service:** every external service sits behind
   a port with a self-hosted adapter (offline installs must work).

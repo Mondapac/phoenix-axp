@@ -22,7 +22,7 @@
 | 1.2 | `platform/events`: outbox، relay، inbox، scheduler و worker | backend | ADR-0006 | **ساخته شد**، PR #5، منتظر بازبینی امنیتی و merge |
 | 1.3 | `platform/audit`: لاگ append-only با زنجیرهٔ hash برای هر مستأجر | backend | ADR-0015 | **ساخته شد**، PR #5، منتظر بازبینی امنیتی و merge |
 | 1.4 | ماژول **tenancy**: ثبت مستأجر، دامنه‌ها، درخت Site با جدول closure، درخت Organization، اتصال Site به Organization، تنظیمات مستأجر (زبان، تقویم، منابع ورود) | backend | PoC ۱ (بسته شد) | آمادهٔ شروع پس از تصمیم نهایی؛ شرط پذیرش: جابه‌جایی سایت‌ها در هر مستأجر پشت سر هم، با آزمون جابه‌جایی هم‌زمان (PoC ۱ ریسک ۸) |
-| 1.5 | ماژول **identity**: ورود OIDC با Keycloak، نشست، سه جمعیت، حساب داخلی کارکنان، ثبت‌نام کاربر عمومی، MFA، نگاشت گروه AD به نقش | backend | PoC ۲ (بسته شد)، تصمیم‌های P1، P2 و P6 | آماده (P1 و P2 قطعی) |
+| 1.5 | ماژول **identity**: ورود OIDC با Keycloak، نشست، سه جمعیت، حساب داخلی کارکنان، ثبت‌نام کاربر عمومی، MFA، نگاشت گروه AD به نقش | backend | PoC ۲ (بسته شد)، تصمیم‌های P1، P2 و P6 | آماده (P1، P2 و P6 قطعی) |
 | 1.6 | use caseهای نقش و اعطای دسترسی (API پنل مدیریت) | backend | 1.1، 1.4، 1.5 | — |
 | 1.7 | `platform/storage`: دریافت فایل روی SeaweedFS، با بررسی نوع و اندازه | backend | — | **در حال ساخت**، PR #3 |
 | 1.8 | `platform/i18n`، `mail`، `rate-limit` و `subject-keys` (هم‌زمان با ثبت‌نام) | backend | 1.5، تصمیم P3 | — |
