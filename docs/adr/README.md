@@ -30,5 +30,6 @@ about one page. An accepted ADR changes only through a new ADR or an italic
 | [0021](0021-merge-model-owning-thread-merges.md) | Merge model: the owning thread merges, coordinated by the coordinator | Accepted 2026-10-27 |
 | [0022](0022-phase-1-owner-decisions.md) | Phase 1 owner decisions: public sign-up, realm per tenant, admin-managed UI languages, isolation overhead per request, AD sync interval, OFL for fonts, widened licence allow-list (amends 0002, 0004, 0009) | Accepted 2026-10-27 |
 | [0023](0023-panel-shell-colours-and-charts.md) | Panel shell, panel colours and chart library (amends 0016) | Accepted 2026-10-27 |
+| [0024](0024-field-level-access.md) | Field-level access and per-definition operation permissions (amends 0004) | Accepted 2026-10-27 |
 
 Reserved (see the board): page builder (Phase 3 review, number to be reserved), 0017 Objects and generated APIs (Phase 2 review).
