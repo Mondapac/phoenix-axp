@@ -16,7 +16,10 @@ import { PermissionRegistry } from '../../src/platform/authz/permission-registry
 import { createUseCaseGate } from '../../src/platform/authz/use-case-gate';
 import { loadTenantConfigs } from '../../src/platform/tenant-config/tenant-config';
 import { TenantRegistry } from '../../src/platform/tenant-config/tenant-registry';
-import { StaleAggregateError } from '../../src/platform/unit-of-work/errors';
+import {
+  StaleAggregateError,
+  TransactionConflictError,
+} from '../../src/platform/unit-of-work/errors';
 import { IdentityAuthorisationCheck } from '../../src/modules/identity/application/access/identity-authorisation-check';
 import { SessionAuthenticator } from '../../src/modules/identity/application/access/session-authenticator';
 import { DirectorySyncRunner } from '../../src/modules/identity/application/directory-sync-runner';
@@ -518,13 +521,21 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         const session = await signedIn({ username: name, directory: false });
         linked.push({ username: name, accountId: session.accountId });
       }
-      const results = await Promise.all(
+      const results = await Promise.allSettled(
         linked.map((input) => identity.bootstrap.execute(system, input)),
       );
-      expect(results.filter((r) => r.ok)).toHaveLength(1);
-      expect(results.filter((r) => !r.ok)).toEqual([
-        { ok: false, error: { code: 'identity.tenant.has-administrator' } },
-      ]);
+      // The loser is refused, or, under load, runs out of serializable retries (a conflict):
+      // never two founders.
+      expect(results.filter((r) => r.status === 'fulfilled' && r.value.ok)).toHaveLength(1);
+      expect(
+        results.filter(
+          (r) =>
+            (r.status === 'fulfilled' &&
+              !r.value.ok &&
+              r.value.error.code === 'identity.tenant.has-administrator') ||
+            (r.status === 'rejected' && r.reason instanceof TransactionConflictError),
+        ),
+      ).toHaveLength(1);
     });
 
     it('refuses an invalid username, and any actor but the system', async () => {
@@ -1040,13 +1051,31 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         const two = await staffMember('two');
         const grantOne = await grant(one.id, system);
         const grantTwo = await grant(two.id, system);
-        const results = await Promise.all([
+        const results = await Promise.allSettled([
           identity.revoke.execute(one.context, { assignmentId: grantTwo as Id<'RoleAssignment'> }),
           identity.revoke.execute(two.context, { assignmentId: grantOne as Id<'RoleAssignment'> }),
         ]);
         // The admin of the suite also holds a system role, so both may succeed only in turn:
-        // whichever runs second has lost its own system role and is refused.
-        expect(results.filter((r) => r.ok)).toHaveLength(1);
+        // whichever runs second has lost its own system role and is refused. Under load the
+        // second can instead keep losing the serializable race until its retries run out, which
+        // answers 409 conflict.retry: also a refusal, so either outcome is accepted, never both
+        // revokes succeeding.
+        const succeeded = results.filter((r) => r.status === 'fulfilled' && r.value.ok);
+        const refused = results.filter(
+          (r) =>
+            (r.status === 'fulfilled' && !r.value.ok) ||
+            (r.status === 'rejected' && r.reason instanceof TransactionConflictError),
+        );
+        expect(succeeded).toHaveLength(1);
+        expect(refused).toHaveLength(1);
+        // And in the database: exactly one of the two grants is left.
+        const left = [];
+        for (const member of [one, two]) {
+          const grants = await identity.listGrants.execute(admin, { accountId: member.id });
+          if (!grants.ok) throw new Error(grants.error.code);
+          left.push(...grants.value.filter((g) => g.id === grantOne || g.id === grantTwo));
+        }
+        expect(left).toHaveLength(1);
       });
 
       it('refuses disabling an account that outranks the actor', async () => {
