@@ -26,7 +26,12 @@ import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
 import { CallLostError, FakeProcessEngine } from '../support/fake-process-engine';
 import { TEST_TENANT_CONFIG_DIRS, TEST_TENANTS, testTenantId } from '../support/test-config';
-import { createPersistence, otherTenantOf, tenantOf, type Persistence } from './persistence-support';
+import {
+  createPersistence,
+  otherTenantOf,
+  tenantOf,
+  type Persistence,
+} from './persistence-support';
 import { testDatabaseUrl } from './test-database';
 
 // Phase 2 slice 2.2: the process bridge end to end against PostgreSQL, through the real
@@ -110,7 +115,16 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       commands,
       relay: new CommandRelay(uow, repository, commands, engine, ids, clock),
       sync: new EngineSync(uow, repository, commands, engine, hashing, ids, clock),
-      publish: new PublishProcessRevision(gate, uow, repository, commands, hashing, audit, clock, ids),
+      publish: new PublishProcessRevision(
+        gate,
+        uow,
+        repository,
+        commands,
+        hashing,
+        audit,
+        clock,
+        ids,
+      ),
       start: new StartProcessInstance(gate, uow, repository, commands, clock, ids),
       incidents: new ListProcessIncidents(gate, uow, repository),
     };
@@ -229,15 +243,24 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
     );
     const open = coreTasks.filter((t) => t.status === 'open' || t.status === 'completing');
     expect(open.map((t) => t.engine_task_id).sort()).toEqual(
-      engineTasks.filter((t) => t.endedAt === null).map((t) => t.id).sort(),
+      engineTasks
+        .filter((t) => t.endedAt === null)
+        .map((t) => t.id)
+        .sort(),
     );
   }
 
   describe('publishing (D7, slice 2.2 security)', () => {
     it('stores numbered immutable revisions, audits them and deploys each under the tenant', async () => {
       const key = `publish-${code.replace('-', '_')}`;
-      const first = await bridge.publish.execute(staff(tenant), { processKey: key, bpmnXml: bpmn(key) });
-      const second = await bridge.publish.execute(staff(tenant), { processKey: key, bpmnXml: bpmn(key) });
+      const first = await bridge.publish.execute(staff(tenant), {
+        processKey: key,
+        bpmnXml: bpmn(key),
+      });
+      const second = await bridge.publish.execute(staff(tenant), {
+        processKey: key,
+        bpmnXml: bpmn(key),
+      });
       expect(first).toMatchObject({ ok: true, value: { revision: 1 } });
       expect(second).toMatchObject({ ok: true, value: { revision: 2 } });
       expect(audit.entries.at(-1)).toMatchObject({
@@ -262,12 +285,16 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
         '<userTask id="approve" flowable:formKey="decision"/>',
         '<scriptTask id="approve" scriptFormat="groovy"><script>System.exit(0)</script></scriptTask>',
       );
-      expect(await bridge.publish.execute(staff(tenant), { processKey: key, bpmnXml: xml })).toEqual({
+      expect(
+        await bridge.publish.execute(staff(tenant), { processKey: key, bpmnXml: xml }),
+      ).toEqual({
         ok: false,
         error: { code: 'process.bpmn.forbidden-construct', field: 'scriptTask' },
       });
       expect(
-        await rowsOf(tenant, 'SELECT 1 FROM process.process_revision WHERE process_key = $1', [key]),
+        await rowsOf(tenant, 'SELECT 1 FROM process.process_revision WHERE process_key = $1', [
+          key,
+        ]),
       ).toEqual([]);
     });
 
@@ -430,7 +457,9 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       const instanceId = await started();
       engine.down = true;
       try {
-        expect(await relay()).toMatchObject({ retried: expect.any(Number), delivered: 0 });
+        const pass = await relay();
+        expect(pass.delivered).toBe(0);
+        expect(pass.retried).toBeGreaterThan(0);
         await expect(sync()).rejects.toThrow('unavailable');
         const [command] = await rowsOf<{ attempts: number; last_error: string; not_before: Date }>(
           tenant,
@@ -549,9 +578,9 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       const instanceId = await started();
       await drain();
       // The core is down: the approver's task opens and escalates unseen.
-      const approve = engine.openTasksOf(code).find(
-        (t) => t.instanceId === engine.liveInstancesOf(instanceId)[0]!.id,
-      )!;
+      const approve = engine
+        .openTasksOf(code)
+        .find((t) => t.instanceId === engine.liveInstancesOf(instanceId)[0]!.id)!;
       clock.advance(Temporal.Duration.from({ minutes: 2 }));
       engine.fireTimer(approve.id);
       await sync();
@@ -578,9 +607,12 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       );
       expect(state!.tasks_ended_after!.getTime()).toBe(latestEnd);
 
-      engine.calls.length = 0;
-      expect(await sync()).toEqual({ applied: 0, duplicates: expect.any(Number) });
-      expect(engine.calls).not.toContain('findTask');
+      engine.foundTasks.length = 0;
+      expect((await sync()).applied).toBe(0);
+      // Open core rows another suite left in this tenant are unknown to this engine and read
+      // from history; none of this engine's ended tasks is read again.
+      const ownTasks = new Set(engine.tasks.map((t) => t.id));
+      expect(engine.foundTasks.filter((id) => ownTasks.has(id))).toEqual([]);
     });
 
     it('flags an engine instance no core instance knows, once', async () => {

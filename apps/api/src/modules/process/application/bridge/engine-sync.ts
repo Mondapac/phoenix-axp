@@ -202,7 +202,8 @@ export class EngineSync {
     ended: EngineTaskRecord | null,
   ): Promise<Outcome> {
     const end = ended === null ? null : ended.end;
-    const closed = end === null ? null : statusOnEngineEnd({ status: 'open', completionKey: null }, end);
+    const closed =
+      end === null ? null : statusOnEngineEnd({ status: 'open', completionKey: null }, end);
     const eventId = this.eventId(tenant, 'task-opened', task.engineTaskId);
     return this.apply(tenant, eventId, SYNC_HANDLERS.surfaceTask, async () => {
       // First writer wins: the relay's start ack may have adopted another instance meanwhile.
@@ -239,7 +240,8 @@ export class EngineSync {
     const eventId = this.eventId(tenant, 'task-ended', task.engineTaskId);
     return this.apply(tenant, eventId, SYNC_HANDLERS.closeTask, async () => {
       const fresh = await this.repository.findTask(tenant, task.id);
-      const next = fresh === null || record.end === null ? null : statusOnEngineEnd(fresh, record.end);
+      const next =
+        fresh === null || record.end === null ? null : statusOnEngineEnd(fresh, record.end);
       if (fresh === null || next === null) return 'applied';
       if (!(await this.repository.closeTask(tenant, fresh, next.status, this.clock.now()))) {
         return 'deferred';

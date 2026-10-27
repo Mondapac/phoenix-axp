@@ -321,9 +321,7 @@ describe('loadAppConfig', () => {
     });
 
     it('takes the Flowable variables together, requires them in production, and keeps the password out of issues', () => {
-      expect(
-        issuesOf({ HOSTED_TENANTS: 'demo-fa', FLOWABLE_PASSWORD: 'engine-secret' }),
-      ).toEqual([
+      expect(issuesOf({ HOSTED_TENANTS: 'demo-fa', FLOWABLE_PASSWORD: 'engine-secret' })).toEqual([
         expect.stringMatching(/^FLOWABLE_URL: .*set together/),
         expect.stringMatching(/^FLOWABLE_USER: .*set together/),
       ]);

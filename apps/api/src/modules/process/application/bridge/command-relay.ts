@@ -89,10 +89,15 @@ export class CommandRelay {
         if (error instanceof EngineUnavailableError) {
           pass.retried += 1;
           await this.release(tenant, command, `engine.${error.reason}`);
-        } else if (error instanceof EngineRefusedError || error instanceof EngineTenantMismatchError) {
+        } else if (
+          error instanceof EngineRefusedError ||
+          error instanceof EngineTenantMismatchError
+        ) {
           pass.refused += 1;
           const code =
-            error instanceof EngineRefusedError ? `engine.${error.reason}` : 'engine.tenant-mismatch';
+            error instanceof EngineRefusedError
+              ? `engine.${error.reason}`
+              : 'engine.tenant-mismatch';
           this.#logger.warn({
             msg: 'process.command.refused',
             tenantId: tenant.tenantId,
@@ -184,7 +189,12 @@ export class CommandRelay {
         );
         if (adoptionOf(recorded, engineInstance.engineInstanceId) !== 'orphan') continue;
         removed.push(engineInstance.engineInstanceId);
-        await this.incident(tenant, 'orphan-instance', engineInstance.engineInstanceId, instance.id);
+        await this.incident(
+          tenant,
+          'orphan-instance',
+          engineInstance.engineInstanceId,
+          instance.id,
+        );
         await this.commands.deleteOrphan(
           tenant,
           context.correlationId,
@@ -270,7 +280,12 @@ export class CommandRelay {
       await this.repository.killCommand(tenant, command.id, this.clock.now(), code);
       const instance =
         command.kind === 'start-instance' ? parseId<'ProcessInstance'>(command.subjectId) : null;
-      await this.incident(tenant, 'command-refused', command.id, instance?.ok ? instance.value : null);
+      await this.incident(
+        tenant,
+        'command-refused',
+        command.id,
+        instance?.ok ? instance.value : null,
+      );
       return ok(undefined);
     });
   }

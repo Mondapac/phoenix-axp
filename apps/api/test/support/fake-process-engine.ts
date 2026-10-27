@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Clock, Temporal, TenantContext } from '@phoenix/shared-kernel';
 import {
   EngineRefusedError,
@@ -50,6 +51,8 @@ export class FakeProcessEngine implements ProcessEngine {
   readonly instances: Instance[] = [];
   readonly tasks: Task[] = [];
   readonly calls: string[] = [];
+  /** The engine task ids `findTask` was asked for. */
+  readonly foundTasks: string[] = [];
   /** Every call fails as unreachable. */
   down = false;
   /** The next call of this name does its work, then the answer is lost. */
@@ -59,6 +62,8 @@ export class FakeProcessEngine implements ProcessEngine {
   /** The user task a new instance reaches first. */
   firstTask: string | null = 'approve';
   #next = 0;
+  /** Ids unique to this engine, so rows an earlier run left in the database never match. */
+  readonly #run = randomUUID().slice(0, 8);
 
   constructor(private readonly clock: Clock) {}
 
@@ -66,7 +71,7 @@ export class FakeProcessEngine implements ProcessEngine {
 
   openTask(instanceId: string, taskKey: string): string {
     const instance = this.instances.find((entry) => entry.id === instanceId)!;
-    const id = `task-${++this.#next}`;
+    const id = `task-${this.#run}-${++this.#next}`;
     this.tasks.push({
       id,
       tenantId: instance.tenantId,
@@ -143,7 +148,11 @@ export class FakeProcessEngine implements ProcessEngine {
       if (!this.deployments.has(this.deploymentKey(tenant, command))) {
         throw new EngineRefusedError('not-deployed');
       }
-      const instance = this.createInstance(tenant.tenantId, command.businessKey, command.businessKey);
+      const instance = this.createInstance(
+        tenant.tenantId,
+        command.businessKey,
+        command.businessKey,
+      );
       return instanceOf(instance);
     });
   }
@@ -197,6 +206,7 @@ export class FakeProcessEngine implements ProcessEngine {
 
   findTask(tenant: TenantContext, engineTaskId: string): Promise<EngineTaskRecord | null> {
     return this.call('findTask', () => {
+      this.foundTasks.push(engineTaskId);
       const task = this.tasks.find((t) => t.id === engineTaskId && t.tenantId === tenant.tenantId);
       return task === undefined ? null : this.recordOf(task);
     });
@@ -233,7 +243,7 @@ export class FakeProcessEngine implements ProcessEngine {
 
   private createInstance(tenantId: string, businessKey: string, coreInstanceId: string): Instance {
     const instance: Instance = {
-      id: `instance-${++this.#next}`,
+      id: `instance-${this.#run}-${++this.#next}`,
       tenantId,
       businessKey,
       coreInstanceId,

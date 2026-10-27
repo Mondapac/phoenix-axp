@@ -4,11 +4,7 @@ import { UseCase, type AccessDeclaration, type UseCaseGate } from '../../../../p
 import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work';
 import { invalidVariable, type EngineVariables } from '../../domain/engine-command';
 import type { EngineCommands } from '../engine-commands';
-import {
-  REVISION_NOT_FOUND,
-  type InvalidVariable,
-  type RevisionNotFound,
-} from '../failures';
+import { REVISION_NOT_FOUND, type InvalidVariable, type RevisionNotFound } from '../failures';
 import type { ProcessRepository } from '../process.repository';
 
 export interface StartProcessInstanceInput {

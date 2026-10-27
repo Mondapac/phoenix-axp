@@ -102,11 +102,7 @@ export interface ProcessRepository {
   findTask(tenant: TenantContext, id: string): Promise<TaskRecord | null>;
   findTaskByEngineId(tenant: TenantContext, engineTaskId: string): Promise<TaskRecord | null>;
   /** Open and completing tasks, oldest first, after `afterId`, at most `limit`. */
-  openTasks(
-    tenant: TenantContext,
-    afterId: string | null,
-    limit: number,
-  ): Promise<TaskRecord[]>;
+  openTasks(tenant: TenantContext, afterId: string | null, limit: number): Promise<TaskRecord[]>;
   /** Moves an open task to `completing` with its key; false when its version moved. */
   markCompleting(
     tenant: TenantContext,
@@ -123,7 +119,11 @@ export interface ProcessRepository {
 
   insertCommand(tenant: TenantContext, command: NewCommand, at: Temporal.Instant): Promise<void>;
   /** Commands due at `now`, oldest first: unpublished, alive and past their lease or retry. */
-  dueCommands(tenant: TenantContext, now: Temporal.Instant, limit: number): Promise<CommandRecord[]>;
+  dueCommands(
+    tenant: TenantContext,
+    now: Temporal.Instant,
+    limit: number,
+  ): Promise<CommandRecord[]>;
   /**
    * The claim (ADR-0020 decision 7): a compare-and-set on `attempts` that takes the lease until
    * `leaseUntil`. False when another relay claimed it first.

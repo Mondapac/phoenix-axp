@@ -104,7 +104,9 @@ export class FlowableRestEngine implements ProcessEngine {
       tenantId: tenant.tenantId,
       deploymentName: deploymentName(deployment),
     });
-    const created = (await this.call('POST', `/repository/deployments?${query.toString()}`, { form })) as {
+    const created = (await this.call('POST', `/repository/deployments?${query.toString()}`, {
+      form,
+    })) as {
       tenantId: string;
     };
     this.checkTenant(tenant, created.tenantId);
@@ -154,9 +156,13 @@ export class FlowableRestEngine implements ProcessEngine {
     if (running === null) return;
     if (running.id !== engineInstanceId) throw new EngineTenantMismatchError();
     this.checkTenant(tenant, running.tenantId);
-    await this.call('DELETE', `${path}?${new URLSearchParams({ deleteReason: reason }).toString()}`, {
-      allowNotFound: true,
-    });
+    await this.call(
+      'DELETE',
+      `${path}?${new URLSearchParams({ deleteReason: reason }).toString()}`,
+      {
+        allowNotFound: true,
+      },
+    );
   }
 
   async listOpenTasks(tenant: TenantContext): Promise<EngineOpenTask[]> {
@@ -245,7 +251,9 @@ export class FlowableRestEngine implements ProcessEngine {
     // The key first, on the task itself: history keeps it, so a repeat can tell its own
     // completion from anybody else's.
     const stored = await this.call('POST', `${path}/variables`, {
-      json: [{ name: COMPLETION_KEY_VARIABLE, type: 'string', value: completionKey, scope: 'local' }],
+      json: [
+        { name: COMPLETION_KEY_VARIABLE, type: 'string', value: completionKey, scope: 'local' },
+      ],
       allowNotFound: true,
     });
     if (stored === null) return 'gone';
@@ -318,7 +326,10 @@ export class FlowableRestEngine implements ProcessEngine {
       key: command.processKey,
       tenantId: tenant.tenantId,
     });
-    const page = (await this.call('GET', `/repository/process-definitions?${query.toString()}`)) as Page<{
+    const page = (await this.call(
+      'GET',
+      `/repository/process-definitions?${query.toString()}`,
+    )) as Page<{
       id: string;
       key: string;
       tenantId: string;
@@ -430,6 +441,11 @@ function variablesOf(variables: EngineVariables) {
 }
 
 const enc = encodeURIComponent;
-const iso = (instant: Temporal.Instant): string => instant.toString({ smallestUnit: 'millisecond' });
+/**
+ * A query date as Flowable's REST API parses it: whole seconds and `Z` (it refuses milliseconds).
+ * Rounded down, so the query never starts after the instant asked for.
+ */
+const iso = (instant: Temporal.Instant): string =>
+  instant.round({ smallestUnit: 'second', roundingMode: 'floor' }).toString();
 const deploymentName = (deployment: Pick<EngineDeployment, 'processKey' | 'revisionId'>) =>
   `${deployment.processKey}@${deployment.revisionId}`;

@@ -41,19 +41,39 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
   });
 
   it.each([
-    ['a script task', '<scriptTask id="s" scriptFormat="groovy"><script>x</script></scriptTask>', 'scriptTask'],
+    [
+      'a script task',
+      '<scriptTask id="s" scriptFormat="groovy"><script>x</script></scriptTask>',
+      'scriptTask',
+    ],
     ['a service task', '<serviceTask id="s" flowable:class="com.Evil"/>', 'serviceTask'],
-    ['a service task under another prefix', '<x:serviceTask xmlns:x="http://www.omg.org/spec/BPMN/20100524/MODEL" id="s"/>', 'serviceTask'],
+    [
+      'a service task under another prefix',
+      '<x:serviceTask xmlns:x="http://www.omg.org/spec/BPMN/20100524/MODEL" id="s"/>',
+      'serviceTask',
+    ],
     ['a business rule task', '<businessRuleTask id="b"/>', 'businessRuleTask'],
     ['a call activity', '<callActivity id="c" calledElement="other"/>', 'callActivity'],
     ['a sub-process', '<subProcess id="p"/>', 'subProcess'],
     ['a send task', '<sendTask id="s"/>', 'sendTask'],
-    ['a task listener', '<userTask id="u"><extensionElements><flowable:taskListener event="create" class="E"/></extensionElements></userTask>', 'extensionElements'],
+    [
+      'a task listener',
+      '<userTask id="u"><extensionElements><flowable:taskListener event="create" class="E"/></extensionElements></userTask>',
+      'extensionElements',
+    ],
     ['an assignee', '<userTask id="u" flowable:assignee="kermit"/>', 'assignee'],
     ['candidate groups', '<userTask id="u" flowable:candidateGroups="admins"/>', 'candidateGroups'],
-    ['a delegate expression', '<userTask id="u" flowable:delegateExpression="x"/>', 'delegateExpression'],
+    [
+      'a delegate expression',
+      '<userTask id="u" flowable:delegateExpression="x"/>',
+      'delegateExpression',
+    ],
     ['an async flag', '<userTask id="u" flowable:async="true"/>', 'async'],
-    ['a script condition', '<sequenceFlow id="f" sourceRef="a" targetRef="b"><conditionExpression language="groovy">true</conditionExpression></sequenceFlow>', 'language'],
+    [
+      'a script condition',
+      '<sequenceFlow id="f" sourceRef="a" targetRef="b"><conditionExpression language="groovy">true</conditionExpression></sequenceFlow>',
+      'language',
+    ],
   ])('refuses %s', (_label, body, field) => {
     expect(refusal(model(body))).toEqual({ code: 'process.bpmn.forbidden-construct', field });
   });
@@ -91,7 +111,10 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
     ['a processing instruction', '<?evil run?>'],
   ])('refuses %s', (_label, prefix) => {
     const xml = model(APPROVAL).replace('<definitions', `${prefix}\n<definitions`);
-    expect(refusal(xml)).toEqual({ code: 'process.bpmn.forbidden-construct', field: 'declaration' });
+    expect(refusal(xml)).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'declaration',
+    });
   });
 
   it('refuses another expression or type language', () => {

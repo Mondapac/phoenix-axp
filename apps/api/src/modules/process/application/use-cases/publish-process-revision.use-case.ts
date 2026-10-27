@@ -71,7 +71,10 @@ export class PublishProcessRevision extends UseCase<
         this.clock.now(),
       );
       await this.commands.deployRevision(context, { id });
-      await this.audit.record(context, PROCESS_REVISION_PUBLISHED.entry(id, { after: { revision } }));
+      await this.audit.record(
+        context,
+        PROCESS_REVISION_PUBLISHED.entry(id, { after: { revision } }),
+      );
       return ok({ id, revision });
     });
   }

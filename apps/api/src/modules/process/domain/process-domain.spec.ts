@@ -46,9 +46,9 @@ describe('statusOnEngineEnd (PoC 3 R4, R7, R10)', () => {
   });
 
   it('marks a pending completion superseded when the engine removed the task (deadline won)', () => {
-    expect(statusOnEngineEnd(completing, { kind: 'deleted', reason: 'boundary event (t)' })).toEqual(
-      { status: 'superseded', incident: 'completion-superseded' },
-    );
+    expect(
+      statusOnEngineEnd(completing, { kind: 'deleted', reason: 'boundary event (t)' }),
+    ).toEqual({ status: 'superseded', incident: 'completion-superseded' });
   });
 
   it('tells an escalation by a boundary timer from any other removal', () => {
@@ -68,7 +68,9 @@ describe('statusOnEngineEnd (PoC 3 R4, R7, R10)', () => {
 
   it('leaves a closed task alone', () => {
     for (const status of ['completed', 'superseded', 'escalated', 'cancelled'] as const) {
-      expect(statusOnEngineEnd({ status, completionKey: null }, { kind: 'deleted', reason: null })).toBeNull();
+      expect(
+        statusOnEngineEnd({ status, completionKey: null }, { kind: 'deleted', reason: null }),
+      ).toBeNull();
     }
   });
 

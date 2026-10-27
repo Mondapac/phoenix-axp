@@ -197,7 +197,9 @@ function decode(raw: string): string | null {
 const localName = (name: string): string => name.slice(name.indexOf(':') + 1);
 
 const NAME = '[A-Za-z_][A-Za-z0-9_.-]*(?::[A-Za-z_][A-Za-z0-9_.-]*)?';
-const START_TAG = new RegExp(`^<(${NAME})((?:\\s+${NAME}\\s*=\\s*(?:"[^"<]*"|'[^'<]*'))*)\\s*(/?)>`);
+const START_TAG = new RegExp(
+  `^<(${NAME})((?:\\s+${NAME}\\s*=\\s*(?:"[^"<]*"|'[^'<]*'))*)\\s*(/?)>`,
+);
 const END_TAG = new RegExp(`^</(${NAME})\\s*>`);
 const ATTRIBUTE = new RegExp(`\\s+(${NAME})\\s*=\\s*(?:"([^"<]*)"|'([^'<]*)')`, 'g');
 const XML_DECLARATION = /^<\?xml\s[^?]*\?>/;

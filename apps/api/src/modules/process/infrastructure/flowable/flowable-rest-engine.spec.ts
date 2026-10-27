@@ -28,7 +28,7 @@ type Route = (call: Call) => { status: number; json?: unknown } | undefined;
 
 function scripted(routes: Route[]) {
   const calls: Call[] = [];
-  const fetchFn = (async (input: string | URL, init?: RequestInit) => {
+  const fetchFn = ((input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : init?.body;
     const call: Call = {
@@ -41,12 +41,14 @@ function scripted(routes: Route[]) {
     for (const route of routes) {
       const answer = route(call);
       if (answer !== undefined) {
-        return new Response(answer.json === undefined ? null : JSON.stringify(answer.json), {
-          status: answer.status,
-        });
+        return Promise.resolve(
+          new Response(answer.json === undefined ? null : JSON.stringify(answer.json), {
+            status: answer.status,
+          }),
+        );
       }
     }
-    return new Response('', { status: 404 });
+    return Promise.resolve(new Response('', { status: 404 }));
   }) as typeof fetch;
   const engine = new FlowableRestEngine(
     { url: 'http://flowable:8080/flowable-rest/service', user: 'core', password: 'secret' },
@@ -57,7 +59,11 @@ function scripted(routes: Route[]) {
 
 const page = (data: unknown[]) => ({ status: 200, json: { data, total: data.length } });
 const on =
-  (method: string, path: string, answer: (call: Call) => { status: number; json?: unknown }): Route =>
+  (
+    method: string,
+    path: string,
+    answer: (call: Call) => { status: number; json?: unknown },
+  ): Route =>
   (call) =>
     call.method === method && call.path === path ? answer(call) : undefined;
 
@@ -172,9 +178,11 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
           { name: INSTANCE_VARIABLE, type: 'string', value: 'bk-1' },
         ],
       });
-      expect(calls.find((call) => call.path === '/repository/process-definitions')!.query.get(
-        'tenantId',
-      )).toBe(tenantId);
+      expect(
+        calls
+          .find((call) => call.path === '/repository/process-definitions')!
+          .query.get('tenantId'),
+      ).toBe(tenantId);
     });
 
     it.each([
@@ -278,7 +286,7 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
       ]);
       const records = await engine.listEndedTasks(
         tenant,
-        Temporal.Instant.from('2026-10-27T12:00:00Z'),
+        Temporal.Instant.from('2026-10-27T12:00:00.750Z'),
         500,
       );
       expect(records.map((record) => record.end)).toEqual([
@@ -289,7 +297,7 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
       const query = calls[0]!.query;
       expect(query.get('tenantId')).toBe(tenantId);
       expect(query.get('finished')).toBe('true');
-      expect(query.get('taskCompletedAfter')).toBe('2026-10-27T12:00:00.000Z');
+      expect(query.get('taskCompletedAfter')).toBe('2026-10-27T12:00:00Z');
       expect(query.get('sort')).toBe('endTime');
     });
 
@@ -343,7 +351,10 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
           call.query.get('taskId') === 't-1' ? page([task({ endTime: null })]) : page([]),
         ),
       ]);
-      expect(await engine.findTask(tenant, 't-1')).toMatchObject({ engineTaskId: 't-1', end: null });
+      expect(await engine.findTask(tenant, 't-1')).toMatchObject({
+        engineTaskId: 't-1',
+        end: null,
+      });
       expect(await engine.findTask(tenant, 't-9')).toBeNull();
       expect(calls[0]!.query.get('tenantId')).toBe(tenantId);
     });
@@ -426,7 +437,7 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
     it('maps a refused connection to unreachable and never puts the credential in the error', async () => {
       const engine = new FlowableRestEngine(
         { url: 'http://flowable:8080/flowable-rest/service', user: 'core', password: 'secret' },
-        (() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch,
+        () => Promise.reject(new TypeError('fetch failed')),
       );
       const failure = await engine.listOpenTasks(tenant).catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(EngineUnavailableError);
@@ -439,6 +450,8 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
 describe('instantOfEngine', () => {
   it("reads Flowable's offsets with and without a colon", () => {
     expect(instantOfEngine('2026-10-27T12:00:00.000+0000').toString()).toBe('2026-10-27T12:00:00Z');
-    expect(instantOfEngine('2026-10-27T15:30:00.000+03:30').toString()).toBe('2026-10-27T12:00:00Z');
+    expect(instantOfEngine('2026-10-27T15:30:00.000+03:30').toString()).toBe(
+      '2026-10-27T12:00:00Z',
+    );
   });
 });

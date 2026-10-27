@@ -9,7 +9,10 @@ export class NodeBridgeHashing implements BridgeHashing {
 
   derivedId(parts: readonly string[]): string {
     // NUL never occurs in a tenant id, a kind or an engine id: the join is unambiguous.
-    const bytes = createHash('sha256').update(parts.join('\u0000'), 'utf8').digest().subarray(0, 16);
+    const bytes = createHash('sha256')
+      .update(parts.join('\u0000'), 'utf8')
+      .digest()
+      .subarray(0, 16);
     bytes[6] = (bytes[6]! & 0x0f) | 0x80; // version 8 (RFC 9562)
     bytes[8] = (bytes[8]! & 0x3f) | 0x80; // the RFC 9562 variant
     const hex = bytes.toString('hex');

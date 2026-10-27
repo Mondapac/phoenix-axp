@@ -187,6 +187,9 @@ jobs:
           S3_ENDPOINT: http://localhost:8333
           S3_ACCESS_KEY_ID: phoenix
           S3_SECRET_ACCESS_KEY: phoenix-dev-secret
+          # For test/db/process-flowable.db-spec.ts only: the Flowable started above (slice 2.2).
+          FLOWABLE_TEST_URL: http://localhost:8090/flowable-rest/service
+          FLOWABLE_TEST_PASSWORD: phoenix-ci-flowable
 
       - name: Build
         run: pnpm build
