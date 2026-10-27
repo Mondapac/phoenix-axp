@@ -516,6 +516,23 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
     const rulesIn = (file: string): string[] => messagesIn(file).map(label).sort();
     const textsIn = (file: string): string[] => messagesIn(file).map((m) => m.message);
 
+    it('has a fixture that breaks every design rule named in eslint.config.mjs', () => {
+      // Every restricted-syntax, -imports or -properties message carries its rule name
+      // ("<design-rule>: ..."); a rule added without a fixture that fires it fails here (QA
+      // review 2.6).
+      const config = readFileSync(path.join(REPO_ROOT, 'eslint.config.mjs'), 'utf8');
+      const declared = [
+        ...new Set([...config.matchAll(/[`'"]([a-z]+(?:-[a-z]+)+): /g)].map((m) => m[1]!)),
+      ].sort();
+      const messages = [...results.values()].flat().map((message) => message.message);
+      const fired = new Set(
+        declared.filter((rule) => messages.some((text) => text.includes(`${rule}: `))),
+      );
+
+      expect(declared.length).toBeGreaterThanOrEqual(8);
+      expect(declared.filter((rule) => !fired.has(rule))).toEqual([]);
+    });
+
     it('reports every message of every fixture as an error', () => {
       const notErrors = [...results].flatMap(([file, messages]) =>
         messages.filter((message) => message.severity !== 2).map(() => file),
