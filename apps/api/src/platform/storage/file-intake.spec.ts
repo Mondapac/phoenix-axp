@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { FileIntake, MAX_FILE_BYTES, MAX_FILE_NAME_LENGTH, sanitiseFileName } from './file-intake';
 import type { IntakePolicy, MalwareScanner } from './file-intake';
+import { ooxmlOf } from '../../../test/support/zip';
 
 const bytes = (...parts: (string | number[])[]): Uint8Array =>
   Uint8Array.from(
@@ -12,7 +13,10 @@ const JPEG = bytes([0xff, 0xd8, 0xff, 0xe0], 'JFIF');
 const GIF = bytes('GIF89a', [1, 0, 1, 0]);
 const WEBP = bytes('RIFF', [0, 0, 0, 0], 'WEBPVP8 ');
 const PDF = bytes('%PDF-1.7\n');
-const ZIP = bytes([0x50, 0x4b, 0x03, 0x04], '[Content_Types].xml');
+const DOCX = ooxmlOf('word/document.xml');
+const XLSX = ooxmlOf('xl/workbook.xml');
+const PPTX = ooxmlOf('ppt/presentation.xml');
+const MACRO_DOCX = ooxmlOf('word/document.xml', { name: 'word/vbaProject.bin' });
 const TEXT = bytes('نام,کد ملی\nعلی,123\n');
 
 const OOXML = 'application/vnd.openxmlformats-officedocument';
@@ -32,9 +36,9 @@ describe('FileIntake', () => {
     ['anim.gif', GIF, 'gif', 'image/gif'],
     ['photo.webp', WEBP, 'webp', 'image/webp'],
     ['form.pdf', PDF, 'pdf', 'application/pdf'],
-    ['letter.docx', ZIP, 'docx', `${OOXML}.wordprocessingml.document`],
-    ['sheet.xlsx', ZIP, 'xlsx', `${OOXML}.spreadsheetml.sheet`],
-    ['deck.pptx', ZIP, 'pptx', `${OOXML}.presentationml.presentation`],
+    ['letter.docx', DOCX, 'docx', `${OOXML}.wordprocessingml.document`],
+    ['sheet.xlsx', XLSX, 'xlsx', `${OOXML}.spreadsheetml.sheet`],
+    ['deck.pptx', PPTX, 'pptx', `${OOXML}.presentationml.presentation`],
     ['notes.txt', TEXT, 'txt', 'text/plain; charset=utf-8'],
     ['list.csv', TEXT, 'csv', 'text/csv; charset=utf-8'],
   ])('accepts %s by extension and content', async (fileName, content, type, contentType) => {
@@ -104,7 +108,9 @@ describe('FileIntake', () => {
     ['a PDF renamed to .jpg', 'a.jpg', PDF],
     ['HTML renamed to .pdf', 'a.pdf', bytes('<html><script>')],
     ['a PNG renamed to .txt', 'a.txt', PNG],
-    ['a ZIP renamed to .csv', 'a.csv', ZIP],
+    ['a ZIP renamed to .csv', 'a.csv', DOCX],
+    ['a workbook renamed to .docx', 'a.docx', XLSX],
+    ['a macro document renamed to .docx', 'a.docx', MACRO_DOCX],
     ['binary with a NUL renamed to .txt', 'a.txt', bytes('abc', [0], 'def')],
     ['invalid UTF-8 in a .csv', 'a.csv', bytes([0xc3, 0x28])],
     ['a truncated PNG signature', 'a.png', bytes([0x89, 0x50, 0x4e])],
@@ -154,6 +160,14 @@ describe('FileIntake', () => {
       expect(result).toEqual({ ok: false, error: { code: 'file.infected' } });
     });
 
+    it('counts any answer but clean as infected', async () => {
+      const scan = jest.fn<Promise<'clean' | 'infected'>, [Uint8Array]>();
+      scan.mockResolvedValue(undefined as unknown as 'clean');
+      const result = await new FileIntake({ scan }).accept({ fileName: 'a.pdf', bytes: PDF }, ANY);
+
+      expect(result).toEqual({ ok: false, error: { code: 'file.infected' } });
+    });
+
     it('does not scan a file the checks already refused', async () => {
       const { scanner, scan } = scannerAnswering('clean');
       await new FileIntake(scanner).accept({ fileName: 'a.exe', bytes: PDF }, ANY);
@@ -199,6 +213,19 @@ describe('sanitiseFileName', () => {
     ['cafe\u0301.txt', 'caf\u00e9.txt'],
   ])('turns %p into %p', (raw, expected) => {
     expect(sanitiseFileName(raw)).toBe(expected);
+  });
+
+  it.each([
+    ['a lone high surrogate', 'a\ud800b.pdf', 'ab.pdf'],
+    ['a lone low surrogate', 'a\udc00b.pdf', 'ab.pdf'],
+    ['a zero width space', 'in\u200bvoice.pdf', 'invoice.pdf'],
+    ['a byte order mark', '\ufeffreport.pdf', 'report.pdf'],
+    ['a soft hyphen and a word joiner', 'rep\u00adort\u2060.pdf', 'report.pdf'],
+  ])('removes %s', (_, raw, expected) => {
+    const name = sanitiseFileName(raw);
+
+    expect(name).toBe(expected);
+    expect(() => encodeURIComponent(name ?? '')).not.toThrow();
   });
 
   it.each(['', '   ', '...', '../', '\u202e'])('answers null for %p', (raw) => {

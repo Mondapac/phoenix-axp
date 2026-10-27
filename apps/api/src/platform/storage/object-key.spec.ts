@@ -1,5 +1,5 @@
 import { Temporal } from '@phoenix/shared-kernel';
-import type { Id } from '@phoenix/shared-kernel';
+import type { Id, TenantContext } from '@phoenix/shared-kernel';
 import { FixedClock, SequenceIdGenerator, testTenantContext } from '@phoenix/shared-kernel/testing';
 import { objectKey } from './object-key';
 
@@ -31,5 +31,11 @@ describe('objectKey', () => {
     expect(() => objectKey(testTenantContext('acme-gov'), 'forms', id as Id<'File'>)).toThrow(
       TypeError,
     );
+  });
+
+  it('throws on a tenant context that was not minted', () => {
+    const forged = { tenantId: 'acme-gov' } as unknown as TenantContext;
+
+    expect(() => objectKey(forged, 'forms', ids.next())).toThrow(TypeError);
   });
 });

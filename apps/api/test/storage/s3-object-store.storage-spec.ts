@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { Global, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Temporal } from '@phoenix/shared-kernel';
 import { FixedClock, SequenceIdGenerator, testTenantContext } from '@phoenix/shared-kernel/testing';
@@ -8,7 +9,11 @@ import { objectKey } from '../../src/platform/storage/object-key';
 import { OBJECT_STORE } from '../../src/platform/storage/object-store';
 import type { ObjectStore } from '../../src/platform/storage/object-store';
 import { S3ObjectStore } from '../../src/platform/storage/s3-object-store';
-import { StorageModule } from '../../src/platform/storage/storage.module';
+import { MALWARE_SCANNER } from '../../src/platform/storage/file-intake';
+import {
+  MalwareScannerRequiredError,
+  StorageModule,
+} from '../../src/platform/storage/storage.module';
 import { testAppConfig } from '../support/test-config';
 
 function required(name: string): string {
@@ -101,6 +106,26 @@ describe('S3ObjectStore against SeaweedFS', () => {
     expect(answer.status).toBe(403);
   });
 
+  it('refuses an expired signed URL', async () => {
+    const key = objectKey(tenantA, 'forms', ids.next());
+    await store.put(key, Buffer.from('secret'), 'text/plain');
+
+    const url = await store.signedDownloadUrl(key, { expiresInSeconds: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 2_100));
+
+    expect((await fetch(url)).status).toBe(403);
+  });
+
+  it('refuses a signed URL whose Content-Disposition was changed to inline', async () => {
+    const key = objectKey(tenantA, 'forms', ids.next());
+    await store.put(key, Buffer.from('<script>alert(1)</script>'), 'text/plain');
+
+    const url = new URL(await store.signedDownloadUrl(key, { expiresInSeconds: 60 }));
+    url.searchParams.set('response-content-disposition', 'inline');
+
+    expect((await fetch(url)).status).toBe(403);
+  });
+
   it('refuses an unsigned request', async () => {
     const key = objectKey(tenantA, 'forms', ids.next());
     await store.put(key, Buffer.from('secret'), 'text/plain');
@@ -112,12 +137,26 @@ describe('S3ObjectStore against SeaweedFS', () => {
 });
 
 describe('StorageModule', () => {
-  async function initModule(env: Record<string, string>): Promise<{
-    store: ObjectStore;
-    close: () => Promise<void>;
-  }> {
+  /** A scanner bound the way a deployment binds one: a global module exporting the token. */
+  @Global()
+  @Module({
+    providers: [{ provide: MALWARE_SCANNER, useValue: { scan: () => Promise.resolve('clean') } }],
+    exports: [MALWARE_SCANNER],
+  })
+  class CleanScannerModule {}
+
+  /** `production` sets nodeEnv after loading, so the local key and http endpoint still load. */
+  async function initModule(
+    env: Record<string, string>,
+    options: { production?: boolean; scanner?: boolean } = {},
+  ): Promise<{ store: ObjectStore; close: () => Promise<void> }> {
+    const config = testAppConfig(env);
     const moduleRef = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot(testAppConfig(env)), StorageModule],
+      imports: [
+        ConfigModule.forRoot(options.production ? { ...config, nodeEnv: 'production' } : config),
+        StorageModule,
+        ...(options.scanner ? [CleanScannerModule] : []),
+      ],
     }).compile();
     await moduleRef.init();
     return { store: moduleRef.get(OBJECT_STORE), close: () => moduleRef.close() };
@@ -136,9 +175,15 @@ describe('StorageModule', () => {
     }
   });
 
+  it('refuses to start in production without a malware scanner', async () => {
+    await expect(
+      initModule({ ...STORAGE_ENV, S3_BUCKET: freshBucket() }, { production: true }),
+    ).rejects.toThrow(MalwareScannerRequiredError);
+  });
+
   it('refuses to start in production when the bucket is missing', async () => {
     await expect(
-      initModule({ ...STORAGE_ENV, S3_BUCKET: freshBucket(), NODE_ENV: 'production' }),
+      initModule({ ...STORAGE_ENV, S3_BUCKET: freshBucket() }, { production: true, scanner: true }),
     ).rejects.toMatchObject({ name: 'NotFound' });
   });
 });

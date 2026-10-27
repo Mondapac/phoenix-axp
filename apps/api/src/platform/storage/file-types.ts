@@ -1,3 +1,5 @@
+import { isOoxmlPackage } from './ooxml';
+
 /**
  * The closed catalogue of file types the platform accepts (ADR-0012 decision 3). A type is
  * named by its file extension and proven by its content: the browser's declared content type
@@ -13,17 +15,17 @@ export const FILE_TYPES = {
   docx: {
     contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     extensions: ['docx'],
-    content: 'zip',
+    content: 'docx',
   },
   xlsx: {
     contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     extensions: ['xlsx'],
-    content: 'zip',
+    content: 'xlsx',
   },
   pptx: {
     contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     extensions: ['pptx'],
-    content: 'zip',
+    content: 'pptx',
   },
   txt: { contentType: 'text/plain; charset=utf-8', extensions: ['txt'], content: 'text' },
   csv: { contentType: 'text/csv; charset=utf-8', extensions: ['csv'], content: 'text' },
@@ -31,7 +33,8 @@ export const FILE_TYPES = {
 
 export type FileType = keyof typeof FILE_TYPES;
 
-type ContentCheck = 'png' | 'jpeg' | 'gif' | 'webp' | 'pdf' | 'zip' | 'text';
+type ContentCheck =
+  'png' | 'jpeg' | 'gif' | 'webp' | 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'zip' | 'text';
 
 interface FileTypeDefinition {
   readonly contentType: string;
@@ -70,7 +73,11 @@ const CHECKS: Record<ContentCheck, (bytes: Uint8Array) => boolean> = {
   gif: (bytes) => startsWith(bytes, ascii('GIF87a')) || startsWith(bytes, ascii('GIF89a')),
   webp: (bytes) => startsWith(bytes, ascii('RIFF')) && startsWith(bytes, ascii('WEBP'), 8),
   pdf: (bytes) => startsWith(bytes, ascii('%PDF-')),
-  // A local file header. An empty archive (PK\x05\x06) holds no document.
+  // Office Open XML: a ZIP package with the format's main part and no macros (ooxml.ts).
+  docx: (bytes) => isOoxmlPackage(bytes, 'word/document.xml'),
+  xlsx: (bytes) => isOoxmlPackage(bytes, 'xl/workbook.xml'),
+  pptx: (bytes) => isOoxmlPackage(bytes, 'ppt/presentation.xml'),
+  // Any ZIP local file header: never accepted as a type, only refused as text.
   zip: (bytes) => startsWith(bytes, [0x50, 0x4b, 0x03, 0x04]),
   // Valid UTF-8 with no NUL byte, and not a binary format renamed to .txt or .csv.
   text: (bytes) => {

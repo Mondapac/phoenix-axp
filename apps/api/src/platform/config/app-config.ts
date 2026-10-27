@@ -161,11 +161,30 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
 /** All of STORAGE_REQUIRED or none of them; all of them in production. */
 function storageIssues(env: Record<string, string | undefined>, nodeEnv: string): string[] {
   const missing = STORAGE_REQUIRED.filter((name) => !env[name]);
-  if (missing.length === 0) return [];
+  if (missing.length === 0) return nodeEnv === 'production' ? productionStorageIssues(env) : [];
   if (nodeEnv === 'production') {
     return missing.map((name) => `${name}: required in production (object storage, ADR-0012)`);
   }
   if (missing.length === STORAGE_REQUIRED.length) return [];
   const together = STORAGE_REQUIRED.join(', ');
   return missing.map((name) => `${name}: ${together} are set together (object storage, ADR-0012)`);
+}
+
+/** The local development key of infra/seaweedfs/s3.json: never a production credential. */
+const DEVELOPMENT_SECRET = 'phoenix-dev-secret';
+
+/** Production serves signed URLs over https only, and never with the development key. */
+function productionStorageIssues(env: Record<string, string | undefined>): string[] {
+  const issues: string[] = [];
+  const publicEndpoint = env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT ?? '';
+  if (!publicEndpoint.startsWith('https://')) {
+    issues.push(
+      `${env.S3_PUBLIC_ENDPOINT ? 'S3_PUBLIC_ENDPOINT' : 'S3_ENDPOINT'}: signed URLs need ` +
+        'https in production (set S3_PUBLIC_ENDPOINT to the https URL browsers use)',
+    );
+  }
+  if (env.S3_SECRET_ACCESS_KEY === DEVELOPMENT_SECRET) {
+    issues.push('S3_SECRET_ACCESS_KEY: the local development key is refused in production');
+  }
+  return issues;
 }

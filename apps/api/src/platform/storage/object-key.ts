@@ -1,4 +1,4 @@
-import { parseId } from '@phoenix/shared-kernel';
+import { isMinted, parseId, parseTenantId } from '@phoenix/shared-kernel';
 import type { Id, TenantContext } from '@phoenix/shared-kernel';
 
 /**
@@ -20,6 +20,9 @@ export function objectKey<K extends string>(
   module: string,
   id: Id<K>,
 ): ObjectKey {
+  if (!isMinted(tenant) || !parseTenantId(tenant.tenantId).ok) {
+    throw new TypeError('objectKey: the tenant must be a minted TenantContext');
+  }
   if (!MODULE_NAME.test(module)) {
     throw new TypeError('objectKey: the module must be a module folder name');
   }

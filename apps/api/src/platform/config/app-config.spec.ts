@@ -144,8 +144,37 @@ describe('loadAppConfig', () => {
         'S3_SECRET_ACCESS_KEY: required in production (object storage, ADR-0012)',
       ]);
       expect(
-        loadAppConfig({ HOSTED_TENANTS: 'acme-gov', NODE_ENV: 'production', ...STORAGE }).storage,
+        loadAppConfig({
+          HOSTED_TENANTS: 'acme-gov',
+          NODE_ENV: 'production',
+          ...STORAGE,
+          S3_PUBLIC_ENDPOINT: 'https://files.example.test',
+          S3_SECRET_ACCESS_KEY: 'a-real-secret',
+        }).storage,
       ).not.toBeNull();
+    });
+
+    it('needs https signed URLs and a real key in production', () => {
+      expect(
+        issuesOf({
+          HOSTED_TENANTS: 'acme-gov',
+          NODE_ENV: 'production',
+          ...STORAGE,
+          S3_SECRET_ACCESS_KEY: 'phoenix-dev-secret',
+        }),
+      ).toEqual([
+        expect.stringMatching(/^S3_ENDPOINT: signed URLs need https in production/),
+        'S3_SECRET_ACCESS_KEY: the local development key is refused in production',
+      ]);
+      expect(
+        issuesOf({
+          HOSTED_TENANTS: 'acme-gov',
+          NODE_ENV: 'production',
+          ...STORAGE,
+          S3_PUBLIC_ENDPOINT: 'http://files.example.test',
+          S3_SECRET_ACCESS_KEY: 'a-real-secret',
+        }),
+      ).toEqual([expect.stringMatching(/^S3_PUBLIC_ENDPOINT: signed URLs need https/)]);
     });
 
     it.each([

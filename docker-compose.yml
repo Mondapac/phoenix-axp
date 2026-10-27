@@ -100,6 +100,9 @@ services:
     # always starts with infra/seaweedfs/s3.json: one local-only key (phoenix /
     # phoenix-dev-secret, as in .env.example); unsigned requests get 403. Volumes are capped at
     # 64 MB: each bucket gets its own volumes, and the 30 GB default fills a laptop disk fast.
+    # The master (9333) and filer (8888) ports bypass S3 signing entirely: they are published
+    # on 127.0.0.1 here for debugging only, and a deployment never exposes them. The local key
+    # has Admin so the API can create its bucket; a production key needs Read, Write, List.
     image: chrislusf/seaweedfs:3.80
     command:
       - server

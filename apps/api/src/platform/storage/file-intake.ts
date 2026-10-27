@@ -11,7 +11,11 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 /** The longest stored file name, in characters, extension included. */
 export const MAX_FILE_NAME_LENGTH = 200;
 
-/** What one upload use case accepts. Each owning module declares its own. */
+/**
+ * What one upload use case accepts. Each owning module declares its own. The route that parses
+ * the request must also cap the body at `maxBytes` (multer `limits.fileSize`, `files: 1`):
+ * the intake sees bytes already in memory.
+ */
 export interface IntakePolicy {
   /** 1 to {@link MAX_FILE_BYTES}. */
   readonly maxBytes: number;
@@ -47,7 +51,11 @@ export type IntakeRefusal =
   | { readonly code: 'file.type-mismatch' }
   | { readonly code: 'file.infected' };
 
-/** Injection token for the optional {@link MalwareScanner} (ADR-0012 decision 3). */
+/**
+ * Injection token for the {@link MalwareScanner} (ADR-0012 decision 3), bound by a global
+ * module that exports it. Optional outside production; production refuses to start without
+ * one (StorageModule).
+ */
 export const MALWARE_SCANNER = Symbol('MALWARE_SCANNER');
 
 /** The malware-scan hook. No adapter is bound yet; a deployment binds one (ClamAV, for one). */
@@ -55,9 +63,12 @@ export interface MalwareScanner {
   scan(bytes: Uint8Array): Promise<'clean' | 'infected'>;
 }
 
-// C0 and C1 controls, and the bidi marks and overrides that can make "gpj.exe" read as
-// "exe.jpg". ZWNJ (U+200C) and ZWJ stay: Persian names need them.
-const UNSAFE_CHARACTERS = /[\p{Cc}؜‎‏‪-‮⁦-⁩]|[<>:"|?*]/gu;
+// C0 and C1 controls; lone surrogates, which break percent-encoding of the name later; the
+// bidi marks and overrides that can make "gpj.exe" read as "exe.jpg"; and invisible format
+// characters (zero width space, word joiner, BOM, soft hyphen). ZWNJ (U+200C) and ZWJ
+// (U+200D) stay: Persian names need them.
+const UNSAFE_CHARACTERS =
+  /[\p{Cc}\p{Cs}\u00ad\u061c\u200b\u200e\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]|[<>:"|?*]/gu;
 
 /**
  * The file name to store: the last path segment of what the client sent, in NFC, without
@@ -93,6 +104,11 @@ export class FileIntake {
     @Optional() @Inject(MALWARE_SCANNER) private readonly scanner: MalwareScanner | null = null,
   ) {}
 
+  /** True when a malware scanner is bound. */
+  get scans(): boolean {
+    return this.scanner !== null;
+  }
+
   async accept(
     file: IncomingFile,
     policy: IntakePolicy,
@@ -114,8 +130,8 @@ export class FileIntake {
 
     let scan: AcceptedFile['scan'] = 'not-scanned';
     if (this.scanner !== null) {
-      if ((await this.scanner.scan(file.bytes)) === 'infected')
-        return err({ code: 'file.infected' });
+      // Only an explicit 'clean' passes: any other answer counts as infected.
+      if ((await this.scanner.scan(file.bytes)) !== 'clean') return err({ code: 'file.infected' });
       scan = 'clean';
     }
 
