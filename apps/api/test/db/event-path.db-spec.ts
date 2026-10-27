@@ -538,14 +538,15 @@ describe('event path: publish, relay, consume (database integration)', () => {
 
     it('a stale give-back changes nothing: another dispatcher has claimed and delivered the row', async () => {
       const clock = startClock();
-      let second: PrismaEventDispatcher | undefined;
+      // The second dispatcher needs the handler's entry, and the handler calls it.
+      const peer: { second?: PrismaEventDispatcher } = {};
       const handler = slowFirstHandler(async () => {
         // Past the 30 s lease: the second dispatcher claims the rest of the batch again.
         clock.advance(Temporal.Duration.from({ seconds: 31 }));
-        expect((await second!.runOnce()).claimed).toBe(1);
+        expect((await peer.second!.runOnce()).claimed).toBe(1);
       });
       const first = stackOf({ entry: handler.entry, handled: [] }, clock);
-      second = stackOf({ entry: handler.entry, handled: [] }, clock).dispatcher;
+      peer.second = stackOf({ entry: handler.entry, handled: [] }, clock).dispatcher;
       const eventIds = await outboxIdsOf(await writeThings(code, 2));
       await first.relay.runOnce();
 
