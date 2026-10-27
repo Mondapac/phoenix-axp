@@ -1,6 +1,6 @@
 # ADR-0009: Licence Policy and Proprietary Product
 
-**Status:** Accepted — 2026-10-26 (owner decision: proprietary product; no GPL or AGPL)
+**Status:** Accepted — 2026-10-26 (owner decision: proprietary product; no GPL or AGPL). Amended by ADR-0022 (allow-list)
 **Relates to:** ADR-0005, ADR-0012, ADR-0014
 
 ## Context

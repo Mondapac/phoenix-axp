@@ -1,28 +1,46 @@
 // The licence policy of ADR-0009, as pure functions: `check-licences.mjs` applies it to the
 // pnpm listings, and apps/api/test/licences.spec.ts proves each rule on fixtures.
 //
-//   - ALLOWED licences (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC) pass silently
-//     (ADR-0009 decision 1).
+//   - ALLOWED licences (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC: ADR-0009 decision 1;
+//     0BSD, CC0-1.0, Unlicense, BlueOak-1.0.0, Python-2.0: ADR-0022 decision 4) pass silently.
+//     An exception for an allowed licence is refused as unneeded.
 //   - DENIED families (GPL, LGPL, AGPL, SSPL, BUSL, the Sustainable Use and similar licences)
 //     always fail, even when listed as an exception (ADR-0009 decision 2). They are recognised
 //     by their SPDX ids and by their names written out anywhere in the declared licence
 //     ("GNU General Public License v3", "Server Side Public License", "LicenseRef-GPL", ...),
 //     so a non-SPDX spelling cannot turn a denied licence into one that an exception passes.
-//   - Every other licence, the permissive variants (MIT-0, 0BSD, BlueOak, Unlicense, CC0, ...)
-//     included, fails unless config/licence-exceptions.json lists that package under that exact
-//     licence, with a reason, the approver `cto` and a date (ADR-0009 decision 2 and its
-//     Consequences: "CI lists them as failures and `cto` approves each one explicitly").
+//   - Every other licence, MIT-0, MPL-2.0 and EPL-2.0 included (ADR-0022 decision 4 keeps
+//     MPL-2.0 and EPL-2.0 case by case), fails unless config/licence-exceptions.json lists that
+//     package under that exact licence, with a reason, the approver `cto` and a date
+//     (ADR-0009 decision 2 and its Consequences: "CI lists them as failures and `cto` approves each one explicitly").
 //   - A package with no or an unknown licence always fails (ADR-0009 decision 3).
 //   - The whole dependency tree is checked, dev dependencies included (ADR-0009 decision 3).
 //     An exception whose reason is DEV_ONLY_REASON fails when that package ships (is in the
 //     production closure).
 //   - An exception that matches no package fails, so the reviewed list never outlives its use.
+//   - SIL OFL-1.1 passes for font packages only (ADR-0022 decision 7): a package of the
+//     FONT_PACKAGE family, whose files are fonts used unmodified and served from our own origin.
+//     OFL-1.1 on any other package still needs an exception. The gate checks the name only;
+//     "unmodified, self-hosted" is kept by review (the panels bundle the files, no font CDN).
 //
 // An SPDX expression passes when one alternative of an OR passes, and an AND only when every
 // part passes; `WITH` and anything unparsed need an exception. An OR with an allowed choice
 // passes even when another choice is denied: "MIT OR GPL-3.0" is taken under MIT.
 
-export const ALLOWED = new Set(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC']);
+export const ALLOWED = new Set([
+  // ADR-0009 decision 1.
+  'MIT',
+  'Apache-2.0',
+  'BSD-2-Clause',
+  'BSD-3-Clause',
+  'ISC',
+  // ADR-0022 decision 4 (owner decision P4, limited widening).
+  '0BSD',
+  'CC0-1.0',
+  'Unlicense',
+  'BlueOak-1.0.0',
+  'Python-2.0',
+]);
 
 /** Refused whatever the exceptions file says: incompatible with a proprietary product. */
 export const DENIED =
@@ -34,6 +52,14 @@ export const DENIED =
  */
 export const DENIED_WORDS =
   /General\s+Public\s+Licen[cs]e|Lesser\s+General\s+Public|Affero|Business\s+Source|Server\s+Side\s+Public|Sustainable\s+Use|Commons[\s-]+Clause|LicenseRef-[\w.+-]*GPL/i;
+
+/** ADR-0022 decision 7: the font licence, and the packages that hold font files only. */
+export const FONT_LICENCE = 'OFL-1.1';
+export const FONT_PACKAGE = /^@fontsource(-variable)?\/[a-z0-9-]+$/;
+
+/** Whether a package passes as a font under the font licence (ADR-0022 decision 7). */
+export const isFontPackage = (name, licence) =>
+  licence.trim() === FONT_LICENCE && FONT_PACKAGE.test(name);
 
 /** The reason that marks an exception as dev-only: such a package may never ship. */
 export const DEV_ONLY_REASON = 'dev-only, not shipped';
@@ -191,6 +217,10 @@ export function checkLicences({ all, production, exceptions }) {
     const ships = shipped.has(key);
     const verdict = verdictOf(pkg.licence);
     if (verdict === 'pass') continue;
+    if (isFontPackage(pkg.name, pkg.licence)) {
+      applied.push(`${label}: font files only, self-hosted (ADR-0022 decision 7)`);
+      continue;
+    }
     if (verdict === 'denied') {
       failures.push(`${label}: forbidden by ADR-0009, whatever the exceptions file says`);
       continue;

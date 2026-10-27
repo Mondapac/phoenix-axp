@@ -103,3 +103,12 @@ export type {
   AuditTargetValue,
   AuditValuesOf,
 } from './audit-action';
+
+export {
+  normaliseForStorage,
+  normaliseInput,
+  normaliseLetters,
+  searchKey,
+  toAsciiDigits,
+} from './persian-text';
+export type { TextMode } from './persian-text';

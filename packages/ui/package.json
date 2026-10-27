@@ -1,0 +1,41 @@
+{
+  "name": "@phoenix/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "In-house panel components on Base UI, design tokens, locale and calendar helpers (ADR-0016). Consumed as source by the Next.js panels.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js && node --test 'lint/*.spec.mjs'",
+    "tokens": "node scripts/write-tokens.mjs",
+    "check-css": "node lint/check-css.mjs"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.9.0",
+    "@fontsource-variable/vazirmatn": "5.3.0",
+    "@phoenix/shared-kernel": "workspace:*",
+    "lucide-react": "1.62.0"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.19.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^10.11.0",
+    "jest": "^30.5.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "ts-jest": "^29.4.14",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0"
+  }
+}

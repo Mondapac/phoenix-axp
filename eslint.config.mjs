@@ -5,6 +5,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { uiSyntaxRules } from './packages/ui/lint/ui-rules.mjs';
 
 // Tenant identifiers that must never appear as literals in core code (ADR-0002): a tenant's id,
 // locales and time zone are configuration (config/tenants/<id>.json), never a branch or a
@@ -342,7 +343,7 @@ export default tseslint.config(
     linterOptions: { noInlineConfig: true },
   },
   {
-    files: [`**/*.${TS}`],
+    files: [`**/*.${TS}`, '**/*.tsx'],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: { ...globals.node },
@@ -484,8 +485,16 @@ export default tseslint.config(
     rules: { 'no-restricted-imports': kernelImports('^(?!\\./|temporal-polyfill/full$)|\\.\\.') },
   },
   {
-    files: [...SPEC_FILES, `**/test/**/*.${TS}`],
+    files: [...SPEC_FILES, '**/*.spec.tsx', `**/test/**/*.${TS}`],
     languageOptions: { globals: { ...globals.jest } },
+  },
+  {
+    // UI code (ADR-0008 decision 5, ADR-0016 decision 2): tokens only, logical properties only,
+    // no raw HTML. The token source holds the colour values; spec files may write any literal.
+    files: [`packages/ui/src/**/*.{ts,tsx}`, `apps/{admin,studio,portal}/**/*.{ts,tsx}`],
+    ignores: [...SPEC_FILES, '**/*.spec.tsx', 'packages/ui/src/tokens/panel-tokens.ts'],
+    languageOptions: { globals: { ...globals.browser } },
+    rules: { 'no-restricted-syntax': ['error', ...uiSyntaxRules] },
   },
   {
     files: ['**/*.mjs', '**/*.cjs', '**/*.js'],
