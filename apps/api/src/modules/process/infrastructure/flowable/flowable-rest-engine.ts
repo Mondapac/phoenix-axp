@@ -105,7 +105,7 @@ export class FlowableRestEngine implements ProcessEngine {
       deploymentName: deploymentName(deployment),
     });
     const created = (await this.call('POST', `/repository/deployments?${query.toString()}`, {
-      form,
+      multipart: form,
     })) as {
       tenantId: string;
     };
@@ -366,7 +366,7 @@ export class FlowableRestEngine implements ProcessEngine {
   private async call(
     method: 'GET' | 'POST' | 'DELETE',
     path: string,
-    body: { json?: unknown; form?: FormData; allowNotFound?: boolean } = {},
+    body: { json?: unknown; multipart?: FormData; allowNotFound?: boolean } = {},
   ): Promise<unknown> {
     let response: Response;
     try {
@@ -377,7 +377,7 @@ export class FlowableRestEngine implements ProcessEngine {
           accept: 'application/json',
           ...(body.json === undefined ? {} : { 'content-type': 'application/json' }),
         },
-        body: body.form ?? (body.json === undefined ? undefined : JSON.stringify(body.json)),
+        body: body.multipart ?? (body.json === undefined ? undefined : JSON.stringify(body.json)),
         signal: AbortSignal.timeout(ENGINE_CALL_TIMEOUT_MS),
         redirect: 'error',
       });
