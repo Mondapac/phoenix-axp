@@ -19,6 +19,9 @@ guard + row-level security), ADR-0018 (site tree, subtree grants), ADR-0009 (lic
 - **درخت سایت (۵۰۰ سایت، closure table):** دسترسی فقط رو به پایین جاری می‌شود؛ ۵۰۰٬۰۰۰ تصمیم بررسی
   شد و صفر خطا داشت (پذیرفته). بررسی دسترسی حدود ۳ میلی‌ثانیه است. اما صفحه‌ی محتوای کل درخت از
   ریشه حدود ۵۰ میلی‌ثانیه طول می‌کشد؛ برای آن **تغییر طراحی** در کوئری/ایندکس لازم است.
+- **جابه‌جایی هم‌زمان سایت‌ها در یک درخت** در این PoC آزموده نشد (جابه‌جایی تکی آزموده شد و درست
+  بود). نتیجه: **تغییر طراحی**: در فاز ۱ جابه‌جایی سایت‌ها در هر مستأجر یکی‌یکی (پشت سر هم) انجام
+  می‌شود، و برش 1.4 (ماژول tenancy) باید آزمونی برای جابه‌جایی هم‌زمان داشته باشد.
 
 ## Setup
 
@@ -182,8 +185,8 @@ guard+RLS (469).
 - Docker images (the pull from quay.io was refused by the egress proxy); everything ran from
   distribution packages.
 - End-to-end request cost with the HTTP stack (PoC 2 measured one use case; see its report).
-- Concurrent moves of sites in one tree (needs serialisable isolation or a per-tenant advisory
-  lock; the move algorithm itself was tested one at a time).
+- Concurrent moves of sites in one tree (the move algorithm itself was tested one at a time).
+  Closed as a design change (verdict 8): Phase 1 serialises moves per tenant and slice 1.4 tests it.
 - Batching `BEGIN; set_config(...)` into one simple-query round trip (needs a driver change; not
   tried).
 - Content shared between sites (ADR-0018 sharing), site deletion, tenants with tens of thousands
@@ -202,4 +205,4 @@ guard+RLS (469).
 | 5 | Subtree content queries are too slow for large trees | **design change** for root-scale pages | Province page 14.6 ms p50, leaf 3.4 ms: fine. Root page of 500 sites / 60 000 items: 49.9 ms p50, 71.5 ms p95, with or without RLS: the plan reads every item of the subtree before the top-N sort. Change: for a "latest N in a subtree" page, query by an index on `(tenant_id, created_at DESC)` with a semi-join on the subtree (stops after N rows when the subtree is most of the tenant), or denormalise the owner site's ancestor ids onto the item (array + GIN) - to be measured in Phase 1 before choosing. Keyset pagination, not offset. |
 | 6 | Statistics leak other tenants' data | **accepted** (residual) | `pg_stats` shows 0 rows to the app role. `EXPLAIN` estimates reveal table-wide row counts (volume, not content); the guard refuses raw SQL from modules, so only platform code could run it. |
 | 7 | A pooled connection keeps the last tenant | **accepted** | Empty after commit, error, throw and timeout (transaction-local setting). |
-| 8 | Site moves under concurrency | **not tested** | Phase 1: serialise moves per tenant (advisory lock) or run them serialisable. |
+| 8 | Site moves under concurrency | **design change** | Not exercised here: the move algorithm was tested one move at a time only. Phase 1 serialises site moves per tenant (a per-tenant advisory lock taken in the move's unit of work, or the move run serialisable), so two moves in one tree never interleave. Acceptance criterion for slice 1.4 (tenancy): a test that runs concurrent moves in one tenant's tree (including two moves that would form a cycle together) and then finds the closure table equal to a recursive walk and no cycle, on both tenant fixtures. |
