@@ -387,11 +387,17 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
       const own = "a module binds only its own name ('content')";
       const platform = "the platform binds only 'platform' or 'platform.<component>'";
       const literal = 'needs a string literal module name as its first argument';
+      const computed = 'with a key that is not a string literal; call the binding by its name';
 
       expect(status).toBe(1);
       expect(problems.sort()).toEqual(
         [
           'app.module.ts:6: registerPermissions(...) outside a module and outside platform/; a module binds itself',
+          `modules/content/computed-keys.ts:11: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:12: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:13: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:14: stubs[...] ${computed}`,
+          'modules/content/computed-keys.ts:16: PersistenceModule destructured with a computed key; call the binding by its name',
           'modules/content/content.module.ts:7: registerPermissions is imported or exported under another name',
           `modules/content/content.module.ts:25: auditWriterFor('identity') in module "content"; ${own}`,
           `modules/content/content.module.ts:26: outboxWriterFor('identity') in module "content"; ${own}`,

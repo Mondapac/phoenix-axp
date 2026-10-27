@@ -15,7 +15,11 @@
 //   - anywhere else in src/ (the composition root included) these calls are refused;
 //   - the argument is always a plain string literal, never a variable or a template;
 //   - the six names are only called, never passed around, aliased or imported under another
-//     name, so every use is a call this check can read.
+//     name, so every use is a call this check can read;
+//   - PersistenceModule and a namespace import (`import * as x`) are never indexed with a key
+//     that is not a string literal (`PersistenceModule[k]`, `x['audit' + 'WriterFor']`,
+//     `x[`${k}`]`, `const { [k]: f } = x`), since such a key can name a binding this check
+//     cannot see.
 // Spec files are not checked: tests bind any module on purpose.
 //
 // Usage: node scripts/check-module-bindings.mjs [--src <apps/api/src>]
@@ -105,7 +109,44 @@ for (const file of sourceFiles(srcDir)) {
     }
   };
 
+  // The objects whose computed members are refused: PersistenceModule and namespace imports.
+  const namespaces = new Set(['PersistenceModule']);
+  const collectNamespaces = (node) => {
+    if (ts.isNamespaceImport(node)) namespaces.add(node.name.text);
+    ts.forEachChild(node, collectNamespaces);
+  };
+  collectNamespaces(source);
+  const isGuarded = (expression) =>
+    expression !== undefined && ts.isIdentifier(expression) && namespaces.has(expression.text);
+
   const visit = (node) => {
+    // A computed key on PersistenceModule or a namespace import can name a binding unseen.
+    if (
+      ts.isElementAccessExpression(node) &&
+      isGuarded(node.expression) &&
+      !ts.isStringLiteralLike(node.argumentExpression)
+    ) {
+      report(
+        node,
+        `${node.expression.text}[...] with a key that is not a string literal; call the ` +
+          'binding by its name',
+      );
+    }
+    if (
+      ts.isBindingElement(node) &&
+      node.propertyName &&
+      ts.isComputedPropertyName(node.propertyName) &&
+      !ts.isStringLiteralLike(node.propertyName.expression) &&
+      ts.isVariableDeclaration(node.parent.parent) &&
+      isGuarded(node.parent.parent.initializer)
+    ) {
+      report(
+        node,
+        `${node.parent.parent.initializer.text} destructured with a computed key; call the ` +
+          'binding by its name',
+      );
+    }
+
     // Import or export of a binding under another name hides its calls.
     if (
       (ts.isImportSpecifier(node) || ts.isExportSpecifier(node)) &&
