@@ -1,12 +1,12 @@
-# ADR-0022: Phase 1 Owner Decisions — Public Sign-up, Keycloak Realms, Isolation Overhead, AD Sync, Font Licence
+# ADR-0022: Phase 1 Owner Decisions — Public Sign-up, Keycloak Realms, UI Languages, Isolation Overhead, AD Sync, Font Licence
 
-**Status:** Accepted — 2026-10-27 (owner decisions on cards P1, P2, P5, P6 and P7 of the Phase 1 review)
+**Status:** Accepted — 2026-10-27 (owner decisions on cards P1, P2, P3, P5, P6 and P7 of the Phase 1 review)
 **Amends:** ADR-0004 (realm layout), ADR-0002 (isolation overhead criterion), ADR-0009 (licence allow-list, fonts only)
 **Relates to:** ADR-0004, ADR-0020, `docs/reviews/poc-1-tenant-isolation.md`,
 `docs/reviews/poc-2-hybrid-login.md`, `docs/reviews/poc-4-rtl-portal.md`
 
 ## Context
-The Phase 1 review asked how public users sign up (card P1) and whether Keycloak keeps one realm per tenant (P2); PoC 2
+The Phase 1 review asked how public users sign up (card P1) and whether Keycloak keeps one realm per tenant (P2) and which UI languages Phase 1 ships (P3); PoC 2
 ran with a realm per tenant and it worked. The Phase 0 PoCs left three questions open (Phase 1 review, cards P5 to P7):
 - PoC 1 showed that RLS policies cost within noise, but a transaction per tiny unit of work costs
   more than 15% on sub-millisecond reads. The criterion in ADR-0002 did not say what it measures.
@@ -35,6 +35,12 @@ ran with a realm per tenant and it worked. The Phase 0 PoCs left three questions
 5. **Keycloak realms (P2).** Each tenant gets its own Keycloak realm: its AD connection, login
    theme and password policy stay separate. Trigger for review: more than about 200 tenants on
    one SaaS deployment, decided in a new ADR.
+6. **UI languages (P3).** The UI is multilingual. Languages are data, not code: a platform
+   operator adds a language in the admin panel (code, name, direction, default calendar and
+   digits) together with its translations, and each tenant chooses which of the installed
+   languages it offers and which one is the default. Phase 1 ships Persian (RTL) and English
+   (LTR). Adding a language never needs a deploy; translations missing for a key fall back to
+   the tenant's default language.
 
 ## Consequences
 - PoC 1's per-request result meets the criterion; the per-unit numbers stay in the report as
@@ -43,6 +49,8 @@ ran with a realm per tenant and it worked. The Phase 0 PoCs left three questions
   AD disable and the next refused request is the tenant's interval (5 minutes by default).
 - Slices 1.5 and 1.8 build both sign-up paths, the tenant setting and the SMS port, with rate
   limiting and the self-hosted CAPTCHA.
+- Slice 1.8 (`platform/i18n`) stores languages and translations as data, with the admin
+  screens in slice 1.10; every UI string goes through translation keys from day one.
 - Slice 1.9 may ship Vazirmatn. The licence gate gets a font-only rule for OFL-1.1 when the first
   font package lands (until then no OFL package is in the tree).
 
