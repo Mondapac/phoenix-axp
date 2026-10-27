@@ -20,7 +20,7 @@ VALUES ($1, $2::uuid, $3, 'pending', 0, $4::timestamptz, $5, $6::timestamptz, $7
 ON CONFLICT ("tenant_id", "event_id", "subscriber") DO NOTHING`;
 
 /**
- * The MVP adapter of the in-process bus (ADR-05; platform persistence design, "P", 6.3 to 6.5).
+ * The MVP adapter of the in-process bus (ADR-0006; platform persistence design, "P", 6.3 to 6.5).
  * It fans each event out to `platform.event_delivery`, one `pending` row per subscription of
  * its type, due now, with a copy of the envelope, through the relay's transaction: the delivery
  * rows and the mark of the outbox rows commit or roll back together. A repeated

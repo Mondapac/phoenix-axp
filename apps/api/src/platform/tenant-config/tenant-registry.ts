@@ -13,7 +13,7 @@ export class TenantNotHostedError extends Error {
 }
 
 /**
- * The tenants this deployment serves (ADR-02). There is no default tenant: callers always
+ * The tenants this deployment serves (ADR-0002). There is no default tenant: callers always
  * name the tenant, and a tenant outside HOSTED_TENANTS is refused.
  *
  * It takes parsed tenant ids and mints nothing: `TenantContextFactory` is the only

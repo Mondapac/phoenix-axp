@@ -6,7 +6,7 @@ import type { Minted } from './minted';
 import type { TenantContext } from './tenant-context';
 
 /**
- * What every use case and facade method takes first (ADR-01): the tenant, the actor and the
+ * What every use case and facade method takes first (ADR-0001): the tenant, the actor and the
  * correlation id of one piece of work, as one minted value. It is built once by an entry
  * adapter (HTTP request, scheduled job, consumed event) and passed on unchanged: no code
  * replaces the actor of a context it received, and a context cannot be rebuilt from JSON or

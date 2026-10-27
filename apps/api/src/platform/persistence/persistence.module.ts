@@ -117,7 +117,8 @@ export class PersistenceModule {
   /**
    * Ported from Mondapac. The one line of a module's Nest module that binds its own outbox
    * writer (P 5.2): `providers: [PersistenceModule.outboxWriterFor('content')]`. The name is
-   * the module's folder. The writer is built here from the exported door (`PrismaService`) and
+   * the module's folder, a string literal; scripts/check-module-bindings.mjs (`pnpm
+   * boundaries`) refuses any other name (security review S5-1). The writer is built here from the exported door (`PrismaService`) and
    * the global catalogue, id generator and permission-key lookup, so no module-to-writer
    * factory is ever injectable: a module cannot resolve the factory or another module's writer
    * (Mondapac security review of slice 1b, M1). A module never exports `OUTBOX_WRITER`.
@@ -141,8 +142,9 @@ export class PersistenceModule {
   /**
    * Ported from Mondapac. The one line of a module's Nest module that binds its own audit
    * writer (Phoenix ADR-0015 decision 2): `providers: [PersistenceModule.auditWriterFor('content')]`.
-   * Like the outbox writer, there is no injectable factory, so a module reaches only its own
-   * writer and records only the actions of its own catalogue entries. A module never exports
+   * Like the outbox writer, there is no injectable factory, and the name must be the module's
+   * own folder (scripts/check-module-bindings.mjs), so a module reaches only its own writer and
+   * records only the actions of its own catalogue entries. A module never exports
    * `AUDIT_WRITER`.
    */
   static auditWriterFor(owner: string): FactoryProvider<AuditWriter> {

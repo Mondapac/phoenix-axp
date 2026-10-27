@@ -1,6 +1,6 @@
 // Ported from Mondapac apps/api/src/platform/persistence/outbox/prisma-outbox-relay.ts, Market
 // adapted to Tenant. Phoenix change: every relay transaction first sets `app.tenant_id` to the
-// tenant it claims for (row-level security, ADR-02), so it sees and marks that tenant's rows
+// tenant it claims for (row-level security, ADR-0002), so it sees and marks that tenant's rows
 // only; Mondapac's relay ran without a tenant setting. `unhostedMarketsWithRows` is not ported
 // (see events/event-bus.ts).
 import { Logger } from '@nestjs/common';
@@ -138,7 +138,7 @@ export class PrismaOutboxRelay implements OutboxRelay {
     const { schema, table } = outbox;
     return this.root.$transaction(
       async (transaction) => {
-        // Row-level security (ADR-02): this transaction sees and writes this tenant's rows only.
+        // Row-level security (ADR-0002): this transaction sees and writes this tenant's rows only.
         await transaction.$queryRaw(setTenantStatement(tenant));
         const rows = await transaction.$queryRawUnsafe<OutboxRecord[]>(
           `SELECT ${ENVELOPE_COLUMNS} FROM "${schema}"."${table}"

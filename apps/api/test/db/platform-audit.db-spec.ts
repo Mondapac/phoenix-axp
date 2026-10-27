@@ -26,14 +26,20 @@ import { PersistenceModule } from '../../src/platform/persistence/persistence.mo
 import { PrismaRoot } from '../../src/platform/persistence/prisma-root';
 import { UNIT_OF_WORK, type UnitOfWork } from '../../src/platform/unit-of-work/unit-of-work';
 import { testAppConfig, TEST_TENANTS } from '../support/test-config';
-import { ownerTestDatabaseUrl, testDatabaseUrl } from './test-database';
+import {
+  auditWriterOwnerTestDatabaseUrl as ownerTestDatabaseUrl,
+  auditWriterTestDatabaseUrl as testDatabaseUrl,
+} from './test-database';
 
 // Mondapac identity slice 6a, the database half of its platform-audit design 16, for Phoenix
 // ADR-0015: the audit writer in a real unit, and the migration `platform_audit` (CHECKs, keys,
 // foreign key, append-only triggers, grants, row-level security). Every case runs for both
-// tenant fixtures. Only this file writes seals in the run database. Phoenix change: the tables
-// are under row-level security, so a raw statement of the application login sets its tenant
-// first (`useTenant`), and the rows are read back as the owner.
+// tenant fixtures. It runs on its own copy of the run database (`audit_writer`, global-setup.ts),
+// where FORCE ROW LEVEL SECURITY is lifted so the owner reads every tenant's rows back, as an
+// operator who lifted it could; the run database keeps FORCE (row-level-security.db-spec.ts).
+// Phoenix change: the tables are under row-level security, so a raw statement of the
+// application login sets its tenant first (`useTenant`), and the rows are read back as the
+// owner.
 
 const CHECK_VIOLATION = '23514';
 const UNIQUE_VIOLATION = '23505';
@@ -106,11 +112,11 @@ describe('platform audit writer and seal tables (database integration, slice 6a)
   let app: INestApplicationContext;
   let writer: AuditWriter;
   let unitOfWork: UnitOfWork;
-  /** The owner's client, which row-level security does not filter. */
+  /** The owner's client, which row-level security does not filter on this copy (no FORCE). */
   let ownerRoot: PrismaRoot;
   /** The application login. */
   let sql: Client;
-  /** The owner of the run database: the migration role. */
+  /** The owner of this copy: the migration role. */
   let owner: Client;
 
   beforeAll(async () => {
@@ -143,7 +149,7 @@ describe('platform audit writer and seal tables (database integration, slice 6a)
     await app.close();
   });
 
-  /** The rows of a correlation id in every tenant, read by the owner (no row-level security). */
+  /** The rows of a correlation id in every tenant, read by the owner (FORCE lifted here). */
   const rowsOf = (correlationId: string) =>
     ownerRoot.auditLog.findMany({ where: { correlationId }, orderBy: { id: 'asc' } });
 

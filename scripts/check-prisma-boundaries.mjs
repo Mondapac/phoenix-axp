@@ -1,5 +1,5 @@
-// Persistence boundaries (ADR-01, ADR-02). Run by `pnpm boundaries`, so by `pnpm verify` and
-// CI; fixtures in apps/api/test/boundary-fixtures/prisma/ are asserted by
+// Persistence boundaries (ADR-0001, ADR-0002, ADR-0003). Run by `pnpm boundaries`, so by
+// `pnpm verify` and CI; fixtures in apps/api/test/boundary-fixtures/prisma/ are asserted by
 // apps/api/test/boundaries.spec.ts.
 //
 // Schema checks (prisma/schema/*.prisma, read by scripts/prisma-schema.mjs):
@@ -7,8 +7,11 @@
 //     underscores); base.prisma declares none; no relation crosses schemas;
 //   - every model is tenant-scoped (tenantId) or exempt ("/// @tenant-scope none: <reason>"),
 //     never neither or both;
-//   - every @id, @unique, @@id and @@unique of a scoped model contains tenantId, except the
-//     single-column UUID @id;
+//   - every @id, @unique, @@id, @@unique and @@index of a scoped model leads with tenantId
+//     (ADR-0002 decision 3), except the single-column UUID @id (a UUIDv7 is unique across
+//     tenants; the exemption ADR-0002 names);
+//   - the tenantId field of a scoped model maps to the column "tenant_id", the column the
+//     row-level security policies and their database test read;
 //   - every @relation between two scoped models has tenantId in both `fields` and
 //     `references`, at the same position; a scoped and an exempt model never relate;
 //   - every outbox model (@@map("outbox")) has the same fields (ported from Mondapac, PM1).
@@ -53,7 +56,7 @@ const RAW_SQL_FILES = new Set([
   'platform/persistence/database-probe.ts',
   'platform/persistence/guarded-client.ts',
   // The relay, the bus adapter and the dispatcher claim and mark rows of every module's outbox
-  // and of platform.event_delivery with fixed statements, setting the tenant first (ADR-05).
+  // and of platform.event_delivery with fixed statements, setting the tenant first (ADR-0006).
   'platform/persistence/outbox/in-process-event-bus.ts',
   'platform/persistence/outbox/prisma-event-dispatcher.ts',
   'platform/persistence/outbox/prisma-outbox-relay.ts',
@@ -110,7 +113,7 @@ for (const model of models) {
     }
   }
 
-  // --- Scope (ADR-02).
+  // --- Scope (ADR-0002).
   if (isScoped(model) && model.exemptionReason !== undefined) {
     problems.push(`${model.file}: ${model.name} has tenantId and also an exemption line`);
   } else if (!isScoped(model) && model.exemptionReason === undefined) {
@@ -120,10 +123,17 @@ for (const model of models) {
     );
   }
 
-  // --- Unique keys of a scoped model contain tenantId.
+  // --- Every key and index of a scoped model leads with tenantId (ADR-0002 decision 3).
   if (isScoped(model)) {
-    for (const key of model.keys) {
-      if (key.fields.includes('tenantId')) continue;
+    const tenantField = model.fields.find((f) => f.name === 'tenantId');
+    if (tenantField.column !== 'tenant_id') {
+      problems.push(
+        `${model.file}: ${model.name}.tenantId maps to column "${tenantField.column}", ` +
+          'expected "tenant_id"',
+      );
+    }
+    for (const key of [...model.keys, ...model.indexes]) {
+      if (key.fields[0] === 'tenantId') continue;
       const field = model.fields.find((f) => f.name === key.fields[0]);
       const uuidId =
         key.kind === 'id' &&
@@ -131,10 +141,11 @@ for (const model of models) {
         field?.type === 'String' &&
         field.attributes.some((a) => a.name === 'db.Uuid');
       if (!uuidId) {
-        const label = key.single
-          ? `@${key.kind} on ${key.fields[0]}`
-          : `@@${key.kind}([${key.fields.join(', ')}])`;
-        problems.push(`${model.file}: ${model.name} ${label} does not contain tenantId`);
+        const label =
+          key.single && key.kind !== 'index'
+            ? `@${key.kind} on ${key.fields[0]}`
+            : `@@${key.kind}([${key.fields.join(', ')}])`;
+        problems.push(`${model.file}: ${model.name} ${label} does not lead with tenantId`);
       }
     }
   }

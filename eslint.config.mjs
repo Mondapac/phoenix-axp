@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-// Tenant identifiers that must never appear as literals in core code (ADR-02): a tenant's id,
+// Tenant identifiers that must never appear as literals in core code (ADR-0002): a tenant's id,
 // locales and time zone are configuration (config/tenants/<id>.json), never a branch or a
 // constant in apps/api/src or the shared kernel. The list is read from the checked-in tenant
 // files, so a new tenant fixture is banned the moment it is added. Spec files and test/ may
@@ -26,7 +26,7 @@ function tenantLiterals() {
 const TENANT_LITERAL = `(^|[^A-Za-z0-9_-])(${tenantLiterals()})($|[^A-Za-z0-9_-])`;
 const TENANT_LITERAL_MESSAGE =
   'no-tenant-literals: a tenant id, locale or time zone is hardcoded in core code. Read it from ' +
-  'tenant configuration (TenantRegistry) or receive it in the TenantContext (ADR-02).';
+  'tenant configuration (TenantRegistry) or receive it in the TenantContext (ADR-0002).';
 const noTenantLiterals = [
   { selector: `Literal[value=/${TENANT_LITERAL}/]`, message: TENANT_LITERAL_MESSAGE },
   { selector: `TemplateElement[value.raw=/${TENANT_LITERAL}/]`, message: TENANT_LITERAL_MESSAGE },
@@ -228,7 +228,7 @@ const kernelStaticImportsOnly = [
   ...codeLoaders,
 ];
 
-// Rule 7, kernel-imports-only-itself (ADR-01): a whitelist. The kernel imports only its own
+// Rule 7, kernel-imports-only-itself (ADR-0001): a whitelist. The kernel imports only its own
 // files (`./name`, never `..`); time.ts alone may also import the polyfill's full build. Each
 // regex matches what is refused.
 const kernelImports = (regex) => [
@@ -471,7 +471,7 @@ export default tseslint.config(
     },
   },
   {
-    // The shared kernel is framework-free and used by the api and the web apps (ADR-01),
+    // The shared kernel is framework-free and used by the api and the web apps (ADR-0001),
     // spec files included.
     files: [
       `packages/shared-kernel/src/**/*.${TS}`,

@@ -75,8 +75,8 @@ describe('event path: publish, relay, consume (database integration)', () => {
     await db.close();
   });
 
-  // Every test starts with nothing due: what an earlier test left is set aside (as the owner,
-  // who is not subject to row-level security).
+  // Every test starts with nothing due: what an earlier test left is set aside (as the owner;
+  // FORCE ROW LEVEL SECURITY is lifted on this copy, global-setup.ts).
   afterEach(async () => {
     await owner.query(`UPDATE probe.outbox SET published_at = now() WHERE published_at IS NULL`);
     await owner.query(
@@ -399,5 +399,163 @@ describe('event path: publish, relay, consume (database integration)', () => {
     await expect(
       db.unitOfWork.runOnce(other, captured!.delivery, () => Promise.resolve(ok(undefined))),
     ).rejects.toBeInstanceOf(UnknownDeliveryError);
+  });
+  // QA review 5.5: the dispatcher's dead-letter and give-back paths against PostgreSQL, per
+  // tenant. The owner reads the rows directly (FORCE is lifted on this copy).
+  describe.each(TEST_TENANTS)('dead letters and give-backs for %s', (code) => {
+    /** The one delivery row of an event, whatever its subscriber. */
+    async function deliveryOf(eventId: string) {
+      const { rows } = await owner.query<{
+        subscriber: string;
+        status: string;
+        attempts: number;
+        error_code: string | null;
+        dead_at: Date | null;
+        next_attempt_at: Date;
+      }>(
+        `SELECT subscriber, status, attempts, error_code, dead_at, next_attempt_at
+           FROM platform.event_delivery WHERE event_id = $1::uuid`,
+        [eventId],
+      );
+      expect(rows).toHaveLength(1);
+      return rows[0]!;
+    }
+
+    it('dead-letters a delivery after its 10th failed claim, with dead_at and the error code', async () => {
+      let calls = 0;
+      const failing = subscription({
+        name: 'probe.record-receipt',
+        event: thingRecorded,
+        handle: () => {
+          calls += 1;
+          return Promise.reject(new Error('handler down'));
+        },
+      });
+      const clock = startClock();
+      const { relay, dispatcher } = stackOf({ entry: failing, handled: [] }, clock);
+      const [eventId] = await outboxIdsOf(await writeThings(code, 1));
+      await relay.runOnce();
+
+      for (let claim = 1; claim <= 10; claim += 1) {
+        expect((await dispatcher.runOnce()).claimed).toBe(1);
+        const row = await deliveryOf(eventId!);
+        expect(row).toMatchObject({
+          status: claim < 10 ? 'pending' : 'dead',
+          attempts: claim,
+          error_code: 'delivery.handler-failed',
+        });
+        expect(row.dead_at === null).toBe(claim < 10);
+        // Past the longest back-off (1 h), so the next pass claims it again.
+        clock.advance(Temporal.Duration.from({ hours: 2 }));
+      }
+
+      expect(calls).toBe(10);
+      expect((await dispatcher.runOnce()).claimed).toBe(0);
+      expect(await receiptsOf([eventId!])).toEqual([]);
+    });
+
+    it.each<[string, string, string]>([
+      [
+        'an undecodable payload',
+        `UPDATE platform.event_delivery SET payload = payload || '{"count": "many"}'::jsonb
+          WHERE event_id = $1::uuid`,
+        'delivery.payload-undecodable',
+      ],
+      [
+        'an unknown subscriber',
+        "UPDATE platform.event_delivery SET subscriber = 'probe.gone' WHERE event_id = $1::uuid",
+        'delivery.unknown-subscriber',
+      ],
+      [
+        "a type that is not the subscription's",
+        `UPDATE platform.event_delivery SET type = 'probe.other-happened.v1'
+          WHERE event_id = $1::uuid`,
+        'delivery.type-mismatch',
+      ],
+    ])(
+      'dead-letters %s at its first claim, without running the handler',
+      async (_, edit, error) => {
+        const handler = receiptHandler();
+        const clock = startClock();
+        const { relay, dispatcher } = stackOf(handler, clock);
+        const [eventId] = await outboxIdsOf(await writeThings(code, 1));
+        await relay.runOnce();
+        await owner.query(edit, [eventId]);
+
+        expect((await dispatcher.runOnce()).claimed).toBe(1);
+        const row = await deliveryOf(eventId!);
+        expect(row).toMatchObject({ status: 'dead', attempts: 1, error_code: error });
+        expect(row.dead_at).not.toBeNull();
+        expect(handler.handled).toEqual([]);
+        clock.advance(Temporal.Duration.from({ hours: 2 }));
+        expect((await dispatcher.runOnce()).claimed).toBe(0);
+      },
+    );
+
+    /**
+     * A subscription whose first call does its work and then lets `afterFirst` run (it moves
+     * the clock, so the rest of the batch's lease is too short); every call settles its delivery.
+     */
+    function slowFirstHandler(afterFirst: () => Promise<void>) {
+      const handled: string[] = [];
+      const entry = subscription({
+        name: 'probe.record-receipt',
+        event: thingRecorded,
+        handle: async (event, delivery: EventDelivery, context) => {
+          await db.unitOfWork.runOnce(context.tenant, delivery, () =>
+            Promise.resolve(ok(undefined)),
+          );
+          handled.push(event.eventId);
+          if (handled.length === 1) await afterFirst();
+        },
+      });
+      return { entry, handled };
+    }
+
+    it('gives back the rest of a batch whose lease ran short: the attempt is restored and the row is due now', async () => {
+      const clock = startClock();
+      const handler = slowFirstHandler(() => {
+        // 15 s into a 30 s lease, less than the 20 s handler budget is left.
+        clock.advance(Temporal.Duration.from({ seconds: 15 }));
+        return Promise.resolve();
+      });
+      const { relay, dispatcher } = stackOf({ entry: handler.entry, handled: [] }, clock);
+      const eventIds = await outboxIdsOf(await writeThings(code, 2));
+      await relay.runOnce();
+
+      expect((await dispatcher.runOnce()).claimed).toBe(2);
+      expect(handler.handled).toHaveLength(1);
+      const released = eventIds.find((id) => id !== handler.handled[0])!;
+      const row = await deliveryOf(released);
+      expect(row).toMatchObject({ status: 'pending', attempts: 0, error_code: null });
+      expect(row.next_attempt_at.getTime()).toBe(clock.now().epochMilliseconds);
+
+      // Due at once, and consumed by the next pass with its first counted attempt.
+      expect((await dispatcher.runOnce()).claimed).toBe(1);
+      expect(await deliveryOf(released)).toMatchObject({ status: 'delivered', attempts: 1 });
+      expect([...handler.handled].sort()).toEqual([...eventIds].sort());
+    });
+
+    it('a stale give-back changes nothing: another dispatcher has claimed and delivered the row', async () => {
+      const clock = startClock();
+      // The second dispatcher needs the handler's entry, and the handler calls it.
+      const peer: { second?: PrismaEventDispatcher } = {};
+      const handler = slowFirstHandler(async () => {
+        // Past the 30 s lease: the second dispatcher claims the rest of the batch again.
+        clock.advance(Temporal.Duration.from({ seconds: 31 }));
+        expect((await peer.second!.runOnce()).claimed).toBe(1);
+      });
+      const first = stackOf({ entry: handler.entry, handled: [] }, clock);
+      peer.second = stackOf({ entry: handler.entry, handled: [] }, clock).dispatcher;
+      const eventIds = await outboxIdsOf(await writeThings(code, 2));
+      await first.relay.runOnce();
+
+      expect((await first.dispatcher.runOnce()).claimed).toBe(2);
+      // The first dispatcher's give-back of the row still names its own claim (attempt 1 and
+      // the old lease), so it matches nothing: the second claim and its delivery stand.
+      const late = eventIds.find((id) => id !== handler.handled[0])!;
+      expect(await deliveryOf(late)).toMatchObject({ status: 'delivered', attempts: 2 });
+      expect([...handler.handled].sort()).toEqual([...eventIds].sort());
+    });
   });
 });

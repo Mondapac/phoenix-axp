@@ -40,7 +40,9 @@ function exported(
     | 'TEST_DELIVERY_DATABASE_URL'
     | 'TEST_DELIVERY_OWNER_DATABASE_URL'
     | 'TEST_AUDIT_DATABASE_URL'
-    | 'TEST_AUDIT_OWNER_DATABASE_URL',
+    | 'TEST_AUDIT_OWNER_DATABASE_URL'
+    | 'TEST_AUDIT_WRITER_DATABASE_URL'
+    | 'TEST_AUDIT_WRITER_OWNER_DATABASE_URL',
 ): string {
   const url = process.env[name];
   if (!url) {
@@ -95,4 +97,16 @@ export function auditTestDatabaseUrl(): string {
 
 export function auditOwnerTestDatabaseUrl(): string {
   return exported('TEST_AUDIT_OWNER_DATABASE_URL');
+}
+
+/**
+ * The copy of the run database that platform-audit.db-spec.ts writes and reads audit rows on
+ * (global-setup.ts), as the application login and as its owner (FORCE lifted there).
+ */
+export function auditWriterTestDatabaseUrl(): string {
+  return exported('TEST_AUDIT_WRITER_DATABASE_URL');
+}
+
+export function auditWriterOwnerTestDatabaseUrl(): string {
+  return exported('TEST_AUDIT_WRITER_OWNER_DATABASE_URL');
 }

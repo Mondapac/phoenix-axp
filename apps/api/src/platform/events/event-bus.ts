@@ -1,5 +1,5 @@
 // Ported from Mondapac apps/api/src/platform/events/event-bus.ts. Phoenix: Market became Tenant,
-// and `unhostedMarketsWithRows` is not ported: under row-level security (ADR-02) the
+// and `unhostedMarketsWithRows` is not ported: under row-level security (ADR-0002) the
 // application login sees only the rows of the tenant it sets, so it cannot list the rows of a
 // tenant this deployment does not host; that is an operator query, as the migration role.
 import type { DomainEvent } from '@phoenix/shared-kernel';

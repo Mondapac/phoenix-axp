@@ -10,7 +10,7 @@ import { isSessionStatement } from './session-statements';
  * does not recognise is refused, and a refusal throws {@link TenantGuardError}, so the unit
  * rolls back.
  *
- * It is the application's half of tenant isolation (ADR-02). The database's half is row-level
+ * It is the application's half of tenant isolation (ADR-0002). The database's half is row-level
  * security: every unit sets `app.tenant_id` and the policies compare each row's `tenant_id`
  * to it, so a query that slipped past the guard still sees only the unit's tenant.
  */

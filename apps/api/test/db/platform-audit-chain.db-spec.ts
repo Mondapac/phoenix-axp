@@ -32,8 +32,8 @@ import { auditOwnerTestDatabaseUrl, auditTestDatabaseUrl } from './test-database
 // The database half of the audit chain (Mondapac identity slice 6b): the sealer and the verifier
 // on the real tables, through the application login (under row-level security, so its session
 // names its tenant first), for both tenant fixtures. The owner connection plays the attacker (and
-// resets the chain between cases) with the user triggers off, in a copy of the run database
-// that no other file uses (global-setup.ts, `audit`).
+// resets the chain between cases) with the user triggers off and FORCE ROW LEVEL SECURITY
+// lifted, in a copy of the run database that no other file uses (global-setup.ts, `audit`).
 
 const START = Temporal.Instant.from('2026-10-08T06:00:00Z');
 const tenantOf = (code: string) => testTenantContext(code);

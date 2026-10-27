@@ -5,7 +5,7 @@ import type { Minted } from './minted';
 import type { TenantContext, TenantId } from './tenant-context';
 
 /**
- * Who is acting, as identifiers (ADR-01, ADR-03). A closed union on `kind`: anonymous is an
+ * Who is acting, as identifiers (ADR-0001, ADR-0004). A closed union on `kind`: anonymous is an
  * explicit value, never `undefined` or `null`, and no kind is a default. Every kind carries the
  * tenant it was established in. Roles, permissions, an email, a name, a token, an address or a
  * user agent never travel in it: the identity module reads them on each check.

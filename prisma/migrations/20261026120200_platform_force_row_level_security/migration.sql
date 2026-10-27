@@ -1,0 +1,18 @@
+-- Row-level security applies to the table owner too (security review S2-1). Without FORCE the
+-- owner, the migration role phoenix_migrator, is exempt from every policy and sees and writes
+-- the rows of every tenant: a migration, a `pnpm db:*` script, an operator holding the
+-- migration URL or a SECURITY DEFINER function owned by that role. With FORCE the owner is
+-- subject to the policies like any other role. The reference policy names only "phoenix_app",
+-- so the owner matches no policy and sees no row and may write none: DDL still works, data
+-- does not cross tenants.
+--
+-- From here on the reference for every tenant-scoped table is three statements in the
+-- migration that creates it (row-level-security.db-spec.ts checks each one exactly):
+--   ALTER TABLE ... ENABLE ROW LEVEL SECURITY;
+--   ALTER TABLE ... FORCE ROW LEVEL SECURITY;
+--   CREATE POLICY "<table>_tenant_isolation" ... AS PERMISSIVE FOR ALL TO "phoenix_app"
+--     USING ("tenant_id" = "platform"."current_tenant_id"())
+--     WITH CHECK ("tenant_id" = "platform"."current_tenant_id"());
+-- A maintenance path that must cross tenants gets its own reviewed policy or role in its own
+-- migration; none exists today.
+ALTER TABLE "platform"."isolation_probe" FORCE ROW LEVEL SECURITY;

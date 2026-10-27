@@ -8,7 +8,7 @@ const REPO_ROOT = path.resolve(__dirname, '../../../..');
 export const TEST_TENANT_CONFIG_DIRS = [path.join(REPO_ROOT, 'config/tenants')] as const;
 
 /**
- * Both tenant fixtures (ADR-02): the Persian/Jalali tenant in Asia/Tehran and the synthetic
+ * Both tenant fixtures (ADR-0002): the Persian/Jalali tenant in Asia/Tehran and the synthetic
  * English/Gregorian tenant in America/Toronto. A tenant-scoped test runs for both.
  */
 export const TEST_TENANTS = ['demo-fa', 'demo-en'] as const;

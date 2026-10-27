@@ -1,6 +1,6 @@
 # Deferred platform components
 
-ADR-12 ("defer with a trigger"): no platform component is built before its first consumer, and
+ADR-0010 ("defer with a trigger"): no platform component is built before its first consumer, and
 each one arrives at the latest in the same change as that consumer. Phase 0 ported from the
 Mondapac template only what the skeleton itself uses. This table lists the rest and the
 trigger that brings each one in. When a trigger fires, port the component from the template
@@ -10,21 +10,21 @@ trigger that brings each one in. When a trigger fires, port the component from t
 | --- | --- | --- |
 | audit trail reader | Mondapac's `AuditTrailReader` (`platform/audit/audit-trail-reader.ts` and its Prisma reader): a paged, permission-checked read of a target's audit rows for an admin screen | The first screen or API that shows an audit trail |
 | first `AUDIT_WRITER` binding | `PersistenceModule.auditWriterFor('<module>')` in a module's providers, its actions registered with `AuditActionCatalogue`, and the checked-in `test/contracts/audit-action-catalogue.snapshot.json` | The first state-changing use case of a business module (identity's role seed and grants) |
-| identity integration (ADR-03) | The `Authenticator` building `AuthenticatedActor` from a Keycloak session; `ActorGuard` accepts no session until then and answers 401 `session.invalid` to any `Authorization` header | The identity module, Phase 1 |
-| `storage` (ADR-11) | The `ObjectStore` port and its SeaweedFS S3 adapter (SeaweedFS is already in `docker-compose.yml`) | The first feature that stores a file |
+| identity integration (ADR-0004) | The `Authenticator` building `AuthenticatedActor` from a Keycloak session; `ActorGuard` accepts no session until then and answers 401 `session.invalid` to any `Authorization` header | The identity module, Phase 1 |
+| `storage` (ADR-0012) | The `ObjectStore` port and its SeaweedFS S3 adapter (SeaweedFS is already in `docker-compose.yml`) | The first feature that stores a file |
 | `subject-keys` | Per-subject encryption keys for personal data fields, the key wrapper and its port | The first personal data field that must be erasable (identity or forms) |
-| `ai` (ADR-10) | `platform/ai/model-gateway`, the only caller of a model, with the provider SDK confined to that folder | Phase 5, the first AI feature |
+| `ai` (ADR-0011) | `platform/ai/model-gateway`, the only caller of a model, with the provider SDK confined to that folder | Phase 5, the first AI feature |
 | `mail` | The mail port and its SMTP adapter (Mailpit locally) | The first message sent to a person (identity verification) |
-| `rate-limit` (ADR-11) | Rate limits with `rate-limiter-flexible` on Valkey | The first public unauthenticated write (sign-in, sign-up) or before the first public deployment, whichever comes first |
+| `rate-limit` (ADR-0010) | Rate limits with `rate-limiter-flexible` on Valkey | The first public unauthenticated write (sign-in, sign-up) or before the first public deployment, whichever comes first |
 | `i18n` | Message catalogues and locale negotiation against the tenant's `supportedLocales` | The first user-facing text produced by the API |
 | reviewed raw reads (Mondapac ADR-0030) | `RawReadPort` and a closed, reviewed list of read-only statements for modules; today raw SQL is allowed only in the platform files of `RAW_SQL_FILES` in `scripts/check-prisma-boundaries.mjs` | The first read a module cannot express through Prisma |
-| `extensions` | Extension points for tenant-specific apps (ADR-07) | The Objects and custom-apps phase |
+| `extensions` | Extension points for tenant-specific apps (ADR-0017, reserved) | The Objects and custom-apps phase |
 | client address | `platform/http/client-address.ts`, the one reader of the socket address behind trusted proxies | The first feature that records or limits by client address (rate limits, audit) |
 
 ## Deviations from the template
 
 - **Every unit of work is a transaction.** Mondapac (its ADR-0025) runs read-only work outside
-  a transaction. Phoenix adds PostgreSQL row-level security (ADR-02), whose tenant setting is
+  a transaction. Phoenix adds PostgreSQL row-level security (ADR-0002), whose tenant setting is
   `SET LOCAL app.tenant_id` and lives only inside a transaction, so every unit opens one: a
   read-only unit runs `SET TRANSACTION READ ONLY` first and makes one attempt; a read-write unit
   retries up to three times on serialization failures and deadlocks (40001, 40P01).
@@ -91,9 +91,11 @@ trigger that brings each one in. When a trigger fires, port the component from t
   and the kernel's `canonical-json`, `content-hash` and `audit-action`, Market adapted to
   Tenant, with these changes:
   - `platform.audit_log`, `audit_log_seal` and `audit_chain_checkpoint` are under row-level
-    security like every tenant table: the application login sees and writes only the rows of
-    `app.tenant_id`. It holds `SELECT, INSERT` only, and a trigger refuses every `UPDATE`,
-    `DELETE` and `TRUNCATE` (the owner too, unless it turns the user triggers off).
+    security like every tenant table, forced on the owner too (migration 20261027150000,
+    security review S5-3): the application login sees and writes only the rows of
+    `app.tenant_id`, and the owner sees none. It holds `SELECT, INSERT` only, and a trigger
+    refuses every `UPDATE`, `DELETE` and `TRUNCATE` (the owner too, unless it lifts FORCE and
+    turns the user triggers off; see the forward requirements below).
   - The chain is per tenant: one chain, one watermark and one checkpoint series per tenant;
     the sealer and the verifier run per hosted tenant in a unit of that tenant.
   - A row carries one `tenant_id` and no market or "acting as" column (Mondapac's
@@ -112,3 +114,27 @@ trigger that brings each one in. When a trigger fires, port the component from t
   - `audit_log`, `audit_log_seal` and `audit_chain_checkpoint` are reserved to
     `platform/persistence/audit/` (the Prisma boundary check), and a module reaches the writer
     only through the `AUDIT_WRITER` port, never the Prisma writer (dependency-cruiser).
+- **Row-level security binds the owner too.** Every tenant-scoped table has `ENABLE` and
+  `FORCE ROW LEVEL SECURITY` and one policy to `phoenix_app` (migrations 20261026120200 and
+  20261027150000, security reviews S2-1 and S5-3). The migration role owns the tables but matches no policy, so it sees
+  and writes no tenant row; migrations are DDL only. A maintenance path that must cross
+  tenants gets its own reviewed policy or role in its own migration; none exists today (see
+  the data migration requirement below). The database tests that use the owner as an operator
+  or attacker (event path, audit chain, audit writer) run on copies where `global-setup.ts`
+  lifts FORCE, as such an owner could.
+
+## Forward requirements (gates on later slices)
+
+Requirements found by the reviews that belong to a slice not built yet. Each names the slice
+it gates; that slice does not merge without it.
+
+| Requirement | Why | Gate |
+| --- | --- | --- |
+| **Session tenant binding** (security review S2-3). Identity's `Authenticator` refuses a session whose tenant differs from the request's tenant (the one `TenantContextGuard` resolved from `x-tenant-id`), with a test on both tenant fixtures. Deployment (Helm, on-prem compose) keeps the API port reachable only from the BFFs; add a `HOST` setting so the API can bind a single interface (today `app.listen(port)` binds all). | `x-tenant-id` is trusted from any caller that reaches the API port (`tenant-context.guard.ts`). Today that only selects a tenant's anonymous surface; once sessions exist, user A of tenant X could send `x-tenant-id: Y` and act in Y. | The identity slice: no session is honoured before the check and its test exist. |
+| **Composite hand-written foreign keys** (security review S2-4). Every foreign key written by hand in a migration between tenant-scoped tables includes `tenant_id` on both sides, as the Prisma-declared ones must (`check-prisma-boundaries`). | PostgreSQL checks a foreign key without row-level security, so an id-only key could point at another tenant's row. | Every migration review. |
+| **Site inputs from the database, and cross-tenant grants refused** (security review S5-7, QA review 5.8). Identity loads the target site in the actor's tenant (so row-level security makes another tenant's site "not found"), computes `siteRelation` from `site_ancestry` and never from input, implements the subtree check of `LastHolderPolicy.canActOn`, and refuses a grant across tenants; each with a test on both tenant fixtures. | `GrantPolicy` and site scope take `placement.scope.siteId`, `placement.siteRelation` and `grantCoversSite(siteId)` from the caller (`authz/roles/grant-policy.ts`, `authz/site-scope.ts`), and the tenant check sits in the unbuilt `AuthorisationCheck`. | The identity and tenancy slices that bind `AuthorisationCheck` and `SiteAncestryReader`. |
+| **Stable subscriber names** (security review S5-8). Snapshot the subscriber names, as the event catalogue is snapshotted, so renaming a subscription fails CI instead of silently changing its inbox key. | The inbox and delivery keys carry the subscriber's name (`delivery-ledger.ts`): a renamed subscription would run its handler again for redelivered events. | The first business-module subscription. |
+| **External audit anchor** (security review S5-2; Mondapac ADR-0032). Replace `LogAnchorSink` (`platform/audit/anchor-sink.ts`) with an anchor written to object storage under S3 Object Lock in compliance mode (SeaweedFS or the customer's store, ADR-0012), and bind a readable `AnchorSource` so `audit-verify` compares every checkpoint with its anchor (check f) instead of a manual runbook step. | Today the anchor is a log line nothing reads back. The hash chain is unkeyed SHA-256, so the database owner can rebuild seals and checkpoints into a consistent chain after rewriting rows; only an anchor outside its reach shows the rewrite. The code accepts the log anchor "while all data is synthetic": this row is that condition's tracked trigger. | **Before real data:** the first environment that holds non-synthetic data (a customer pilot, a staging copy of production data, or any on-prem install), whichever comes first. |
+| **Migrator credential off runtime hosts** (security review S5-2). `MIGRATION_DATABASE_URL` exists only in the migration job (CI deploy step, Helm pre-upgrade hook, the offline installer's migrate step), never in the API's or worker's environment, image or mounted secrets; the deployment docs and charts say so and a release check (Bagher, release gate) confirms it. The API already refuses to start when the variable is set. | The migration role owns the tables: it can lift FORCE ROW LEVEL SECURITY, turn the audit triggers off and rewrite audit rows (confirmed by the review). A runtime host that holds it turns any code-execution bug into an audit rewrite. | **Before real data:** the first Helm chart or on-prem installer, and in any case before the first environment with non-synthetic data. |
+| **Alert on a disabled audit trigger or lifted FORCE** (security review S5-2). A periodic check, in `audit-verify` or the role self-check, that fails and alerts when any of the six append-only triggers on `audit_log`, `audit_log_seal` and `audit_chain_checkpoint` has `pg_trigger.tgenabled <> 'O'`, or when a tenant-scoped table has `relforcerowsecurity = false`; wired to the operations alerting of the deployment. | Disabling a trigger or lifting FORCE is the first step of an owner-side rewrite; today nothing notices it, and `ALTER TABLE` leaves no row in the audit log. | **Before real data**, together with the external anchor; the alert route is part of the first production-like deployment. |
+| **Data migrations on tenant tables** (re-review N2-3). The first migration that reads or writes rows of a tenant-scoped table runs under its own reviewed role or policy, added in its own migration, and ADR-0020's per-tenant data migration line is amended to name it. | With `FORCE ROW LEVEL SECURITY` and every policy granted to `phoenix_app` only, the migration role matches no policy: a data migration under it silently reads and changes no row. | The first data migration on a tenant-scoped table. |

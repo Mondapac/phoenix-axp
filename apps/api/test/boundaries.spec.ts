@@ -108,7 +108,7 @@ const tenantLiterals = (count = 1): string[] => syntax('no-tenant-literals', cou
 const kernelImports = (count = 1): string[] =>
   times(count, 'no-restricted-imports: kernel-imports-only-itself');
 
-describe('architecture boundaries (ADR-01, ADR-02)', () => {
+describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
   describe('dependency-cruiser', () => {
     let cruise: CruiseResult;
     let found: string[];
@@ -283,7 +283,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ).toEqual({ status: 0, problems: [] });
     });
 
-    it('accepts the passing fixture: keys with tenantId (also not leading and name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, raw SQL and the driver in the platform files, identical outboxes, an inbox, the outbox exception and the audit folder', () => {
+    it('accepts the passing fixture: keys and indexes led by tenantId (also name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, raw SQL and the driver in the platform files, identical outboxes, an inbox, the outbox exception and the audit folder', () => {
       expect(
         checkPrisma(
           path.join(PRISMA_FIXTURES, 'passing/schema'),
@@ -305,10 +305,16 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'beta.prisma: enum BetaKind is in schema "alpha", but this file owns "beta"',
           'alpha.prisma: AlphaNeither is neither tenant-scoped (tenantId) nor exempt ("/// @tenant-scope none: <reason>")',
           'alpha.prisma: AlphaBoth has tenantId and also an exemption line',
-          'alpha.prisma: AlphaBadKeys @unique on ref does not contain tenantId',
-          'alpha.prisma: AlphaBadKeys @@id([kind, code]) does not contain tenantId',
-          'alpha.prisma: AlphaBadKeys @@unique([kind, ref]) does not contain tenantId',
-          'alpha.prisma: AlphaIntId @id on id does not contain tenantId',
+          'alpha.prisma: AlphaBadKeys @unique on ref does not lead with tenantId',
+          'alpha.prisma: AlphaBadKeys @@id([kind, code]) does not lead with tenantId',
+          'alpha.prisma: AlphaBadKeys @@unique([kind, ref]) does not lead with tenantId',
+          'alpha.prisma: AlphaIntId @id on id does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant.tenantId maps to column "tenant", expected "tenant_id"',
+          'alpha.prisma: AlphaTrailingTenant @@unique([id, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@unique([kind, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@index([code]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@index([kind, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingId @@id([kind, tenantId]) does not lead with tenantId',
           'alpha.prisma: AlphaChildNoTenant.parent relates two tenant-scoped models without tenantId in both fields and references',
           'alpha.prisma: AlphaChildMisaligned.parent pairs tenantId with another column (tenantId is at different positions in fields and references)',
           'alpha.prisma: AlphaScopedChild.parent relates a tenant-scoped model to the exempt model AlphaExemptParent; exempt and tenant-scoped models may not relate',
@@ -352,6 +358,65 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
     });
   });
 
+  describe('module bindings (scripts/check-module-bindings.mjs, security review S5-1)', () => {
+    /** Runs the real script, as `pnpm boundaries` does; answers its exit code and problems. */
+    function checkBindings(srcDir: string): { status: number; problems: string[] } {
+      try {
+        execFileSync(
+          process.execPath,
+          [path.join(REPO_ROOT, 'scripts/check-module-bindings.mjs'), '--src', srcDir],
+          { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        return { status: 0, problems: [] };
+      } catch (error) {
+        const { status, stderr } = error as { status: number; stderr: string };
+        const problems = stderr
+          .split('\n')
+          .filter((line) => line.startsWith('  - '))
+          .map((line) => line.slice(4));
+        return { status, problems };
+      }
+    }
+
+    it('accepts the real sources', () => {
+      expect(checkBindings(path.join(API_ROOT, 'src'))).toEqual({ status: 0, problems: [] });
+    });
+
+    it('rejects every binding that does not name its own module, and nothing else', () => {
+      const { status, problems } = checkBindings(path.join(FIXTURES, 'bindings/src'));
+      const own = "a module binds only its own name ('content')";
+      const platform = "the platform binds only 'platform' or 'platform.<component>'";
+      const literal = 'needs a string literal module name as its first argument';
+      const computed = 'with a key that is not a string literal; call the binding by its name';
+
+      expect(status).toBe(1);
+      expect(problems.sort()).toEqual(
+        [
+          'app.module.ts:6: registerPermissions(...) outside a module and outside platform/; a module binds itself',
+          `modules/content/computed-keys.ts:11: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:12: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:13: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:14: stubs[...] ${computed}`,
+          'modules/content/computed-keys.ts:16: PersistenceModule destructured with a computed key; call the binding by its name',
+          'modules/content/content.module.ts:7: registerPermissions is imported or exported under another name',
+          `modules/content/content.module.ts:25: auditWriterFor('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:26: outboxWriterFor('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:27: registerSubscriptionsFrom('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:28: registerAuditActions('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:29: registerJobsFrom('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:30: auditWriterFor('platform.authz') in module "content"; ${own}`,
+          `modules/content/content.module.ts:31: outboxWriterFor(...) ${literal}`,
+          `modules/content/content.module.ts:32: registerAuditActions(...) ${literal}`,
+          `modules/content/content.module.ts:33: auditWriterFor('identity') in module "content"; ${own}`,
+          'modules/content/content.module.ts:37: auditWriterFor is used without being called; call it directly',
+          'modules/content/content.module.ts:38: outboxWriterFor is used without being called; call it directly',
+          `platform/audit/audit.module.ts:13: auditWriterFor('identity') in platform/; ${platform}`,
+          `platform/audit/audit.module.ts:14: registerPermissions('content') in platform/; ${platform}`,
+        ].sort(),
+      );
+    });
+  });
+
   describe('the model map generator (scripts/generate-model-map.mjs)', () => {
     const GENERATOR = path.join(REPO_ROOT, 'scripts/generate-model-map.mjs');
 
@@ -386,7 +451,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         compoundSelectors: [
           { name: 'tenantId_id', fields: ['tenantId', 'id'] },
           { name: 'byCode', fields: ['tenantId', 'code'] },
-          { name: 'kind_tenantId', fields: ['kind', 'tenantId'] },
+          { name: 'tenantId_kind', fields: ['tenantId', 'kind'] },
         ],
         foreignKeys: [],
       });
@@ -550,6 +615,23 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       textsIn(file).map((text) => text.split(':')[0] ?? text);
     const rulesIn = (file: string): string[] => messagesIn(file).map(label).sort();
     const textsIn = (file: string): string[] => messagesIn(file).map((m) => m.message);
+
+    it('has a fixture that breaks every design rule named in eslint.config.mjs', () => {
+      // Every restricted-syntax, -imports or -properties message carries its rule name
+      // ("<design-rule>: ..."); a rule added without a fixture that fires it fails here (QA
+      // review 2.6).
+      const config = readFileSync(path.join(REPO_ROOT, 'eslint.config.mjs'), 'utf8');
+      const declared = [
+        ...new Set([...config.matchAll(/[`'"]([a-z]+(?:-[a-z]+)+): /g)].map((m) => m[1]!)),
+      ].sort();
+      const messages = [...results.values()].flat().map((message) => message.message);
+      const fired = new Set(
+        declared.filter((rule) => messages.some((text) => text.includes(`${rule}: `))),
+      );
+
+      expect(declared.length).toBeGreaterThanOrEqual(8);
+      expect(declared.filter((rule) => !fired.has(rule))).toEqual([]);
+    });
 
     it('reports every message of every fixture as an error', () => {
       const notErrors = [...results].flatMap(([file, messages]) =>

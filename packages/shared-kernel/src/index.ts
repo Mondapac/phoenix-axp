@@ -1,4 +1,4 @@
-// Shared kernel (ADR-01): framework-free building blocks shared by api and the web apps. No
+// Shared kernel (ADR-0001): framework-free building blocks shared by api and the web apps. No
 // I/O, no Node API, no framework; `domain/` code may import nothing else.
 //
 // Result, Id, Clock and Temporal, TenantContext with minting, CorrelationId, the actor and

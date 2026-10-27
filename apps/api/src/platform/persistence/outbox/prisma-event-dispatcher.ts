@@ -1,6 +1,6 @@
 // Ported from Mondapac apps/api/src/platform/persistence/outbox/prisma-event-dispatcher.ts,
 // Market adapted to Tenant. Phoenix change: every statement on platform.event_delivery runs in a
-// transaction that sets `app.tenant_id` first (row-level security, ADR-02); Mondapac ran the
+// transaction that sets `app.tenant_id` first (row-level security, ADR-0002); Mondapac ran the
 // give-back, failure and dead-letter statements outside a transaction.
 import { Logger } from '@nestjs/common';
 import { parseCorrelationId, parseId, Temporal } from '@phoenix/shared-kernel';
@@ -50,7 +50,7 @@ interface DeliveryRecord {
  * P 6.4: the claim counts the attempt and moves `next_attempt_at` by the back-off of the new
  * count, `min(30 s × 2^(attempts − 1), 1 h)` (the old count is the exponent), so a handler that
  * crashes needs no bookkeeping. `FOR UPDATE SKIP LOCKED` gives concurrent dispatchers disjoint
- * rows. The claim runs in a transaction that set the tenant first (row-level security, ADR-02),
+ * rows. The claim runs in a transaction that set the tenant first (row-level security, ADR-0002),
  * and filters on it too.
  */
 const CLAIM = `
@@ -125,7 +125,7 @@ const valueOf = <T>(parsed: Parsed<T>): T | null => (parsed.ok ? parsed.value : 
  *
  * Phoenix: every statement on `platform.event_delivery` (the claim, the give-back, the failure
  * and the dead letter) runs in a short transaction of the base client that sets `app.tenant_id`
- * first, because row-level security applies to the application login (ADR-02).
+ * first, because row-level security applies to the application login (ADR-0002).
  */
 export class PrismaEventDispatcher implements EventDispatcher {
   private readonly logger = new Logger('EventDispatcher');
@@ -171,7 +171,7 @@ export class PrismaEventDispatcher implements EventDispatcher {
 
   /**
    * Runs `work` in a short transaction of the base client whose first statement sets the
-   * tenant, so row-level security admits that tenant's delivery rows and no other (ADR-02).
+   * tenant, so row-level security admits that tenant's delivery rows and no other (ADR-0002).
    */
   private inTenant<T>(
     tenant: TenantContext,

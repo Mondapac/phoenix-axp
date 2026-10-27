@@ -104,7 +104,7 @@ export function checkUnitOfWorkOptions(options: UnitOfWorkOptions): void {
  * Every unit is one interactive transaction per attempt, a fresh {@link OpenUnit} around its
  * client, `work` awaited inside `unitStorage.run` (P 3.2). Its first statements, before
  * `work`, are the session statements: `SET TRANSACTION READ ONLY` for a read-only unit, then
- * `set_config('app.tenant_id', <tenant>, true)` for row-level security (ADR-02), then the
+ * `set_config('app.tenant_id', <tenant>, true)` for row-level security (ADR-0002), then the
  * optional `SET LOCAL lock_timeout`.
  *
  * - Read-write: READ COMMITTED sends no `isolationLevel`; `serializable` sends `Serializable`.
@@ -183,7 +183,7 @@ export class PrismaUnitOfWork implements UnitOfWork {
   }
 
   /**
-   * Ported from Mondapac (P 6.4; ADR-05): the inbox row, the work when the row is new, and the
+   * Ported from Mondapac (P 6.4; ADR-0006): the inbox row, the work when the row is new, and the
    * mark of the delivery, in one read-write unit of the delivery's tenant; on a retry of the
    * unit all three run again. The delivery is settled only after the commit, so the dispatcher
    * sees a failed handler.
