@@ -7,6 +7,7 @@ import {
   AUTHENTICATOR,
   AUTHORISATION_CHECK,
   FIELD_RULE_READER,
+  ROLE_HOLDING_READER,
   PermissionRegistry,
   registerPermissions,
   SITE_ANCESTRY_READER,
@@ -24,6 +25,7 @@ import { ACCOUNT_REPOSITORY, type AccountRepository } from './application/accoun
 import { IdentityAuthorisationCheck } from './application/access/identity-authorisation-check';
 import { IdentityActorGrantReader } from './application/access/identity-actor-grant-reader';
 import { IdentityFieldRuleReader } from './application/access/identity-field-rule-reader';
+import { IdentityRoleHoldingReader } from './application/access/identity-role-holding-reader';
 import { SessionAuthenticator } from './application/access/session-authenticator';
 import { DirectorySyncRunner } from './application/directory-sync-runner';
 import {
@@ -78,10 +80,13 @@ import { StaffSignInController } from './presentation/staff-sign-in.controller';
 
 const SESSIONS = { provide: SESSION_REPOSITORY, useClass: PrismaSessionRepository };
 const ROLE_RECORDS = { provide: ROLE_REPOSITORY, useClass: PrismaRoleRepository };
+const ACCOUNT_RECORDS = { provide: ACCOUNT_REPOSITORY, useClass: PrismaAccountRepository };
 
 /**
  * The identity module's answers to platform/authz: the `AUTHENTICATOR` of the ActorGuard, the
- * `AUTHORISATION_CHECK` of the UseCaseGate, the `FIELD_RULE_READER` of the FieldPolicy and the `ACTOR_GRANT_READER` of site-scope checks. Passed to `AuthzModule.register` by app.module.ts,
+ * `AUTHORISATION_CHECK` of the UseCaseGate, the `FIELD_RULE_READER` of the FieldPolicy, the
+ * `ACTOR_GRANT_READER` of site-scope checks and the `ROLE_HOLDING_READER` of the task inbox.
+ * Passed to `AuthzModule.register` by app.module.ts,
  * so platform/ imports no module; it needs only the global persistence, clock and permission
  * registry providers.
  */
@@ -105,6 +110,7 @@ const ROLE_RECORDS = { provide: ROLE_REPOSITORY, useClass: PrismaRoleRepository 
       ) => new IdentityAuthorisationCheck(unitOfWork, sessions, permissions, clock),
     },
     ROLE_RECORDS,
+    ACCOUNT_RECORDS,
     {
       provide: FIELD_RULE_READER,
       inject: [UNIT_OF_WORK, SESSION_REPOSITORY, ROLE_REPOSITORY, PermissionRegistry, CLOCK],
@@ -127,8 +133,33 @@ const ROLE_RECORDS = { provide: ROLE_REPOSITORY, useClass: PrismaRoleRepository 
         clock: Clock,
       ) => new IdentityActorGrantReader(unitOfWork, sessions, roles, permissions, clock),
     },
+    {
+      provide: ROLE_HOLDING_READER,
+      inject: [
+        UNIT_OF_WORK,
+        ACCOUNT_REPOSITORY,
+        SESSION_REPOSITORY,
+        ROLE_REPOSITORY,
+        PermissionRegistry,
+        CLOCK,
+      ],
+      useFactory: (
+        unitOfWork: UnitOfWork,
+        accounts: AccountRepository,
+        sessions: SessionRepository,
+        roles: RoleRepository,
+        permissions: PermissionRegistry,
+        clock: Clock,
+      ) => new IdentityRoleHoldingReader(unitOfWork, accounts, sessions, roles, permissions, clock),
+    },
   ],
-  exports: [AUTHENTICATOR, AUTHORISATION_CHECK, FIELD_RULE_READER, ACTOR_GRANT_READER],
+  exports: [
+    AUTHENTICATOR,
+    AUTHORISATION_CHECK,
+    FIELD_RULE_READER,
+    ACTOR_GRANT_READER,
+    ROLE_HOLDING_READER,
+  ],
 })
 export class IdentityAccessModule {}
 

@@ -48,6 +48,7 @@ import { ChangeRoleFieldRules } from '../../src/modules/identity/application/use
 import { ChangeRolePermissions } from '../../src/modules/identity/application/use-cases/change-role-permissions.use-case';
 import { ViewRoleFieldRules } from '../../src/modules/identity/application/use-cases/view-role-field-rules.use-case';
 import { IdentityFieldRuleReader } from '../../src/modules/identity/application/access/identity-field-rule-reader';
+import { IdentityRoleHoldingReader } from '../../src/modules/identity/application/access/identity-role-holding-reader';
 import {
   resolveFieldAccess,
   type FieldDescriptor,
@@ -213,6 +214,14 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       changeFieldRules: new ChangeRoleFieldRules(gate, uow, roles, permissions, audit, clock),
       viewFieldRules: new ViewRoleFieldRules(gate, uow, roles),
       fieldRules: new IdentityFieldRuleReader(uow, sessions, roles, permissions, clock),
+      roleHoldings: new IdentityRoleHoldingReader(
+        uow,
+        accounts,
+        sessions,
+        roles,
+        permissions,
+        clock,
+      ),
       ancestry,
       listGrants: new ListAccountRoleAssignments(gate, uow, accounts, roles),
       assign: new AssignRole(gate, uow, accounts, roles, permissions, ancestry, audit, clock, ids),
@@ -921,6 +930,38 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         expect(audit.actions()).toEqual(
           expect.arrayContaining(['identity.role.assigned', 'identity.role.revoked']),
         );
+      });
+
+      it('answers the role holdings of an account for the task inbox, on every call (ADR-0025)', async () => {
+        const member = await staffMember('holder');
+        const peer = await staffMember('peer');
+        const fars = await site(null);
+        const reviewer = await customRole('site', [editKey]);
+        const grant = await assigned(member.id, reviewer, {
+          level: 'site',
+          siteId: fars,
+          includeDescendants: true,
+        });
+        const expected = [
+          {
+            roleId: reviewer,
+            scope: { level: 'site', siteId: fars, includeDescendants: true },
+            keys: new Set([editKey]),
+          },
+        ];
+        expect(await identity.roleHoldings.holdingsOf(peer.context, member.id)).toEqual(expected);
+        expect(await identity.roleHoldings.holdingsOf(member.context, member.id)).toEqual(expected);
+        // Only staff ask; an unknown account holds nothing.
+        expect(
+          await identity.roleHoldings.holdingsOf(testCallContext(tenant, 'system'), member.id),
+        ).toEqual([]);
+        expect(await identity.roleHoldings.holdingsOf(peer.context, ids.next<'Account'>())).toEqual(
+          [],
+        );
+        expect(await identity.revoke.execute(admin, { assignmentId: grant })).toMatchObject({
+          ok: true,
+        });
+        expect(await identity.roleHoldings.holdingsOf(peer.context, member.id)).toEqual([]);
       });
 
       it('refuses a grant to an unlinked local account, itself, or a role of another level (M1)', async () => {

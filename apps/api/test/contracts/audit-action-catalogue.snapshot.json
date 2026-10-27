@@ -309,6 +309,17 @@
     }
   },
   {
+    "action": "process.calendar.changed",
+    "targetType": "process.calendar",
+    "targetId": "enumOf(tenant)",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "holidays": "integer",
+      "weekendDays": "integer"
+    }
+  },
+  {
     "action": "process.revision.published",
     "targetType": "process.revision",
     "targetId": "id",
@@ -317,6 +328,60 @@
     "after": {
       "revision": "integer"
     }
+  },
+  {
+    "action": "process.task.assigned",
+    "targetType": "process.task",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "assignee": "id"
+    }
+  },
+  {
+    "action": "process.task.claimed",
+    "targetType": "process.task",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": null
+  },
+  {
+    "action": "process.task.completion-requested",
+    "targetType": "process.task",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": null
+  },
+  {
+    "action": "process.task.completion-superseded",
+    "targetType": "process.task",
+    "targetId": "id",
+    "actors": ["system"],
+    "before": null,
+    "after": {
+      "role": "id"
+    }
+  },
+  {
+    "action": "process.task.escalated",
+    "targetType": "process.task",
+    "targetId": "id",
+    "actors": ["system"],
+    "before": null,
+    "after": {
+      "role": "id"
+    }
+  },
+  {
+    "action": "process.task.released",
+    "targetType": "process.task",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": null
   },
   {
     "action": "tenancy.organization.created",

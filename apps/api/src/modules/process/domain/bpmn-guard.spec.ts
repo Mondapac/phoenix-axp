@@ -286,3 +286,55 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
     expect(refusal(model(padding))).toEqual({ code: 'process.bpmn.too-large' });
   });
 });
+
+describe('checkBpmn and the core user task settings (slice 2.3, ADR-0025)', () => {
+  const ROLE = '01990000-0000-7000-8000-000000000001';
+  const settings = (attributes: string, element = 'userTask') => `
+    <startEvent id="start"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="approve"/>
+    <${element} id="approve" name="Approve" ${attributes}/>
+    <sequenceFlow id="f2" sourceRef="approve" targetRef="end"/>
+    <endEvent id="end"/>`;
+
+  it('returns each user task with its settings, under any namespace prefix', () => {
+    const result = checkBpmn(
+      model(settings(`xmlns:p="urn:phoenix" p:phoenixRole="${ROLE}" p:phoenixDue="P2D"`)),
+      'leave-approval',
+    );
+    expect(result.ok && result.value.userTasks.get('approve')).toMatchObject({
+      name: 'Approve',
+      candidateRoleId: ROLE,
+      deadline: { amount: 2, unit: 'days', count: 'calendar' },
+    });
+  });
+
+  it('refuses a setting on any element but a user task', () => {
+    expect(refusal(model(settings(`phoenixRole="${ROLE}"`, 'manualTask')))).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'phoenixRole',
+    });
+  });
+
+  it('refuses an invalid setting, naming the attribute only', () => {
+    expect(
+      refusal(model(settings('xmlns:p="urn:phoenix" p:phoenixDue="P2D" p:phoenixDueDays="lunar"'))),
+    ).toEqual({
+      code: 'process.bpmn.task-setting-invalid',
+      field: 'phoenixDueDays',
+    });
+  });
+
+  it('refuses a setting outside a namespace of its own, which the engine would refuse', () => {
+    expect(refusal(model(settings(`phoenixRole="${ROLE}"`)))).toEqual({
+      code: 'process.bpmn.task-setting-invalid',
+      field: 'phoenixRole',
+    });
+  });
+
+  it('refuses an expression in a setting', () => {
+    expect(refusal(model(settings('phoenixRole="${role}"')))).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'expression',
+    });
+  });
+});

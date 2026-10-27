@@ -15,15 +15,18 @@ import { FailClosedActorGrantReader } from './placeholders/fail-closed-actor-gra
 import { FailClosedAuthenticator } from './placeholders/fail-closed-authenticator';
 import { FailClosedAuthorisationCheck } from './placeholders/fail-closed-authorisation-check';
 import { FailClosedFieldRuleReader } from './placeholders/fail-closed-field-rule-reader';
+import { FailClosedRoleHoldingReader } from './placeholders/fail-closed-role-holding-reader';
 import { FailClosedSiteAncestryReader } from './placeholders/fail-closed-site-ancestry-reader';
+import { ROLE_HOLDING_READER } from './role-holdings';
 import { SITE_ANCESTRY_READER } from './site-scope';
 import { createUseCaseGate } from './use-case-gate';
 import { USE_CASE_GATE } from './use-case-gate.token';
 
 /**
- * Where the four ports of `platform/authz` come from. Each is a Nest module that provides and
- * exports the token (`AUTHENTICATOR`, `AUTHORISATION_CHECK`, `FIELD_RULE_READER` and `ACTOR_GRANT_READER` from
- * identity, `SITE_ANCESTRY_READER` from tenancy),
+ * Where the six ports of `platform/authz` come from. Each is a Nest module that provides and
+ * exports the token (`AUTHENTICATOR`, `AUTHORISATION_CHECK`, `FIELD_RULE_READER`,
+ * `ACTOR_GRANT_READER` and `ROLE_HOLDING_READER` from identity, `SITE_ANCESTRY_READER` from
+ * tenancy),
  * passed by `app.module.ts`, so `platform/` imports no module. Absent, the fail-closed
  * placeholder is bound, and a production start is refused (ADR-0010 decision 4).
  */
@@ -33,6 +36,7 @@ export interface AuthzBindings {
   readonly siteAncestry?: Type;
   readonly fieldRules?: Type;
   readonly actorGrants?: Type;
+  readonly roleHoldings?: Type;
 }
 
 /**
@@ -80,6 +84,14 @@ export class AuthzModule {
     } else {
       if (!imports.includes(bindings.actorGrants)) imports.push(bindings.actorGrants);
       if (!reexported.includes(bindings.actorGrants)) reexported.push(bindings.actorGrants);
+    }
+    // Read by the task inbox of the process module (ADR-0025), so exported either way.
+    if (bindings.roleHoldings === undefined) {
+      placeholders.push({ provide: ROLE_HOLDING_READER, useClass: FailClosedRoleHoldingReader });
+      reexported.push(ROLE_HOLDING_READER);
+    } else {
+      if (!imports.includes(bindings.roleHoldings)) imports.push(bindings.roleHoldings);
+      if (!reexported.includes(bindings.roleHoldings)) reexported.push(bindings.roleHoldings);
     }
     if (bindings.siteAncestry === undefined) {
       placeholders.push({ provide: SITE_ANCESTRY_READER, useClass: FailClosedSiteAncestryReader });

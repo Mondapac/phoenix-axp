@@ -19,6 +19,9 @@ model ProcessRevision {
   bpmnXml     String            @map("bpmn_xml")
   /// `sha256:` and the hex SHA-256 of the XML.
   contentHash String            @map("content_hash") @db.VarChar(71)
+  /// The core's settings of each user task, read from the model at publication (slice 2.3,
+  /// ADR-0025): an object of task key to attributes, checked again when read.
+  taskSettings Json             @default("{}") @map("task_settings")
   publishedAt DateTime          @map("published_at") @db.Timestamptz(3)
   instances   ProcessInstance[]
 
@@ -35,6 +38,9 @@ model ProcessInstance {
   id               String          @id @db.Uuid
   tenantId         String          @map("tenant_id") @db.VarChar(32)
   revisionId       String          @map("revision_id") @db.Uuid
+  /// The site the run belongs to (its task queues are at this site); null for a tenant-level
+  /// run, which only tenant grants reach (slice 2.3).
+  siteId           String?         @map("site_id") @db.Uuid
   /// starting | running | completed | cancelled
   status           String          @db.VarChar(16)
   /// The engine instance the core adopted: set once, first writer wins (ADR-0020 decision 9).
@@ -70,6 +76,24 @@ model ProcessTask {
   status        String          @db.VarChar(16)
   /// The engine command of the completion: the key stored on the engine task (PoC 3 R4).
   completionKey String?         @map("completion_key") @db.Uuid
+  // The inbox (slice 2.3, ADR-0025), copied from the instance and the revision's task settings
+  // when the task is first seen; the core alone changes the assignment.
+  /// The instance's site; null for a tenant-level run.
+  siteId            String?   @map("site_id") @db.Uuid
+  /// The user task's name in the model, the tenant's text.
+  name              String?   @db.VarChar(255)
+  /// The queue: a role at the site; null for a task sent to one person or not assigned yet.
+  candidateRoleId   String?   @map("candidate_role_id") @db.Uuid
+  /// Who holds the task: claimed, assigned, or the modeller's direct assignee.
+  assigneeAccountId String?   @map("assignee_account_id") @db.Uuid
+  dueAt             DateTime? @map("due_at") @db.Timestamptz(3)
+  /// The queue the task moves to when its deadline passes.
+  escalationRoleId  String?   @map("escalation_role_id") @db.Uuid
+  escalatedAt       DateTime? @map("escalated_at") @db.Timestamptz(3)
+  /// The outcome codes a person picks from; empty when the task offers none.
+  outcomes          String[]  @default([]) @db.VarChar(32)
+  /// The outcome of the completion the core asked for; kept when the deadline superseded it.
+  outcome           String?   @db.VarChar(32)
   openedAt      DateTime        @map("opened_at") @db.Timestamptz(3)
   closedAt      DateTime?       @map("closed_at") @db.Timestamptz(3)
   version       Int
@@ -77,6 +101,8 @@ model ProcessTask {
 
   @@unique([tenantId, engineTaskId], map: "process_task_tenant_id_engine_task_id_key")
   @@index([tenantId, instanceId], map: "process_task_tenant_id_instance_id_idx")
+  @@index([tenantId, assigneeAccountId], map: "process_task_tenant_id_assignee_account_id_idx")
+  @@index([tenantId, candidateRoleId], map: "process_task_tenant_id_candidate_role_id_idx")
   @@map("process_task")
   @@schema("process")
 }
@@ -157,5 +183,22 @@ model ProcessIncident {
   @@unique([tenantId, kind, engineRef], map: "process_incident_tenant_id_kind_engine_ref_key")
   @@index([tenantId, detectedAt], map: "process_incident_tenant_id_detected_at_idx")
   @@map("process_incident")
+  @@schema("process")
+}
+
+/// A tenant's working calendar (owner decision D4; slice 2.3): the weekdays not worked and the
+/// holidays the tenant administrator enters; working-day deadlines count on it. No default
+/// source of holidays: a tenant without a row works every day. Versioning (ADR-0007): one
+/// mutable row per tenant with `version` (stale write = 409); its history is the audit log.
+model WorkingCalendar {
+  tenantId    String     @id @map("tenant_id") @db.VarChar(32)
+  /// ISO weekdays, 1 = Monday ... 7 = Sunday.
+  weekendDays Int[]      @map("weekend_days") @db.SmallInt
+  /// ISO dates in the tenant's time zone.
+  holidays    DateTime[] @db.Date
+  version     Int
+  updatedAt   DateTime   @map("updated_at") @db.Timestamptz(3)
+
+  @@map("working_calendar")
   @@schema("process")
 }

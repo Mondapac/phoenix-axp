@@ -7,7 +7,12 @@ import { testCallContext, testTenantContext } from '@phoenix/shared-kernel/testi
 import { TEST_TENANTS } from '../../../test/support/test-config';
 import { FailClosedSiteAncestryReader } from './placeholders/fail-closed-site-ancestry-reader';
 import type { GrantScope } from './roles/role-model';
-import { grantCoversSite, siteRelation, type SiteAncestryReader } from './site-scope';
+import {
+  grantCoversSite,
+  siteRelation,
+  sitesCoveredBy,
+  type SiteAncestryReader,
+} from './site-scope';
 
 const site = (n: number): Id<'Site'> => {
   const parsed = parseId<'Site'>(`01990000-0000-7000-8000-${String(n).padStart(12, '0')}`);
@@ -43,6 +48,15 @@ class TreeReader implements SiteAncestryReader {
     }
     return Promise.resolve(false);
   }
+  async sitesWithin(context: CallContext, root: Id<'Site'>): Promise<Id<'Site'>[]> {
+    if (!(await this.siteExists(context, root))) return [];
+    const all = new Set([...PARENT.keys(), ...PARENT.values()]);
+    const within: Id<'Site'>[] = [root];
+    for (const siteId of all) {
+      if (await this.isWithinSubtree(context, siteId, root)) within.push(siteId);
+    }
+    return within;
+  }
 }
 
 const grant = (siteId: Id<'Site'>, includeDescendants: boolean): GrantScope => ({
@@ -76,6 +90,7 @@ describe.each(TEST_TENANTS)('site scope in tenant %s', (code) => {
       const broken: SiteAncestryReader = {
         siteExists: () => Promise.reject(new Error('database down')),
         isWithinSubtree: () => Promise.reject(new Error('database down')),
+        sitesWithin: () => Promise.reject(new Error('database down')),
       };
       await expect(siteRelation(broken, context, BRANCH, REGION)).rejects.toThrow('database down');
     });
@@ -135,6 +150,31 @@ describe.each(TEST_TENANTS)('site scope in tenant %s', (code) => {
       await expect(
         grantCoversSite(placeholder, context, grant(REGION, true), BRANCH),
       ).resolves.toBe(false);
+    });
+  });
+
+  describe('sitesCoveredBy', () => {
+    it('answers all when one grant is a tenant grant', async () => {
+      await expect(
+        sitesCoveredBy(reader(), context, [grant(BRANCH, false), { level: 'tenant' }]),
+      ).resolves.toBe('all');
+    });
+
+    it('answers the granted sites, and every site below a subtree grant', async () => {
+      const covered = await sitesCoveredBy(reader(), context, [
+        grant(REGION, true),
+        grant(OTHER_REGION, false),
+      ]);
+      expect(covered === 'all' ? covered : [...covered].sort()).toEqual(
+        [REGION, BRANCH, OTHER_REGION].sort(),
+      );
+    });
+
+    it('covers no site for a platform grant, and only the site itself under the placeholder', async () => {
+      await expect(sitesCoveredBy(reader(), context, [{ level: 'platform' }])).resolves.toEqual([]);
+      await expect(
+        sitesCoveredBy(new FailClosedSiteAncestryReader(), context, [grant(REGION, true)]),
+      ).resolves.toEqual([REGION]);
     });
   });
 });

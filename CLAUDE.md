@@ -102,7 +102,8 @@ change one only through a new ADR or an "Amended by" note.
   port. Core -> Flowable via outbox relay with idempotency keys; Flowable -> core via
   `process.inbox` keyed `(tenant_id, event_id, handler)`. The adapter passes the tenant on every
   call and re-checks every returned object (ADR-0020). Flowable executes processes, timers and
-  DMN; the core owns task inbox, forms, authorisation and audit.
+  DMN; the core owns task inbox, assignment, task deadlines and escalation (ADR-0025), forms,
+  authorisation and audit.
 - Forms: JSON Schema + UI Schema; published revisions are immutable; each user task points to
   one form revision.
 

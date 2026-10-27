@@ -4,14 +4,18 @@ import type { Id, JsonObject, TenantContext } from '@phoenix/shared-kernel';
 import { PrismaService } from '../../../platform/persistence/prisma.service';
 import { StaleAggregateError } from '../../../platform/unit-of-work/errors';
 import type {
+  CalendarRecord,
   CommandRecord,
   IncidentRecord,
   InstanceRecord,
   NewCommand,
+  NewTask,
   ProcessRepository,
   RevisionRecord,
+  StoredTaskSettings,
   SyncState,
   TaskRecord,
+  TaskSites,
 } from '../application/process.repository';
 import type { CommandKind } from '../domain/engine-command';
 import type { IncidentKind } from '../domain/incident';
@@ -31,7 +35,31 @@ const TASK_COLUMNS = {
   status: true,
   completionKey: true,
   version: true,
+  siteId: true,
+  name: true,
+  candidateRoleId: true,
+  assigneeAccountId: true,
+  dueAt: true,
+  escalationRoleId: true,
+  escalatedAt: true,
+  outcomes: true,
+  outcome: true,
+  openedAt: true,
 } as const;
+
+/** By due time, none last, then age: the order of an inbox. */
+const INBOX_ORDER = [
+  { dueAt: { sort: 'asc', nulls: 'last' } },
+  { openedAt: 'asc' },
+  { id: 'asc' },
+] as const;
+
+/** An ISO date as PostgreSQL `date` reads it through Prisma, and back. */
+const dayOf = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`);
+const isoOf = (day: Date): string => day.toISOString().slice(0, 10);
+
+/** Every site, or the listed ones (a task without a site matches no list). */
+const siteFilterOf = (sites: TaskSites) => (sites === 'all' ? {} : { siteId: { in: [...sites] } });
 
 /** The process module's tables in schema `process`, through the unit's guarded client. */
 @Injectable()
@@ -49,7 +77,10 @@ export class PrismaProcessRepository implements ProcessRepository {
 
   async insertRevision(
     tenant: TenantContext,
-    revision: RevisionRecord & { readonly contentHash: string },
+    revision: RevisionRecord & {
+      readonly contentHash: string;
+      readonly taskSettings: StoredTaskSettings;
+    },
     at: Temporal.Instant,
   ): Promise<void> {
     // Two publishes of one key read the same latest number: the second insert waits for the
@@ -63,6 +94,7 @@ export class PrismaProcessRepository implements ProcessRepository {
           revision: revision.revision,
           bpmnXml: revision.bpmnXml,
           contentHash: revision.contentHash,
+          taskSettings: revision.taskSettings,
           publishedAt: dateOf(at),
         },
       ],
@@ -79,9 +111,32 @@ export class PrismaProcessRepository implements ProcessRepository {
     return row === null ? null : { ...row, id: row.id as Id<'ProcessRevision'> };
   }
 
+  async findTaskSettings(
+    tenant: TenantContext,
+    revisionId: string,
+  ): Promise<StoredTaskSettings | null> {
+    const row = await this.prisma.tx(tenant).processRevision.findUnique({
+      where: {
+        tenantId_id: { tenantId: tenant.tenantId, id: revisionId },
+        tenantId: tenant.tenantId,
+      },
+      select: { taskSettings: true },
+    });
+    if (row === null) return null;
+    const settings = row.taskSettings;
+    // The column CHECK keeps it an object; anything else reads as no settings.
+    return typeof settings === 'object' && settings !== null && !Array.isArray(settings)
+      ? (settings as StoredTaskSettings)
+      : {};
+  }
+
   async insertInstance(
     tenant: TenantContext,
-    instance: { readonly id: Id<'ProcessInstance'>; readonly revisionId: Id<'ProcessRevision'> },
+    instance: {
+      readonly id: Id<'ProcessInstance'>;
+      readonly revisionId: Id<'ProcessRevision'>;
+      readonly siteId: Id<'Site'> | null;
+    },
     at: Temporal.Instant,
   ): Promise<void> {
     await this.prisma.tx(tenant).processInstance.create({
@@ -89,6 +144,7 @@ export class PrismaProcessRepository implements ProcessRepository {
         tenantId: tenant.tenantId,
         id: instance.id,
         revisionId: instance.revisionId,
+        siteId: instance.siteId,
         status: 'starting',
         engineInstanceId: null,
         requestedAt: dateOf(at),
@@ -101,7 +157,14 @@ export class PrismaProcessRepository implements ProcessRepository {
   async findInstance(tenant: TenantContext, id: string): Promise<InstanceRecord | null> {
     const row = await this.prisma.tx(tenant).processInstance.findUnique({
       where: { tenantId_id: { tenantId: tenant.tenantId, id }, tenantId: tenant.tenantId },
-      select: { id: true, revisionId: true, status: true, engineInstanceId: true, version: true },
+      select: {
+        id: true,
+        revisionId: true,
+        siteId: true,
+        status: true,
+        engineInstanceId: true,
+        version: true,
+      },
     });
     return row === null
       ? null
@@ -109,6 +172,7 @@ export class PrismaProcessRepository implements ProcessRepository {
           ...row,
           id: row.id as Id<'ProcessInstance'>,
           revisionId: row.revisionId as Id<'ProcessRevision'>,
+          siteId: row.siteId as Id<'Site'> | null,
           status: row.status as InstanceStatus,
         };
   }
@@ -144,11 +208,7 @@ export class PrismaProcessRepository implements ProcessRepository {
     return count === 1;
   }
 
-  async insertTask(
-    tenant: TenantContext,
-    task: Omit<TaskRecord, 'version' | 'completionKey'>,
-    at: Temporal.Instant,
-  ): Promise<void> {
+  async insertTask(tenant: TenantContext, task: NewTask, at: Temporal.Instant): Promise<void> {
     const open = OPEN_TASK_STATUSES.includes(task.status);
     await this.prisma.tx(tenant).processTask.create({
       data: {
@@ -160,6 +220,15 @@ export class PrismaProcessRepository implements ProcessRepository {
         formKey: task.formKey,
         status: task.status,
         completionKey: null,
+        siteId: task.siteId,
+        name: task.name,
+        candidateRoleId: task.candidateRoleId,
+        assigneeAccountId: task.assigneeAccountId,
+        dueAt: task.dueAt === null ? null : dateOf(task.dueAt),
+        escalationRoleId: task.escalationRoleId,
+        escalatedAt: null,
+        outcomes: [...task.outcomes],
+        outcome: null,
         openedAt: dateOf(at),
         closedAt: open ? null : dateOf(at),
         version: 1,
@@ -211,12 +280,127 @@ export class PrismaProcessRepository implements ProcessRepository {
     tenant: TenantContext,
     task: TaskRecord,
     completionKey: Id<'EngineCommand'>,
+    completion: {
+      readonly assigneeAccountId: Id<'Account'> | null;
+      readonly outcome: string | null;
+    },
   ): Promise<boolean> {
     const { count } = await this.prisma.tx(tenant).processTask.updateMany({
       where: { tenantId: tenant.tenantId, id: task.id, version: task.version, status: 'open' },
-      data: { status: 'completing', completionKey, version: { increment: 1 } },
+      data: {
+        status: 'completing',
+        completionKey,
+        outcome: completion.outcome,
+        ...(completion.assigneeAccountId === null
+          ? {}
+          : { assigneeAccountId: completion.assigneeAccountId }),
+        version: { increment: 1 },
+      },
     });
     return count === 1;
+  }
+
+  async assignTask(
+    tenant: TenantContext,
+    task: TaskRecord,
+    assigneeAccountId: Id<'Account'> | null,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.tx(tenant).processTask.updateMany({
+      where: { tenantId: tenant.tenantId, id: task.id, version: task.version, status: 'open' },
+      data: { assigneeAccountId, version: { increment: 1 } },
+    });
+    return count === 1;
+  }
+
+  async escalateTask(
+    tenant: TenantContext,
+    task: TaskRecord,
+    at: Temporal.Instant,
+  ): Promise<boolean> {
+    if (task.escalationRoleId === null) return false;
+    const { count } = await this.prisma.tx(tenant).processTask.updateMany({
+      where: {
+        tenantId: tenant.tenantId,
+        id: task.id,
+        version: task.version,
+        status: { in: [...OPEN_TASK_STATUSES] },
+        escalatedAt: null,
+      },
+      data: {
+        status: 'open',
+        completionKey: null,
+        candidateRoleId: task.escalationRoleId,
+        assigneeAccountId: null,
+        escalatedAt: dateOf(at),
+        version: { increment: 1 },
+      },
+    });
+    return count === 1;
+  }
+
+  async inboxCandidates(
+    tenant: TenantContext,
+    accountId: Id<'Account'>,
+    roleIds: readonly Id<'Role'>[],
+    sites: TaskSites,
+    limit: number,
+  ): Promise<TaskRecord[]> {
+    if (sites !== 'all' && sites.length === 0) return [];
+    const rows = await this.prisma.tx(tenant).processTask.findMany({
+      where: {
+        tenantId: tenant.tenantId,
+        ...siteFilterOf(sites),
+        OR: [
+          { assigneeAccountId: accountId, status: { in: [...OPEN_TASK_STATUSES] } },
+          ...(roleIds.length === 0
+            ? []
+            : [{ assigneeAccountId: null, status: 'open', candidateRoleId: { in: [...roleIds] } }]),
+        ],
+      },
+      orderBy: [...INBOX_ORDER],
+      take: limit,
+      select: TASK_COLUMNS,
+    });
+    return rows.map(taskOf);
+  }
+
+  async openTasksByDue(
+    tenant: TenantContext,
+    sites: TaskSites,
+    limit: number,
+  ): Promise<TaskRecord[]> {
+    if (sites !== 'all' && sites.length === 0) return [];
+    const rows = await this.prisma.tx(tenant).processTask.findMany({
+      where: {
+        tenantId: tenant.tenantId,
+        ...siteFilterOf(sites),
+        status: { in: [...OPEN_TASK_STATUSES] },
+      },
+      orderBy: [...INBOX_ORDER],
+      take: limit,
+      select: TASK_COLUMNS,
+    });
+    return rows.map(taskOf);
+  }
+
+  async tasksToEscalate(
+    tenant: TenantContext,
+    now: Temporal.Instant,
+    limit: number,
+  ): Promise<TaskRecord[]> {
+    const rows = await this.prisma.tx(tenant).processTask.findMany({
+      where: {
+        tenantId: tenant.tenantId,
+        status: 'open',
+        escalationRoleId: { not: null },
+        escalatedAt: null,
+        dueAt: { lte: dateOf(now) },
+      },
+      orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+      select: TASK_COLUMNS,
+    });
+    return rows.map(taskOf);
   }
 
   async closeTask(
@@ -393,6 +577,46 @@ export class PrismaProcessRepository implements ProcessRepository {
     return count === 1;
   }
 
+  async readWorkingCalendar(tenant: TenantContext): Promise<CalendarRecord> {
+    const row = await this.prisma.tx(tenant).workingCalendar.findUnique({
+      where: { tenantId: tenant.tenantId },
+      select: { weekendDays: true, holidays: true, version: true },
+    });
+    return row === null
+      ? { weekendDays: [], holidays: [], version: 0 }
+      : {
+          weekendDays: row.weekendDays,
+          holidays: row.holidays.map(isoOf).sort(),
+          version: row.version,
+        };
+  }
+
+  async saveWorkingCalendar(
+    tenant: TenantContext,
+    calendar: Omit<CalendarRecord, 'version'>,
+    expectedVersion: number,
+    at: Temporal.Instant,
+  ): Promise<boolean> {
+    const tx = this.prisma.tx(tenant);
+    const values = {
+      weekendDays: [...calendar.weekendDays],
+      holidays: calendar.holidays.map(dayOf),
+      updatedAt: dateOf(at),
+    };
+    if (expectedVersion === 0) {
+      const { count } = await tx.workingCalendar.createMany({
+        data: [{ tenantId: tenant.tenantId, ...values, version: 1 }],
+        skipDuplicates: true,
+      });
+      return count === 1;
+    }
+    const { count } = await tx.workingCalendar.updateMany({
+      where: { tenantId: tenant.tenantId, version: expectedVersion },
+      data: { ...values, version: { increment: 1 } },
+    });
+    return count === 1;
+  }
+
   async recordIncident(tenant: TenantContext, incident: IncidentRecord): Promise<void> {
     await this.prisma.tx(tenant).processIncident.createMany({
       data: [
@@ -435,11 +659,28 @@ function taskOf(row: {
   status: string;
   completionKey: string | null;
   version: number;
+  siteId: string | null;
+  name: string | null;
+  candidateRoleId: string | null;
+  assigneeAccountId: string | null;
+  dueAt: Date | null;
+  escalationRoleId: string | null;
+  escalatedAt: Date | null;
+  outcomes: string[];
+  outcome: string | null;
+  openedAt: Date;
 }): TaskRecord {
   return {
     ...row,
     id: row.id as Id<'ProcessTask'>,
     instanceId: row.instanceId as Id<'ProcessInstance'>,
     status: row.status as TaskStatus,
+    siteId: row.siteId as Id<'Site'> | null,
+    candidateRoleId: row.candidateRoleId as Id<'Role'> | null,
+    assigneeAccountId: row.assigneeAccountId as Id<'Account'> | null,
+    dueAt: row.dueAt === null ? null : instantOf(row.dueAt),
+    escalationRoleId: row.escalationRoleId as Id<'Role'> | null,
+    escalatedAt: row.escalatedAt === null ? null : instantOf(row.escalatedAt),
+    openedAt: instantOf(row.openedAt),
   };
 }

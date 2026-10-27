@@ -8,7 +8,9 @@ import type {
   JsonObject,
   TenantContext,
 } from '@phoenix/shared-kernel';
+import type { AuditWriter } from '../../../../platform/audit/audit-writer';
 import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work';
+import { PROCESS_TASK_COMPLETION_SUPERSEDED } from '../../domain/audit-actions';
 import {
   COMMAND_LEASE_MS,
   invalidVariable,
@@ -20,6 +22,8 @@ import { checkBpmn } from '../../domain/bpmn-guard';
 import type { IncidentKind } from '../../domain/incident';
 import { adoptionOf } from '../../domain/instance';
 import { statusOnEngineEnd, type EngineTaskEnd } from '../../domain/task';
+import { deadlinePassed } from '../../domain/task-access';
+import { OUTCOME_VARIABLE, outcomeOf } from '../../domain/task-settings';
 import type { EngineCommands } from '../engine-commands';
 import {
   EngineRefusedError,
@@ -64,6 +68,7 @@ export class CommandRelay {
     private readonly engine: ProcessEngine,
     private readonly ids: IdGenerator,
     private readonly clock: Clock,
+    private readonly audit: AuditWriter,
   ) {}
 
   async runOnce(context: CallContext): Promise<RelayPass> {
@@ -126,7 +131,7 @@ export class CommandRelay {
       case 'start-instance':
         return this.startInstance(context, command);
       case 'complete-task':
-        return this.completeTask(context.tenant, command);
+        return this.completeTask(context, command);
       case 'delete-orphan':
         return this.deleteOrphan(context.tenant, command);
     }
@@ -214,16 +219,31 @@ export class CommandRelay {
   /**
    * Completes the engine task with the command id as completion key (PoC 3 R4). When the task
    * is gone, its history tells the core's own earlier completion from a deadline that won or a
-   * completion made outside the core.
+   * completion made outside the core. A decision that has not reached the engine when the
+   * task's deadline passes never does: the deadline wins (owner decision on PoC 3 R7).
    */
-  private async completeTask(tenant: TenantContext, command: CommandRecord): Promise<void> {
+  private async completeTask(context: CallContext, command: CommandRecord): Promise<void> {
+    const { tenant } = context;
     const task = await this.read(tenant, () => this.repository.findTask(tenant, command.subjectId));
     let end: EngineTaskEnd | null = null;
     if (task !== null && task.status === 'completing' && task.completionKey === command.id) {
+      if (deadlinePassed(task, this.clock.now())) {
+        // An earlier attempt may have reached the engine although its answer was lost: the
+        // engine's record decides, and only a decision it never applied is superseded.
+        end = (await this.engine.findTask(tenant, task.engineTaskId))?.end ?? null;
+        if (end === null) return this.supersede(context, command);
+      }
+    }
+    if (
+      end === null &&
+      task !== null &&
+      task.status === 'completing' &&
+      task.completionKey === command.id
+    ) {
       const outcome = await this.engine.completeTask(
         tenant,
         task.engineTaskId,
-        variablesOf(command.payload),
+        engineVariablesOf(command.payload),
         command.id,
       );
       end =
@@ -247,6 +267,40 @@ export class CommandRelay {
       await this.repository.ackCommand(tenant, command.id, this.clock.now());
       return ok(undefined);
     });
+  }
+
+  /**
+   * The deadline passed before the decision reached the engine: the task escalates as if the
+   * person had not decided, the decision stays on the row (`outcome`) labelled superseded in the
+   * audit log, and the command ends without reaching the engine.
+   */
+  private async supersede(context: CallContext, command: CommandRecord): Promise<void> {
+    const { tenant } = context;
+    const raced = await this.unitOfWork.run<boolean, never>(tenant, async () => {
+      const now = this.clock.now();
+      const fresh = await this.repository.findTask(tenant, command.subjectId);
+      const pending =
+        fresh !== null &&
+        fresh.status === 'completing' &&
+        fresh.completionKey === command.id &&
+        fresh.escalationRoleId !== null;
+      if (pending && (await this.repository.escalateTask(tenant, fresh, now))) {
+        await this.incident(tenant, 'completion-superseded', fresh.engineTaskId, fresh.instanceId);
+        await this.audit.record(
+          context,
+          PROCESS_TASK_COMPLETION_SUPERSEDED.entry(fresh.id, {
+            after: { role: fresh.escalationRoleId },
+          }),
+        );
+      } else if (pending) {
+        // Another write moved the row first: the command stays, so the task never sits in
+        // `completing` with no command to end it.
+        return ok(true);
+      }
+      await this.repository.killCommand(tenant, command.id, now, 'task.superseded');
+      return ok(false);
+    });
+    if (raced.ok && raced.value) await this.release(tenant, command, 'task.version-race');
   }
 
   private async deleteOrphan(tenant: TenantContext, command: CommandRecord): Promise<void> {
@@ -308,6 +362,18 @@ export class CommandRelay {
     if (!result.ok) return Promise.reject(new Error('unreachable: a read unit returned err'));
     return result.value;
   }
+}
+
+/**
+ * What a completion sends the engine: the payload's variables and, when the person picked one,
+ * the outcome as the core's own `phoenixOutcome`, checked again like the variables.
+ */
+function engineVariablesOf(payload: JsonObject): EngineVariables {
+  const variables = variablesOf(payload);
+  if (payload.outcome === undefined) return variables;
+  const outcome = outcomeOf(payload.outcome);
+  if (outcome === null) throw new EngineRefusedError('client-error');
+  return { ...variables, [OUTCOME_VARIABLE]: outcome };
 }
 
 /** The variables of a command payload, checked again: the row is data, not trust. */

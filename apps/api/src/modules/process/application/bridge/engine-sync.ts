@@ -7,12 +7,15 @@ import type {
   Temporal,
   TenantContext,
 } from '@phoenix/shared-kernel';
+import type { TenantRegistry } from '../../../../platform/tenant-config/tenant-registry';
 import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work';
+import { dueAt } from '../../domain/deadline';
 import type { IncidentKind } from '../../domain/incident';
 import { adoptionOf, endStatusOf } from '../../domain/instance';
 import { statusOnEngineEnd } from '../../domain/task';
 import { advance, queryFrom } from '../../domain/watermark';
 import type { EngineCommands } from '../engine-commands';
+import { settingsOf } from '../inbox-access';
 import type { BridgeHashing } from '../ports/bridge-hashing';
 import type {
   EngineInstance,
@@ -20,7 +23,7 @@ import type {
   EngineTaskRecord,
   ProcessEngine,
 } from '../ports/process-engine';
-import type { ProcessRepository, TaskRecord } from '../process.repository';
+import type { InstanceRecord, ProcessRepository, TaskRecord } from '../process.repository';
 
 /** The inbox handlers of the sync: `(tenant_id, event_id, handler)` is the dedup key. */
 export const SYNC_HANDLERS = Object.freeze({
@@ -72,6 +75,7 @@ export class EngineSync {
     private readonly hashing: BridgeHashing,
     private readonly ids: IdGenerator,
     private readonly clock: Clock,
+    private readonly tenants: TenantRegistry,
   ) {}
 
   async runOnce(context: CallContext): Promise<SyncPass> {
@@ -143,7 +147,7 @@ export class EngineSync {
     if (adoptionOf(instance.engineInstanceId, task.engineInstanceId) === 'orphan') {
       return this.flagOrphan(context, instance.id, task.engineInstanceId);
     }
-    return this.surfaceTask(tenant, instance.id, task, null);
+    return this.surfaceTask(tenant, instance, task, null);
   }
 
   private async observeEndedTask(context: CallContext, record: EngineTaskRecord): Promise<Outcome> {
@@ -161,7 +165,7 @@ export class EngineSync {
     if (adoptionOf(instance.engineInstanceId, record.engineInstanceId) === 'orphan') {
       return this.flagOrphan(context, instance.id, record.engineInstanceId);
     }
-    return this.surfaceTask(tenant, instance.id, record, record);
+    return this.surfaceTask(tenant, instance, record, record);
   }
 
   private async observeEndedInstance(
@@ -194,13 +198,19 @@ export class EngineSync {
     });
   }
 
-  /** Records a task of the adopted instance: open, or closed when `ended` says how it ended. */
+  /**
+   * Records a task of the adopted instance: open, or closed when `ended` says how it ended. The
+   * inbox columns come with it (ADR-0025): the instance's site, and the modeller's settings of
+   * the task in the instance's revision, its deadline counted from now in the tenant's time
+   * zone and, for working days, on the tenant's working calendar.
+   */
   private surfaceTask(
     tenant: TenantContext,
-    instanceId: Id<'ProcessInstance'>,
+    instance: InstanceRecord,
     task: EngineOpenTask,
     ended: EngineTaskRecord | null,
   ): Promise<Outcome> {
+    const instanceId = instance.id;
     const end = ended === null ? null : ended.end;
     const closed =
       end === null ? null : statusOnEngineEnd({ status: 'open', completionKey: null }, end);
@@ -213,6 +223,25 @@ export class EngineSync {
         task.engineInstanceId,
       );
       if (recorded !== task.engineInstanceId) return 'deferred';
+      const settings = settingsOf(
+        await this.repository.findTaskSettings(tenant, instance.revisionId),
+        task.taskKey,
+      );
+      const now = this.clock.now();
+      let due: Temporal.Instant | null = null;
+      if (settings.deadline !== null) {
+        const calendar = await this.repository.readWorkingCalendar(tenant);
+        try {
+          due = dueAt(now, this.tenants.get(tenant.tenantId).timeZone, settings.deadline, {
+            weekendDays: new Set(calendar.weekendDays),
+            holidays: new Set(calendar.holidays),
+          });
+        } catch (error) {
+          // A calendar with no working day (the table's CHECKs refuse one): the task waits in
+          // its queue with no deadline rather than stopping the tenant's sync on every pass.
+          if (!(error instanceof RangeError)) throw error;
+        }
+      }
       await this.repository.insertTask(
         tenant,
         {
@@ -222,8 +251,15 @@ export class EngineSync {
           taskKey: task.taskKey,
           formKey: task.formKey,
           status: closed === null ? 'open' : closed.status,
+          siteId: instance.siteId,
+          name: settings.name,
+          candidateRoleId: settings.candidateRoleId,
+          assigneeAccountId: settings.assigneeAccountId,
+          dueAt: due,
+          escalationRoleId: due === null ? null : settings.escalationRoleId,
+          outcomes: settings.outcomes,
         },
-        this.clock.now(),
+        now,
       );
       if (closed !== null && closed.incident !== null) {
         await this.incident(tenant, closed.incident, task.engineTaskId, instanceId);

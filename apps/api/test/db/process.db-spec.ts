@@ -1,5 +1,5 @@
-import { encodeAuditFields, Temporal } from '@phoenix/shared-kernel';
-import type { AuditEntry, CallContext, Id, TenantContext } from '@phoenix/shared-kernel';
+import { Temporal } from '@phoenix/shared-kernel';
+import type { CallContext, Id, TenantContext } from '@phoenix/shared-kernel';
 import {
   FixedClock,
   SequenceIdGenerator,
@@ -7,11 +7,8 @@ import {
   testCallContext,
 } from '@phoenix/shared-kernel/testing';
 import { Client } from 'pg';
-import type { AuditWriter } from '../../src/platform/audit/audit-writer';
 import type { PermissionDeclaration } from '../../src/platform/authz/permission';
 import { createUseCaseGate } from '../../src/platform/authz/use-case-gate';
-import { loadTenantConfigs } from '../../src/platform/tenant-config/tenant-config';
-import { TenantRegistry } from '../../src/platform/tenant-config/tenant-registry';
 import { CommandRelay } from '../../src/modules/process/application/bridge/command-relay';
 import { EngineSync } from '../../src/modules/process/application/bridge/engine-sync';
 import { EngineCommands } from '../../src/modules/process/application/engine-commands';
@@ -20,14 +17,15 @@ import { ListProcessIncidents } from '../../src/modules/process/application/use-
 import { PublishProcessRevision } from '../../src/modules/process/application/use-cases/publish-process-revision.use-case';
 import { StartProcessInstance } from '../../src/modules/process/application/use-cases/start-process-instance.use-case';
 import { PROCESS_PERMISSIONS } from '../../src/modules/process/contracts/permissions';
-import { PROCESS_AUDIT_ACTIONS } from '../../src/modules/process/domain/audit-actions';
 import { COMMAND_LEASE_MS } from '../../src/modules/process/domain/engine-command';
 import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node-bridge-hashing';
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
 import { StaleAggregateError } from '../../src/platform/unit-of-work/errors';
 import { CallLostError, FakeProcessEngine } from '../support/fake-process-engine';
+import { RecordingAuditWriter, testTenantRegistry } from '../support/process-test-support';
 import { realFlowableScenarios } from './process-flowable.scenarios';
-import { TEST_TENANT_CONFIG_DIRS, TEST_TENANTS, testTenantId } from '../support/test-config';
+import { taskInboxScenarios } from './process-inbox.scenarios';
+import { TEST_TENANTS } from '../support/test-config';
 import {
   createPersistence,
   otherTenantOf,
@@ -42,22 +40,6 @@ import { testDatabaseUrl } from './test-database';
 // scenario is a row of the PoC 3 failure matrix: the criterion is that every engine task of the
 // adopted instance is in the core exactly once, no orphan's task ever is, and every anomaly is
 // an incident. The gate admits a staff actor; the audit writer checks each entry.
-
-const DEFINITIONS = new Map(PROCESS_AUDIT_ACTIONS.map((d) => [d.action as string, d]));
-
-class RecordingAuditWriter implements AuditWriter {
-  readonly entries: AuditEntry[] = [];
-  record(_context: CallContext, entry: AuditEntry): Promise<void> {
-    const definition = DEFINITIONS.get(entry.action);
-    if (definition === undefined) throw new Error(`undeclared audit action ${entry.action}`);
-    const options = { isKnownPermissionKey: () => false };
-    if (definition.after !== null) {
-      expect(encodeAuditFields(definition.after, entry.after, options).ok).toBe(true);
-    }
-    this.entries.push(entry);
-    return Promise.resolve();
-  }
-}
 
 const bpmn = (key: string) => `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowable="http://flowable.org/bpmn" targetNamespace="http://phoenix.example/bpmn">
@@ -99,9 +81,7 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
     const declared = new Map<string, PermissionDeclaration>(
       PROCESS_PERMISSIONS.declarations.map((d) => [d.key, d]),
     );
-    const tenants = new TenantRegistry(
-      loadTenantConfigs(TEST_TENANT_CONFIG_DIRS, TEST_TENANTS.map(testTenantId)),
-    );
+    const tenants = testTenantRegistry();
     const gate = createUseCaseGate(
       tenants,
       { get: (key) => declared.get(key) },
@@ -115,8 +95,8 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       uow,
       repository,
       commands,
-      relay: new CommandRelay(uow, repository, commands, engine, ids, clock),
-      sync: new EngineSync(uow, repository, commands, engine, hashing, ids, clock),
+      relay: new CommandRelay(uow, repository, commands, engine, ids, clock, audit),
+      sync: new EngineSync(uow, repository, commands, engine, hashing, ids, clock, tenants),
       publish: new PublishProcessRevision(
         gate,
         uow,
@@ -539,6 +519,7 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
             revision: 1,
             bpmnXml: unsafe,
             contentHash: new NodeBridgeHashing().contentHash(unsafe),
+            taskSettings: {},
           },
           clock.now(),
         );
@@ -726,5 +707,7 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
   });
 });
 
-// The same bridge on the real engine, after the fake engine's scenarios (see that file).
+// The task inbox on the fake engine (slice 2.3), then the same bridge on the real engine, after
+// the fake engine's scenarios (see that file).
+taskInboxScenarios();
 realFlowableScenarios();

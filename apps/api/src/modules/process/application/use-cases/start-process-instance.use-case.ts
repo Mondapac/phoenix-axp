@@ -9,6 +9,11 @@ import type { ProcessRepository } from '../process.repository';
 
 export interface StartProcessInstanceInput {
   readonly revisionId: Id<'ProcessRevision'>;
+  /**
+   * The site the run belongs to, whose queues receive its tasks; null for a tenant-level run.
+   * The caller (a subscriber of this module) passes a site of the tenant it already checked.
+   */
+  readonly siteId?: Id<'Site'> | null;
   /** Ids, codes and numbers for the model (ADR-0005 decision 7). */
   readonly variables: EngineVariables;
 }
@@ -57,7 +62,7 @@ export class StartProcessInstance extends UseCase<
         if (revision === null) return err(REVISION_NOT_FOUND);
         await this.repository.insertInstance(
           tenant,
-          { id, revisionId: revision.id },
+          { id, revisionId: revision.id, siteId: input.siteId ?? null },
           this.clock.now(),
         );
         await this.commands.startInstance(context, id, revision.id, input.variables);

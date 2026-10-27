@@ -43,4 +43,14 @@ export class ClosureSiteAncestryReader implements SiteAncestryReader {
     );
     return answer.ok && answer.value;
   }
+
+  async sitesWithin(context: CallContext, rootSiteId: Id<'Site'>): Promise<Id<'Site'>[]> {
+    const { tenant } = context;
+    const answer = await this.unitOfWork.run(
+      tenant,
+      async () => ok((await this.sites.list(tenant, rootSiteId)).map((site) => site.id)),
+      { readOnly: true },
+    );
+    return answer.ok ? answer.value : [];
+  }
 }

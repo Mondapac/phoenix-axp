@@ -18,6 +18,8 @@ export interface RevisionRecord {
 export interface InstanceRecord {
   readonly id: Id<'ProcessInstance'>;
   readonly revisionId: Id<'ProcessRevision'>;
+  /** Null for a tenant-level run. */
+  readonly siteId: Id<'Site'> | null;
   readonly status: InstanceStatus;
   readonly engineInstanceId: string | null;
   readonly version: number;
@@ -31,6 +33,34 @@ export interface TaskRecord {
   readonly formKey: string | null;
   readonly status: TaskStatus;
   readonly completionKey: string | null;
+  readonly version: number;
+  // The inbox (slice 2.3, ADR-0025).
+  readonly siteId: Id<'Site'> | null;
+  readonly name: string | null;
+  readonly candidateRoleId: Id<'Role'> | null;
+  readonly assigneeAccountId: Id<'Account'> | null;
+  readonly dueAt: Temporal.Instant | null;
+  readonly escalationRoleId: Id<'Role'> | null;
+  readonly escalatedAt: Temporal.Instant | null;
+  readonly outcomes: readonly string[];
+  readonly outcome: string | null;
+  readonly openedAt: Temporal.Instant;
+}
+
+/** A task as the sync first records it. */
+export type NewTask = Omit<
+  TaskRecord,
+  'version' | 'completionKey' | 'escalatedAt' | 'outcome' | 'openedAt'
+>;
+
+/** A revision's stored task settings: task key to attributes, checked again when read. */
+export type StoredTaskSettings = Readonly<Record<string, Readonly<Record<string, string>>>>;
+
+/** A tenant's working calendar as stored; version 0 when the tenant entered none. */
+export interface CalendarRecord {
+  readonly weekendDays: readonly number[];
+  /** ISO dates, sorted. */
+  readonly holidays: readonly string[];
   readonly version: number;
 }
 
@@ -61,18 +91,33 @@ export interface SyncState {
   readonly version: number;
 }
 
+/**
+ * The sites a task list reads (ADR-0025): `all`, tenant-level tasks (no site) included, or the
+ * listed sites only, never a task without a site.
+ */
+export type TaskSites = 'all' | readonly Id<'Site'>[];
+
 export interface ProcessRepository {
   latestRevisionNumber(tenant: TenantContext, processKey: string): Promise<number>;
   insertRevision(
     tenant: TenantContext,
-    revision: RevisionRecord & { readonly contentHash: string },
+    revision: RevisionRecord & {
+      readonly contentHash: string;
+      readonly taskSettings: StoredTaskSettings;
+    },
     at: Temporal.Instant,
   ): Promise<void>;
   findRevision(tenant: TenantContext, id: string): Promise<RevisionRecord | null>;
+  /** The task settings of a revision; null when the revision does not exist. */
+  findTaskSettings(tenant: TenantContext, revisionId: string): Promise<StoredTaskSettings | null>;
 
   insertInstance(
     tenant: TenantContext,
-    instance: { readonly id: Id<'ProcessInstance'>; readonly revisionId: Id<'ProcessRevision'> },
+    instance: {
+      readonly id: Id<'ProcessInstance'>;
+      readonly revisionId: Id<'ProcessRevision'>;
+      readonly siteId: Id<'Site'> | null;
+    },
     at: Temporal.Instant,
   ): Promise<void>;
   findInstance(tenant: TenantContext, id: string): Promise<InstanceRecord | null>;
@@ -94,21 +139,55 @@ export interface ProcessRepository {
   ): Promise<boolean>;
 
   /** Inserts a task seen open, or seen only after it ended (closed at `at` then). */
-  insertTask(
-    tenant: TenantContext,
-    task: Omit<TaskRecord, 'version' | 'completionKey'>,
-    at: Temporal.Instant,
-  ): Promise<void>;
+  insertTask(tenant: TenantContext, task: NewTask, at: Temporal.Instant): Promise<void>;
   findTask(tenant: TenantContext, id: string): Promise<TaskRecord | null>;
   findTaskByEngineId(tenant: TenantContext, engineTaskId: string): Promise<TaskRecord | null>;
   /** Open and completing tasks, oldest first, after `afterId`, at most `limit`. */
   openTasks(tenant: TenantContext, afterId: string | null, limit: number): Promise<TaskRecord[]>;
-  /** Moves an open task to `completing` with its key; false when its version moved. */
+  /**
+   * Moves an open task to `completing` with its key, held by `assignee` (an implicit claim)
+   * when given, with the outcome picked; false when its version moved.
+   */
   markCompleting(
     tenant: TenantContext,
     task: TaskRecord,
     completionKey: Id<'EngineCommand'>,
+    completion: {
+      readonly assigneeAccountId: Id<'Account'> | null;
+      readonly outcome: string | null;
+    },
   ): Promise<boolean>;
+  /** Gives an open task to `assignee` (null: back to its queue); false when its version moved. */
+  assignTask(
+    tenant: TenantContext,
+    task: TaskRecord,
+    assigneeAccountId: Id<'Account'> | null,
+  ): Promise<boolean>;
+  /**
+   * The deadline passed: an open or completing task moves, open, to the escalation role's
+   * queue, held by nobody, its completion request dropped; false when its version moved.
+   */
+  escalateTask(tenant: TenantContext, task: TaskRecord, at: Temporal.Instant): Promise<boolean>;
+  /**
+   * The inbox candidates of an account: open and completing tasks it holds, and open tasks
+   * nobody holds in the queues of `roleIds`, at `sites`; by due time (none last), then age, at
+   * most `limit`.
+   */
+  inboxCandidates(
+    tenant: TenantContext,
+    accountId: Id<'Account'>,
+    roleIds: readonly Id<'Role'>[],
+    sites: TaskSites,
+    limit: number,
+  ): Promise<TaskRecord[]>;
+  /** Open and completing tasks at `sites` by due time (none last), then age, at most `limit`. */
+  openTasksByDue(tenant: TenantContext, sites: TaskSites, limit: number): Promise<TaskRecord[]>;
+  /** Open tasks whose deadline escalates and has passed at `now`, oldest due first. */
+  tasksToEscalate(
+    tenant: TenantContext,
+    now: Temporal.Instant,
+    limit: number,
+  ): Promise<TaskRecord[]>;
   /** Closes a task with `status`; false when its version moved. */
   closeTask(
     tenant: TenantContext,
@@ -163,6 +242,15 @@ export interface ProcessRepository {
   saveSyncState(
     tenant: TenantContext,
     state: Omit<SyncState, 'version'>,
+    expectedVersion: number,
+    at: Temporal.Instant,
+  ): Promise<boolean>;
+
+  readWorkingCalendar(tenant: TenantContext): Promise<CalendarRecord>;
+  /** Saves the calendar if `expectedVersion` still holds; false when another write came first. */
+  saveWorkingCalendar(
+    tenant: TenantContext,
+    calendar: Omit<CalendarRecord, 'version'>,
     expectedVersion: number,
     at: Temporal.Instant,
   ): Promise<boolean>;
