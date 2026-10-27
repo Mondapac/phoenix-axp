@@ -1,3 +1,4 @@
+import type { Id } from '@phoenix/shared-kernel';
 import type { InvalidUsername } from '../domain/account';
 
 // The expected failures of the identity use cases: codes, never values. The controllers map each
@@ -15,7 +16,8 @@ export type SignInFailure =
   | { readonly code: 'sign-in.rejected' }
   | { readonly code: 'sign-in.unavailable' }
   | { readonly code: 'sign-in.no-staff-account' }
-  | { readonly code: 'sign-in.account-disabled' };
+  /** `accountId` is for the refusal log only: the HTTP answer carries the code alone. */
+  | { readonly code: 'sign-in.account-disabled'; readonly accountId: Id<'Account'> };
 
 export type { InvalidUsername };
 

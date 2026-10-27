@@ -398,7 +398,7 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       }
       expect(await signIn({ username, directory: false })).toEqual({
         ok: false,
-        error: { code: 'sign-in.account-disabled' },
+        error: { code: 'sign-in.account-disabled', accountId: created.value.id },
       });
       expect(audit.actions()).toContain('identity.account.disabled');
     });

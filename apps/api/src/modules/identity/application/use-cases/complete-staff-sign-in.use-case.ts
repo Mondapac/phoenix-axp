@@ -26,7 +26,11 @@ export interface StartedSession {
   readonly accountId: Id<'Account'>;
 }
 
-const failure = (code: SignInFailure['code']): Result<never, SignInFailure> => err({ code });
+const failure = (
+  code: Exclude<SignInFailure['code'], 'sign-in.account-disabled'>,
+): Result<never, SignInFailure> => err({ code });
+const disabled = (accountId: Id<'Account'>): Result<never, SignInFailure> =>
+  err({ code: 'sign-in.account-disabled', accountId });
 
 /**
  * Completes a staff sign-in (ADR-0004 decisions 1 and 2, ADR-0019 decision 3): checks the
@@ -95,11 +99,11 @@ export class CompleteStaffSignIn extends UseCase<
         case 'refused':
           return failure('sign-in.no-staff-account');
         case 'existing':
-          if (match.account.status !== 'active') return failure('sign-in.account-disabled');
+          if (match.account.status !== 'active') return disabled(match.account.id);
           accountId = match.account.id;
           break;
         case 'link-local':
-          if (match.account.status !== 'active') return failure('sign-in.account-disabled');
+          if (match.account.status !== 'active') return disabled(match.account.id);
           accountId = match.account.id;
           await this.accounts.link(tenant, accountId, match.account.version, identity.subject, now);
           await this.audit.record(

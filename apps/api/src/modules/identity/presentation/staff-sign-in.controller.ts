@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http';
-import { Controller, Get, HttpCode, Inject, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, HttpCode, Inject, Logger, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { CallContext } from '@phoenix/shared-kernel';
 import type { Response } from 'express';
@@ -44,6 +44,8 @@ export class StaffSignInController {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
+  readonly #logger = new Logger('StaffSignIn');
+
   /** Redirects to the tenant's Keycloak realm, with the flow secret in its cookie. */
   @Get('sign-in')
   async signIn(@Call() context: CallContext, @Res() response: Response): Promise<void> {
@@ -73,6 +75,17 @@ export class StaffSignInController {
       flowSecret: cookieValue(request.headers.cookie, FLOW_COOKIE) ?? '',
     });
     response.clearCookie(FLOW_COOKIE, { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });
+    if (!result.ok) {
+      // A refused sign-in leaves a trace for operations and for sign-in rate limiting: the
+      // reason code and the account when known, never the username, the code or the state.
+      this.#logger.warn({
+        msg: 'identity.sign-in.refused',
+        reason: result.error.code,
+        accountId: 'accountId' in result.error ? result.error.accountId : null,
+        tenantId: context.tenant.tenantId,
+        correlationId: context.correlationId,
+      });
+    }
     const session = answer(result);
     response.cookie(STUDIO_SESSION_COOKIE, session.sessionToken, {
       httpOnly: true,
