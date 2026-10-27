@@ -1,33 +1,5 @@
 [
   {
-    "package": "tslib",
-    "licence": "0BSD",
-    "reason": "TypeScript's runtime helpers, a production dependency of @nestjs/common, @nestjs/core and rxjs. 0BSD is a public-domain-equivalent permissive licence (no conditions at all); ADR-0009 leaves 0BSD to an owner question, so it is excepted by name until then.",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "argparse",
-    "licence": "Python-2.0",
-    "reason": "Production dependency through js-yaml from @nestjs/swagger (OpenAPI document). The PSF licence is permissive (BSD-style, attribution only) and not copyleft; used unmodified.",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "postgres",
-    "licence": "Unlicense",
-    "reason": "Public-domain dedication. Reached through the prisma CLI, a peer dependency of @prisma/client, so it sits in the production closure; the API does not load it at runtime (it uses pg through @prisma/adapter-pg).",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "robust-predicates",
-    "licence": "Unlicense",
-    "reason": "Public-domain dedication. Reached through Prisma Studio inside the prisma CLI (a peer dependency of @prisma/client); not loaded by the API.",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
     "package": "elkjs",
     "licence": "EPL-2.0",
     "reason": "Weak, file-level copyleft (EPL-2.0 is not GPL-family; its secondary-licence clause is not invoked). Used unmodified by Prisma Studio inside the prisma CLI (a peer dependency of @prisma/client); never linked into or loaded by the API. Revisit if the prisma CLI leaves the production closure or if anything imports elkjs directly.",
@@ -37,55 +9,6 @@
   {
     "package": "caniuse-lite",
     "licence": "CC-BY-4.0",
-    "reason": "dev-only, not shipped",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "glob",
-    "licence": "BlueOak-1.0.0",
-    "reason": "dev-only, not shipped",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "jackspeak",
-    "licence": "BlueOak-1.0.0",
-    "reason": "dev-only, not shipped",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "lru-cache",
-    "licence": "BlueOak-1.0.0",
-    "reason": "dev-only, not shipped",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "minimatch",
-    "licence": "BlueOak-1.0.0",
-    "reason": "dev-only, not shipped",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "minipass",
-    "licence": "BlueOak-1.0.0",
-    "reason": "dev-only, not shipped",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "package-json-from-dist",
-    "licence": "BlueOak-1.0.0",
-    "reason": "dev-only, not shipped",
-    "approver": "cto",
-    "date": "2026-10-27"
-  },
-  {
-    "package": "path-scurry",
-    "licence": "BlueOak-1.0.0",
     "reason": "dev-only, not shipped",
     "approver": "cto",
     "date": "2026-10-27"

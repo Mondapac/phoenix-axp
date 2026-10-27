@@ -28,5 +28,6 @@ about one page. An accepted ADR changes only through a new ADR or an italic
 | [0019](0019-operators-are-staff-with-roles.md) | Operators are staff with roles, one account per employee | Accepted 2026-10-27 |
 | [0020](0020-phase-0-poc-outcomes-and-review-amendments.md) | Phase 0 proof-of-concept outcomes and review amendments (amends 0002, 0004, 0005, 0006, 0010) | Accepted 2026-10-27 |
 | [0021](0021-merge-model-owning-thread-merges.md) | Merge model: the owning thread merges, coordinated by the coordinator | Accepted 2026-10-27 |
+| [0022](0022-phase-1-owner-decisions.md) | Phase 1 owner decisions: public sign-up, realm per tenant, admin-managed UI languages, isolation overhead per request, AD sync interval, OFL for fonts, widened licence allow-list (amends 0002, 0004, 0009) | Accepted 2026-10-27 |
 
 Reserved (see the board): page builder (Phase 3 review, number to be reserved), 0017 Objects and generated APIs (Phase 2 review).

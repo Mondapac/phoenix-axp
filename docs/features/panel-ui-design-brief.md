@@ -104,7 +104,7 @@
 | apexcharts 4.7.0 | MIT | حذف شود (Recharts کافی است). |
 | **react-leaflet** | **Hippocratic-2.1** | **ممنوع.** نقشه نیاز نداریم؛ حذف شود. |
 | sharp (libvips) از Next.js | LGPL-3.0 | مثل PoC ۴ حذف شود. |
-| caniuse-lite، axe-core، lightningcss، minimatch | CC-BY-4.0، MPL-2.0، BlueOak | همان سؤال باز ADR-0009 (ابزار ساخت). |
+| caniuse-lite، axe-core، lightningcss، minimatch | CC-BY-4.0، MPL-2.0، BlueOak | BlueOak مجاز است (P4، ADR-0022). CC-BY-4.0 و MPL-2.0 با استثنای موردی (ابزار ساخت). |
 | **کد Metronic** (layoutها، Keenicons، CSS دموها) | **مجوز تجاری Envato** | تصمیم ۱. اجزای `components/ui` از ReUI هستند که احتمالاً MIT است. این باید روی مخزن ReUI تأیید شود. |
 
 ## ۷. ترتیب کار پیشنهادی (بعد از تأیید)
