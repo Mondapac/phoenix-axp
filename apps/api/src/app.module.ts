@@ -61,11 +61,12 @@ export class AppModule {
         CommandsModule,
         PersistenceModule,
         AuditModule,
-        // Identity authenticates sessions and answers the gate; tenancy answers subtree
-        // questions. No fail-closed placeholder of platform/authz stays bound (ADR-0010).
+        // Identity authenticates sessions, answers the gate and reads field rules; tenancy
+        // answers subtree questions. No fail-closed placeholder of platform/authz stays bound (ADR-0010).
         AuthzModule.register({
           authentication: IdentityAccessModule,
           authorisation: IdentityAccessModule,
+          fieldRules: IdentityAccessModule,
           siteAncestry: TenancySiteAncestryModule,
         }),
         StorageModule,

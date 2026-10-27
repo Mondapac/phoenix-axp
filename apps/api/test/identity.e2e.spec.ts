@@ -21,6 +21,11 @@ const ROLE_ID = '0190a000-0000-7000-8000-000000000001';
 const BODIES: Readonly<Record<string, object>> = {
   '/identity/roles': { key: 'editor', scope: 'site', permissionKeys: ['x.y.z'] },
   [`/identity/roles/${ROLE_ID}/permissions`]: { version: 1, permissionKeys: ['x.y.z'] },
+  [`/identity/roles/${ROLE_ID}/definition-scopes/x.y.z`]: { version: 1, definitions: 'all' },
+  [`/identity/roles/${ROLE_ID}/field-rules/${ROLE_ID}`]: {
+    version: 1,
+    rules: [{ fieldId: ROLE_ID, mode: 'read' }],
+  },
   '/identity/role-assignments': {
     accountId: ROLE_ID,
     roleId: ROLE_ID,
@@ -109,6 +114,9 @@ describe('the identity API (HTTP)', () => {
       ['get', '/identity/permissions'],
       ['post', '/identity/roles'],
       ['put', `/identity/roles/${ROLE_ID}/permissions`],
+      ['put', `/identity/roles/${ROLE_ID}/definition-scopes/x.y.z`],
+      ['get', `/identity/roles/${ROLE_ID}/field-rules/${ROLE_ID}`],
+      ['put', `/identity/roles/${ROLE_ID}/field-rules/${ROLE_ID}`],
       ['get', `/identity/staff-accounts/${ROLE_ID}/role-assignments`],
       ['post', '/identity/role-assignments'],
       ['delete', `/identity/role-assignments/${ROLE_ID}`],

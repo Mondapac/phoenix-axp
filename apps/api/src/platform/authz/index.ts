@@ -3,7 +3,8 @@
 // `modules-reach-authz-through-its-barrel`): the base class, the declaration types, the
 // permission helpers and registry, the answers, the gate's token and type, the authorisation
 // check's and the authenticator's ports and tokens (identity implements them), the site-ancestry port and token (tenancy
-// implements it) with the subtree helpers, and the role model with its policies. The gate's
+// implements it) with the subtree helpers, the role model with its policies, and the field
+// policy with its port (identity implements it) and the definition qualifier (ADR-0024). The gate's
 // factory, the declaration checks and the placeholders stay inside `platform/`.
 export { ACCESS_DENIED_STATUS, type AccessDenied } from './access-denied';
 export type { AccessDeclaration, AccessRule, PermissionKey } from './access-rule';
@@ -23,9 +24,11 @@ export {
   declarePermissions,
   definePermission,
   MAX_PERMISSION_KEY_LENGTH,
+  PERMISSION_QUALIFIERS,
   populationOfScope,
   type PermissionCatalogue,
   type PermissionDeclaration,
+  type PermissionQualifier,
   type PermissionScope,
 } from './permission';
 export { PERMISSION_KEY_LOOKUP, type PermissionKeyLookup } from './permission-key-lookup';
@@ -36,6 +39,31 @@ export {
   type SealedPermissionCatalogue,
 } from './permission-registry';
 export {
+  ALL_DEFINITIONS,
+  grantCoversDefinition,
+  MAX_QUALIFIER_DEFINITIONS,
+  qualifierWithin,
+  type DefinitionQualifier,
+  type DefinitionScopedGrant,
+} from './definition-scope';
+export {
+  FIELD_DENIED,
+  FIELD_DENIED_STATUS,
+  FIELD_MODES,
+  FIELD_RULE_READER,
+  FieldPolicy,
+  isVisible,
+  narrowerMode,
+  resolveFieldAccess,
+  type FieldAccess,
+  type FieldDenied,
+  type FieldDescriptor,
+  type FieldGrant,
+  type FieldMode,
+  type FieldRequest,
+  type FieldRuleReader,
+} from './field-policy';
+export {
   grantCoversSite,
   SITE_ANCESTRY_READER,
   siteRelation,
@@ -44,8 +72,10 @@ export {
 } from './site-scope';
 export {
   GrantPolicy,
+  NO_DEFINITION_ACCESS,
   type ActedOnAccount,
   type CannotActOn,
+  type DefinitionAccess,
   type GrantedRole,
   type Grantee,
   type GrantingActor,

@@ -1,6 +1,12 @@
 import { auditField, defineAuditAction } from '@phoenix/shared-kernel';
 import { ACCOUNT_SOURCES } from './account';
-import { CUSTOM_ROLE_SCOPES, GRANT_LEVELS, MAX_ROLE_PERMISSION_KEYS } from './role';
+import {
+  CUSTOM_ROLE_SCOPES,
+  GRANT_LEVELS,
+  MAX_FIELD_RULES,
+  MAX_ROLE_PERMISSION_KEYS,
+  MAX_ROLE_QUALIFIER_DEFINITIONS,
+} from './role';
 import { SYNC_OUTCOMES } from './directory-sync';
 
 // Every audited action of the identity module (Phoenix ADR-0015 decision 2). Ids, sources and
@@ -114,6 +120,45 @@ export const ROLE_PERMISSIONS_CHANGED = defineAuditAction({
   after: { permissionKeys },
 });
 
+/** How a qualifier covers definitions: none (no row), all, or the listed ids. */
+export const QUALIFIER_COVERAGE = ['none', 'all', 'listed'] as const;
+export type QualifierCoverage = (typeof QUALIFIER_COVERAGE)[number];
+
+const definitionScope = {
+  permissionKey: auditField.permissionKey(),
+  coverage: auditField.enumOf(QUALIFIER_COVERAGE),
+  definitionIds: auditField.listOf(auditField.id(), MAX_ROLE_QUALIFIER_DEFINITIONS),
+};
+
+/** The definition qualifier of one key of a custom role (ADR-0024 decisions 2 and 3). */
+export const ROLE_DEFINITION_SCOPE_CHANGED = defineAuditAction({
+  action: 'identity.role.definition-scope-changed',
+  targetType: 'identity.role',
+  actors: ['authenticated'],
+  before: definitionScope,
+  after: definitionScope,
+});
+
+const fieldIds = auditField.listOf(auditField.id(), MAX_FIELD_RULES);
+const fieldRules = {
+  definitionId: auditField.id(),
+  hidden: fieldIds,
+  read: fieldIds,
+  edit: fieldIds,
+};
+
+/**
+ * The field rules of one definition of a custom role (ADR-0024 decision 3): the field ids of
+ * each mode, ids only.
+ */
+export const ROLE_FIELD_RULES_CHANGED = defineAuditAction({
+  action: 'identity.role.field-rules-changed',
+  targetType: 'identity.role',
+  actors: ['authenticated'],
+  before: fieldRules,
+  after: fieldRules,
+});
+
 const grant = {
   accountId: auditField.id(),
   roleId: auditField.id(),
@@ -167,6 +212,8 @@ export const IDENTITY_AUDIT_ACTIONS = [
   DIRECTORY_SYNC_RAN,
   ROLE_CREATED,
   ROLE_PERMISSIONS_CHANGED,
+  ROLE_DEFINITION_SCOPE_CHANGED,
+  ROLE_FIELD_RULES_CHANGED,
   ROLE_ASSIGNED,
   ROLE_REVOKED,
   SYSTEM_ROLE_SEEDED,

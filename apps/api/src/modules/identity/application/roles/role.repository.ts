@@ -1,5 +1,23 @@
 import type { Id, Temporal, TenantContext } from '@phoenix/shared-kernel';
-import type { RoleKind, RoleScope } from '../../../../platform/authz';
+import type { FieldMode, RoleKind, RoleScope } from '../../../../platform/authz';
+
+/** The stored qualifier of one qualified key of a role (`identity.role_definition_scope`). */
+export interface DefinitionScopeRecord {
+  readonly permissionKey: string;
+  /** True: every definition; `definitionIds` is then empty. */
+  readonly allDefinitions: boolean;
+  readonly definitionIds: readonly Id<'Definition'>[];
+}
+
+/** One field rule of a role (`identity.role_field_rule`). */
+export interface FieldRuleRecord {
+  readonly definitionId: Id<'Definition'>;
+  readonly fieldId: Id<'Field'>;
+  readonly mode: FieldMode;
+}
+
+/** A role's field-access state as stored; a qualifier of `null` removes the row. */
+export type DefinitionScopeChange = Omit<DefinitionScopeRecord, 'permissionKey'> | null;
 
 /** A role of the tenant (`identity.role`). */
 export interface RoleRecord {
@@ -10,6 +28,13 @@ export interface RoleRecord {
   /** Empty for a system role, which holds every key of its scope by definition. */
   readonly permissionKeys: readonly string[];
   readonly version: number;
+  /** The qualifiers of its qualified keys (ADR-0024); absent or empty, none. */
+  readonly definitionScopes?: readonly DefinitionScopeRecord[];
+  /**
+   * Its field rules: every rule where the repository reads a role for a grant decision, the
+   * rules of one definition where it reads for the field-rule reader; absent, none.
+   */
+  readonly fieldRules?: readonly FieldRuleRecord[];
 }
 
 /** One role granted to an account (`identity.role_assignment`), with its role. */
@@ -50,7 +75,10 @@ export interface RoleRepository {
     },
     at: Temporal.Instant,
   ): Promise<'created' | 'taken'>;
-  /** Replaces the keys of a role still at `expectedVersion`; StaleAggregateError otherwise. */
+  /**
+   * Replaces the keys of a role still at `expectedVersion`, and removes the qualifiers of keys
+   * it no longer confers; StaleAggregateError otherwise.
+   */
   changePermissionKeys(
     tenant: TenantContext,
     id: Id<'Role'>,
@@ -58,6 +86,39 @@ export interface RoleRepository {
     permissionKeys: readonly string[],
     at: Temporal.Instant,
   ): Promise<void>;
+  /**
+   * Sets (or, with `null`, removes) the qualifier of one key of a role still at
+   * `expectedVersion`, and bumps its version; StaleAggregateError otherwise.
+   */
+  changeDefinitionScope(
+    tenant: TenantContext,
+    id: Id<'Role'>,
+    expectedVersion: number,
+    permissionKey: string,
+    scope: DefinitionScopeChange,
+    at: Temporal.Instant,
+  ): Promise<void>;
+  /**
+   * Replaces the rules of one definition of a role still at `expectedVersion`, and bumps its
+   * version; StaleAggregateError otherwise.
+   */
+  replaceFieldRules(
+    tenant: TenantContext,
+    id: Id<'Role'>,
+    expectedVersion: number,
+    definitionId: Id<'Definition'>,
+    rules: readonly Omit<FieldRuleRecord, 'definitionId'>[],
+    at: Temporal.Instant,
+  ): Promise<void>;
+  /**
+   * The grants of an account with each role's qualifiers and only its field rules of
+   * `definitionId`, for the field-rule reader.
+   */
+  assignmentsForDefinition(
+    tenant: TenantContext,
+    accountId: Id<'Account'>,
+    definitionId: Id<'Definition'>,
+  ): Promise<AssignmentRecord[]>;
   /** True when the role is granted to any account. */
   hasAssignments(tenant: TenantContext, roleId: Id<'Role'>): Promise<boolean>;
   /** The grants of an account, oldest first. */

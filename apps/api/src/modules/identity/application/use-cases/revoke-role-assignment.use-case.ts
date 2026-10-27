@@ -16,9 +16,11 @@ import { ROLE_REVOKED } from '../../domain/audit-actions';
 import type { AccountRepository } from '../account.repository';
 import { ASSIGNMENT_NOT_FOUND, type AssignmentNotFound } from '../failures';
 import {
+  definitionAccessOf,
   effectiveKeysOf,
   grantingActorsOf,
   grantScopeOf,
+  heldDefinitionGrantsOf,
   heldKeysOf,
   type KeyCatalogue,
 } from '../roles/acting-assignments';
@@ -107,11 +109,13 @@ export class RevokeRoleAssignment extends UseCase<
             scope: grant.role.scope,
             kind: grant.role.kind,
             effectiveKeys: effectiveKeysOf(grant.role, this.catalogue),
+            definitionAccess: definitionAccessOf(grant.role, this.catalogue),
           },
           {
             accountId: account.id,
             population: account.population,
             effectiveKeys: heldKeysOf(held, account.population, this.catalogue),
+            definitionGrants: heldDefinitionGrantsOf(held, account.population, this.catalogue),
           },
           grantScopeOf(grant),
           relations,
