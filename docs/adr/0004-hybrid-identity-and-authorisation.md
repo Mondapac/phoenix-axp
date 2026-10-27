@@ -23,6 +23,7 @@ and transferable.
    *(Amended by ADR-0019: an operator is an employee (tenant-staff) holding management roles, with one account per employee.)*
 3. **Upstream disable.** Disabling a user in LDAP or Keycloak ends core sessions through
    back-channel logout or synchronisation; proven in PoC 2.
+   *(Amended by ADR-0020: PoC 2 found that Keycloak sends nothing on a directory disable; it takes effect on the next request after a scheduled per-tenant sync, whose interval is an owner question.)*
 4. **Authorisation in the application layer:** every use case extends `UseCase` with a static
    `access` rule — `permissions`, `anonymous`, `own-resources` or `system`. Silence is never a
    default; a use case without a rule fails CI. `UseCaseGate` runs before `handle`; controller

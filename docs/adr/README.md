@@ -25,6 +25,7 @@ about one page. An accepted ADR changes only through a new ADR or an italic
 | [0015](0015-append-only-audit-log.md) | Append-only audit log with hash chain | Accepted 2026-10-26 |
 | [0018](0018-site-tree-content-sharing-and-subtree-roles.md) | Site tree, content sharing and subtree role scope | Accepted 2026-10-26 |
 | [0019](0019-operators-are-staff-with-roles.md) | Operators are staff with roles, one account per employee | Accepted 2026-10-27 |
+| [0020](0020-phase-0-poc-outcomes-and-review-amendments.md) | Phase 0 proof-of-concept outcomes and review amendments (amends 0002, 0004, 0005, 0006, 0010) | Accepted 2026-10-27 |
 
 Reserved (see the board): 0016 panel UI base and page builder (frontend track, after PoC 4),
 0017 Objects and generated APIs (Phase 2 review).

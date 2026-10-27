@@ -16,7 +16,9 @@ tested and transferable.
    personal data cannot enter an event. The event catalogue is snapshot-tested.
 3. **Outbox:** one `<module>.outbox` table per module, written in the use case's transaction.
 4. **Relay:** in the worker role, `FOR UPDATE SKIP LOCKED`; at-least-once delivery.
+   *(Amended by ADR-0020: across an external call the relay holds a lease, not a row lock (PoC 3 R2); a duplicate external start keeps the first and records an orphan incident.)*
 5. **Inbox:** one per module, keyed `(event_id, handler)`, makes handlers idempotent.
+   *(Amended by ADR-0020: inbox and delivery keys lead with `tenant_id`: `(tenant_id, event_id, handler)`.)*
 6. **EventBus port:** an in-process durable adapter today; NATS or Kafka only through a new ADR.
 7. **Scheduler:** fixed-interval jobs guarded by `pg_try_advisory_xact_lock`; every job is safe to
    run twice and resolves exactly one tenant per unit of work.

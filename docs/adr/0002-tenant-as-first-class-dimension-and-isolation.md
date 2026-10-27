@@ -23,12 +23,14 @@ other's data, and some require a separate database or an on-premise installation
    derives `x-tenant-id` from the host only.
 3. **Data.** Every tenant-scoped table has `tenant_id` (not null, no default) leading every
    index and unique key.
+   *(Amended by ADR-0020: a single-column UUIDv7 `@id` may stand alone; every other key and index leads with `tenant_id`.)*
 4. **Layer 1 — tenant guard** (MondaPac market guard): Prisma extension rejecting any query whose
    `where.tenantId` differs from the unit of work's tenant; nested writes and raw SQL are closed
    to modules.
 5. **Layer 2 — PostgreSQL Row-Level Security** on every tenant-scoped table, keyed on a
    per-transaction setting written by the UnitOfWork; the app role cannot bypass RLS. Defence in
    depth, not a replacement for layer 1.
+   *(Amended by ADR-0020: every unit of work is a transaction; the tenant is set only with `set_config(..., true)`, targeting one driver-level statement right after `BEGIN`; RLS is FORCEd on every tenant table; PgBouncer only in transaction mode under that rule.)*
 6. **Layer 3 — silo.** A tenant may get its own database, or its own on-prem deployment with
    `HOSTED_TENANTS` naming only it. Code paths are identical.
 7. **No literals.** Core code never branches on a tenant or organisation identity; differences

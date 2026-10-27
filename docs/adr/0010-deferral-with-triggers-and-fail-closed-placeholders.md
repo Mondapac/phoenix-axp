@@ -17,6 +17,7 @@ facades that are not merged yet.
    slice starts and amended (italic note) when a phase review moves a trigger. Phase 0 brings
    only shared-kernel, persistence/UnitOfWork/tenant guard, DB roles, health and logging
    (slice 0.4).
+   *(Amended by ADR-0020: a platform piece may land at phase start, ahead of its first consumer, when the phase review lists it; Phase 1 does this for authz, events, scheduler, worker and audit.)*
 
    | Piece | Trigger (first consumer) | Phase |
    |---|---|---|
@@ -38,6 +39,7 @@ facades that are not merged yet.
 5. **One binding PR per dependency** replaces the placeholder with the real facade, reviewed by
    security-tester when the port is on a mandatory path.
 6. **Never stubbed:** authentication, permission, ownership and tenant checks.
+   *(Amended by ADR-0020: a permission or ownership check may be bound to a fail-closed placeholder that always refuses; platform placeholders live under `platform/<piece>/placeholders/`.)*
 
 ## Consequences
 - Tracks proceed in parallel without opening holes; each placeholder costs one swap PR.
