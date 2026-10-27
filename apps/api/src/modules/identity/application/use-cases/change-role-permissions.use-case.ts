@@ -13,7 +13,7 @@ import { IDENTITY_ROLES_MANAGE } from '../../contracts/permissions';
 import { ROLE_PERMISSIONS_CHANGED } from '../../domain/audit-actions';
 import { parseRolePermissionKeys, type InvalidRoleValue } from '../../domain/role';
 import { ROLE_NOT_FOUND, type RoleNotEditable, type RoleNotFound } from '../failures';
-import { keyFitsRole, type KeyCatalogue } from '../roles/acting-assignments';
+import { definitionAccessOf, keyFitsRole, type KeyCatalogue } from '../roles/acting-assignments';
 import { canDefineRole } from '../roles/role-definition';
 import type { RoleRepository } from '../roles/role.repository';
 
@@ -81,6 +81,8 @@ export class ChangeRolePermissions extends UseCase<
           [...new Set([...previous, ...keys.value])],
           this.catalogue,
           await this.roles.hasAssignments(tenant, role.id),
+          // A stored qualifier comes back into force with its key (ADR-0024 decision 10).
+          definitionAccessOf({ ...role, permissionKeys: keys.value }, this.catalogue),
         );
         if (!allowed.ok) return allowed;
         await this.roles.changePermissionKeys(

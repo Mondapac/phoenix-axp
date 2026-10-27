@@ -63,21 +63,23 @@ model Session {
 /// mutable aggregate with `version` (optimistic lock); its history is the audit log
 /// (`identity.role.created`, `identity.role.permissions-changed`).
 model Role {
-  id             String           @id @db.Uuid
-  tenantId       String           @map("tenant_id") @db.VarChar(32)
+  id               String                @id @db.Uuid
+  tenantId         String                @map("tenant_id") @db.VarChar(32)
   /// Unique in the tenant, kebab case.
-  key            String           @db.VarChar(64)
+  key              String                @db.VarChar(64)
   /// system | default | custom
-  kind           String           @db.VarChar(16)
+  kind             String                @db.VarChar(16)
   /// platform | tenant | site
-  scope          String           @db.VarChar(16)
+  scope            String                @db.VarChar(16)
   /// The keys the role confers; empty for a system role. A key the registry does not declare
   /// grants nothing.
-  permissionKeys String[]         @map("permission_keys") @db.VarChar(128)
-  version        Int
-  createdAt      DateTime         @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime         @map("updated_at") @db.Timestamptz(3)
-  assignments    RoleAssignment[]
+  permissionKeys   String[]              @map("permission_keys") @db.VarChar(128)
+  version          Int
+  createdAt        DateTime              @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime              @map("updated_at") @db.Timestamptz(3)
+  assignments      RoleAssignment[]
+  definitionScopes RoleDefinitionScope[]
+  fieldRules       RoleFieldRule[]
 
   @@unique([tenantId, id], map: "role_tenant_id_id_key")
   /// The target of role_assignment's foreign key, which makes a grant's level its role's scope.
@@ -115,24 +117,63 @@ model RoleAssignment {
   @@schema("identity")
 }
 
+/// The definition qualifier of a qualified key a custom role confers (ADR-0024 decision 2): every
+/// definition of the tenant, those created later included, or the listed ones (ids of the
+/// forms or objects module, not foreign keys: no relation crosses schemas). A qualified key
+/// without a row covers no definition. A row of a key the role no longer confers, or an id of a
+/// definition that is gone, grants nothing: readers ignore it. Versioning (ADR-0007, V1): part of the role, whose
+/// version every change bumps; its history is the audit log (`identity.role.definition-scope-changed`).
+model RoleDefinitionScope {
+  tenantId       String   @map("tenant_id") @db.VarChar(32)
+  roleId         String   @map("role_id") @db.Uuid
+  permissionKey  String   @map("permission_key") @db.VarChar(128)
+  allDefinitions Boolean  @map("all_definitions")
+  /// Empty under all_definitions; 1 to 256 ids otherwise.
+  definitionIds  String[] @map("definition_ids") @db.Uuid
+  role           Role     @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "role_definition_scope_role_fkey")
+
+  @@id([tenantId, roleId, permissionKey], map: "role_definition_scope_pkey")
+  @@map("role_definition_scope")
+  @@schema("identity")
+}
+
+/// A custom role's mode for one field of one definition (ADR-0024 decision 3): hidden, read or
+/// edit, keyed by the field's stable id, so renaming a field keeps the rule. A field without a
+/// rule follows the operation (sensitive fields are hidden). Inserted and deleted, never
+/// updated: a change replaces the role's rules of one definition and bumps the role's version
+/// (V1); its history is the audit log (`identity.role.field-rules-changed`).
+model RoleFieldRule {
+  tenantId     String @map("tenant_id") @db.VarChar(32)
+  roleId       String @map("role_id") @db.Uuid
+  definitionId String @map("definition_id") @db.Uuid
+  fieldId      String @map("field_id") @db.Uuid
+  /// hidden | read | edit
+  mode         String @db.VarChar(8)
+  role         Role   @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "role_field_rule_role_fkey")
+
+  @@id([tenantId, roleId, definitionId, fieldId], map: "role_field_rule_pkey")
+  @@map("role_field_rule")
+  @@schema("identity")
+}
+
 /// The tenant's staff directory sync (ADR-0022 decision 6), one row per tenant, written on first
 /// need. Keycloak sends nothing when a user is disabled in AD, so this sync is what ends a
 /// directory account's access: the longest delay is the interval.
 model DirectorySync {
-  tenantId          String    @id @map("tenant_id") @db.VarChar(32)
+  tenantId         String    @id @map("tenant_id") @db.VarChar(32)
   /// Minutes between two runs, 1 to 60; 5 unless the tenant changed it.
-  intervalMinutes   Int       @map("interval_minutes") @db.SmallInt
+  intervalMinutes  Int       @map("interval_minutes") @db.SmallInt
   /// When the last run started (claimed), whatever its outcome; null before the first run.
-  lastStartedAt     DateTime? @map("last_started_at") @db.Timestamptz(3)
+  lastStartedAt    DateTime? @map("last_started_at") @db.Timestamptz(3)
   /// completed | failed | halted; null before the first run ends.
-  lastOutcome       String?   @map("last_outcome") @db.VarChar(16)
-  lastFinishedAt    DateTime? @map("last_finished_at") @db.Timestamptz(3)
-  accountsChecked   Int       @map("accounts_checked")
-  accountsDisabled  Int       @map("accounts_disabled")
-  accountsEnabled   Int       @map("accounts_enabled")
+  lastOutcome      String?   @map("last_outcome") @db.VarChar(16)
+  lastFinishedAt   DateTime? @map("last_finished_at") @db.Timestamptz(3)
+  accountsChecked  Int       @map("accounts_checked")
+  accountsDisabled Int       @map("accounts_disabled")
+  accountsEnabled  Int       @map("accounts_enabled")
   /// Optimistic concurrency of the interval only; a run claims on last_started_at instead.
-  version           Int
-  updatedAt         DateTime  @map("updated_at") @db.Timestamptz(3)
+  version          Int
+  updatedAt        DateTime  @map("updated_at") @db.Timestamptz(3)
 
   @@map("directory_sync")
   @@schema("identity")

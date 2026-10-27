@@ -43,7 +43,16 @@ import { ViewDirectorySync } from '../../src/modules/identity/application/use-ca
 import { ViewOwnAccount } from '../../src/modules/identity/application/use-cases/view-own-account.use-case';
 import { AssignRole } from '../../src/modules/identity/application/use-cases/assign-role.use-case';
 import { BootstrapTenantAdministrator } from '../../src/modules/identity/application/use-cases/bootstrap-tenant-administrator.use-case';
+import { ChangeRoleDefinitionScope } from '../../src/modules/identity/application/use-cases/change-role-definition-scope.use-case';
+import { ChangeRoleFieldRules } from '../../src/modules/identity/application/use-cases/change-role-field-rules.use-case';
 import { ChangeRolePermissions } from '../../src/modules/identity/application/use-cases/change-role-permissions.use-case';
+import { ViewRoleFieldRules } from '../../src/modules/identity/application/use-cases/view-role-field-rules.use-case';
+import { IdentityFieldRuleReader } from '../../src/modules/identity/application/access/identity-field-rule-reader';
+import {
+  resolveFieldAccess,
+  type FieldDescriptor,
+  type FieldRequest,
+} from '../../src/platform/authz/field-policy';
 import { CreateRole } from '../../src/modules/identity/application/use-cases/create-role.use-case';
 import { ListAccountRoleAssignments } from '../../src/modules/identity/application/use-cases/list-account-role-assignments.use-case';
 import { ListPermissions } from '../../src/modules/identity/application/use-cases/list-permissions.use-case';
@@ -139,11 +148,26 @@ const CONTENT_ITEMS_EDIT = definePermission('content', {
   protected: false,
 });
 
-/** The sealed registry of the running app, with the identity catalogue and the test key. */
+/** Keys over run-time definitions (ADR-0024 decision 2), as the objects module will declare. */
+const RECORDS_READ = definePermission('records', {
+  key: 'records.item.read',
+  scope: 'site',
+  protected: false,
+  qualifier: 'definition',
+});
+const RECORDS_UPDATE = definePermission('records', {
+  key: 'records.item.update',
+  scope: 'site',
+  protected: false,
+  qualifier: 'definition',
+});
+
+/** The sealed registry of the running app, with the identity catalogue and the test keys. */
 function permissionRegistry(): PermissionRegistry {
   const registry = new PermissionRegistry();
   registry.register('identity', IDENTITY_PERMISSIONS);
   registry.register('content', declarePermissions('content', [CONTENT_ITEMS_EDIT]));
+  registry.register('records', declarePermissions('records', [RECORDS_READ, RECORDS_UPDATE]));
   registry.seal();
   return registry;
 }
@@ -185,6 +209,11 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       listPermissions: new ListPermissions(gate, permissions),
       createRole: new CreateRole(gate, uow, roles, permissions, audit, clock, ids),
       changeRole: new ChangeRolePermissions(gate, uow, roles, permissions, audit, clock),
+      changeScope: new ChangeRoleDefinitionScope(gate, uow, roles, permissions, audit, clock),
+      changeFieldRules: new ChangeRoleFieldRules(gate, uow, roles, permissions, audit, clock),
+      viewFieldRules: new ViewRoleFieldRules(gate, uow, roles),
+      fieldRules: new IdentityFieldRuleReader(uow, sessions, roles, permissions, clock),
+      ancestry,
       listGrants: new ListAccountRoleAssignments(gate, uow, accounts, roles),
       assign: new AssignRole(gate, uow, accounts, roles, permissions, ancestry, audit, clock, ids),
       revoke: new RevokeRoleAssignment(gate, uow, accounts, roles, permissions, ancestry, audit),
@@ -1109,6 +1138,351 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         await expect(grant(member.id, viewer, randomUUID())).rejects.toMatchObject({
           constraint: 'role_assignment_role_fkey',
         });
+      });
+    });
+
+    describe('field-level access (slice 2.0, ADR-0024)', () => {
+      const READ = RECORDS_READ.key;
+      const UPDATE = RECORDS_UPDATE.key;
+      const DEF_A = ids.next<'Definition'>();
+      const DEF_B = ids.next<'Definition'>();
+      const NAME = ids.next<'Field'>();
+      const NOTE = ids.next<'Field'>();
+      const NATIONAL_ID = ids.next<'Field'>();
+      const FIELDS: FieldDescriptor[] = [
+        { id: NAME, sensitive: false },
+        { id: NOTE, sensitive: false },
+        { id: NATIONAL_ID, sensitive: true },
+      ];
+      const request = (definitionId: Id<'Definition'>): FieldRequest => ({
+        definitionId,
+        operations: { read: READ, write: UPDATE },
+        fields: FIELDS,
+      });
+
+      async function staffMember(prefix: string) {
+        const session = await signedIn({ username: unique(prefix), directory: true });
+        return { id: session.accountId, context: await contextOf(session.sessionToken) };
+      }
+
+      async function customRole(permissionKeys: string[], by: CallContext = admin) {
+        const created = await identity.createRole.execute(by, {
+          key: unique('fields'),
+          scope: 'tenant',
+          permissionKeys,
+        });
+        if (!created.ok) throw new Error(`role setup: ${created.error.code}`);
+        return created.value.id;
+      }
+
+      async function assigned(accountId: Id<'Account'>, roleId: Id<'Role'>, by = admin) {
+        const done = await identity.assign.execute(by, {
+          accountId,
+          roleId,
+          placement: { level: 'tenant' },
+        });
+        if (!done.ok) throw new Error(`grant setup: ${done.error.code}`);
+        return done.value.id;
+      }
+
+      const modes = async (context: CallContext, definitionId: Id<'Definition'>) => {
+        const access = await resolveFieldAccess(
+          identity.fieldRules,
+          identity.ancestry,
+          context,
+          null,
+          request(definitionId),
+        );
+        return { ...access, modes: Object.fromEntries(access.modes) };
+      };
+
+      it('qualifies a key, sets field rules, and the reader answers them on the next request', async () => {
+        const roleId = await customRole([READ, UPDATE]);
+        const member = await staffMember('fields');
+        await assigned(member.id, roleId);
+        // A qualified key without a qualifier covers no definition.
+        expect(await modes(member.context, DEF_A)).toMatchObject({ canRead: false });
+
+        expect(
+          await identity.changeScope.execute(admin, {
+            roleId,
+            version: 1,
+            permissionKey: READ,
+            definitions: 'all',
+          }),
+        ).toEqual({ ok: true, value: undefined });
+        expect(
+          await identity.changeScope.execute(admin, {
+            roleId,
+            version: 2,
+            permissionKey: UPDATE,
+            definitions: [DEF_A],
+          }),
+        ).toEqual({ ok: true, value: undefined });
+        expect(await modes(member.context, DEF_A)).toEqual({
+          canRead: true,
+          canWrite: true,
+          modes: { [NAME]: 'edit', [NOTE]: 'edit', [NATIONAL_ID]: 'hidden' },
+        });
+        expect(await modes(member.context, DEF_B)).toMatchObject({
+          canWrite: false,
+          modes: { [NAME]: 'read', [NOTE]: 'read', [NATIONAL_ID]: 'hidden' },
+        });
+
+        const rules = [
+          { fieldId: NOTE, mode: 'hidden' as const },
+          { fieldId: NATIONAL_ID, mode: 'read' as const },
+        ];
+        expect(
+          await identity.changeFieldRules.execute(admin, {
+            roleId,
+            version: 3,
+            definitionId: DEF_A,
+            rules,
+          }),
+        ).toEqual({ ok: true, value: undefined });
+        expect((await modes(member.context, DEF_A)).modes).toEqual({
+          [NAME]: 'edit',
+          [NOTE]: 'hidden',
+          [NATIONAL_ID]: 'read',
+        });
+        expect(
+          await identity.viewFieldRules.execute(admin, { roleId, definitionId: DEF_A }),
+        ).toEqual({
+          ok: true,
+          value: { version: 4, rules: [...rules].sort((a, b) => (a.fieldId < b.fieldId ? -1 : 1)) },
+        });
+        await expect(
+          identity.changeFieldRules.execute(admin, {
+            roleId,
+            version: 3,
+            definitionId: DEF_A,
+            rules: [],
+          }),
+        ).rejects.toThrow(StaleAggregateError);
+
+        const listed = await identity.listRoles.execute(admin, undefined);
+        expect(listed.ok && listed.value.find((r) => r.id === roleId)).toMatchObject({
+          version: 4,
+          definitionScopes: [
+            { permissionKey: READ, allDefinitions: true, definitionIds: [] },
+            { permissionKey: UPDATE, allDefinitions: false, definitionIds: [DEF_A] },
+          ],
+        });
+        const entries = audit.entries.filter((entry) => entry.targetId === roleId);
+        expect(entries.map((entry) => entry.action)).toEqual([
+          'identity.role.created',
+          'identity.role.definition-scope-changed',
+          'identity.role.definition-scope-changed',
+          'identity.role.field-rules-changed',
+        ]);
+        expect(entries[3]?.after).toEqual({
+          definitionId: DEF_A,
+          hidden: [NOTE],
+          read: [NATIONAL_ID],
+          edit: [],
+        });
+
+        // Removing the qualifier and revoking the role count on the next request too.
+        expect(
+          await identity.changeScope.execute(admin, {
+            roleId,
+            version: 4,
+            permissionKey: UPDATE,
+            definitions: 'none',
+          }),
+        ).toEqual({ ok: true, value: undefined });
+        expect(await modes(member.context, DEF_A)).toMatchObject({ canWrite: false });
+      });
+
+      it('drops the qualifier of a key the role no longer confers (review L3)', async () => {
+        const roleId = await customRole([READ, UPDATE]);
+        await identity.changeScope.execute(admin, {
+          roleId,
+          version: 1,
+          permissionKey: UPDATE,
+          definitions: 'all',
+        });
+        for (const [version, permissionKeys] of [
+          [2, [READ]],
+          [3, [READ, UPDATE]],
+        ] as const) {
+          expect(
+            await identity.changeRole.execute(admin, {
+              roleId,
+              version,
+              permissionKeys: [...permissionKeys],
+            }),
+          ).toEqual({ ok: true, value: undefined });
+        }
+        const listed = await identity.listRoles.execute(admin, undefined);
+        expect(listed.ok && listed.value.find((r) => r.id === roleId)?.definitionScopes).toEqual(
+          [],
+        );
+      });
+
+      it('refuses a key that is not qualified or not conferred, and a system role', async () => {
+        const roleId = await customRole([READ, CONTENT_ITEMS_EDIT.key]);
+        for (const permissionKey of [CONTENT_ITEMS_EDIT.key, UPDATE, 'unknown.key.x']) {
+          expect(
+            await identity.changeScope.execute(admin, {
+              roleId,
+              version: 1,
+              permissionKey,
+              definitions: 'all',
+            }),
+          ).toEqual({
+            ok: false,
+            error: { code: 'identity.value.invalid', field: 'permissionKey' },
+          });
+        }
+        expect(
+          await identity.changeScope.execute(admin, {
+            roleId,
+            version: 1,
+            permissionKey: READ,
+            definitions: [DEF_A, DEF_A],
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.value.invalid', field: 'definitionIds' } });
+        const system = (await role('system', 'tenant', [])) as Id<'Role'>;
+        expect(
+          await identity.changeFieldRules.execute(admin, {
+            roleId: system,
+            version: 1,
+            definitionId: DEF_A,
+            rules: [],
+          }),
+        ).toEqual({ ok: false, error: { code: 'identity.role.not-editable' } });
+      });
+
+      it('lets a delegate hand out no wider definitions or fields than it holds (decision 10)', async () => {
+        const delegateRole = await customRole(['identity.roles.manage', READ, UPDATE]);
+        const scope = (
+          roleId: Id<'Role'>,
+          version: number,
+          permissionKey: string,
+          definitions: 'all' | 'none' | Id<'Definition'>[],
+          by = admin,
+        ) => identity.changeScope.execute(by, { roleId, version, permissionKey, definitions });
+        await scope(delegateRole, 1, READ, [DEF_A]);
+        await scope(delegateRole, 2, UPDATE, [DEF_A]);
+        await identity.changeFieldRules.execute(admin, {
+          roleId: delegateRole,
+          version: 3,
+          definitionId: DEF_A,
+          rules: [{ fieldId: NOTE, mode: 'hidden' }],
+        });
+        const delegate = await staffMember('field-delegate');
+        await assigned(delegate.id, delegateRole);
+
+        const shaped = await customRole([READ, UPDATE], delegate.context);
+        const refused = (reason: string) => ({
+          ok: false,
+          error: { code: 'role.not-grantable', reason },
+        });
+        expect(await scope(shaped, 1, READ, 'all', delegate.context)).toEqual(
+          refused('definition'),
+        );
+        expect(await scope(shaped, 1, READ, [DEF_B], delegate.context)).toEqual(
+          refused('definition'),
+        );
+        // DEF_A is within reach, but the delegate's own narrowing of NOTE must come along.
+        expect(await scope(shaped, 1, READ, [DEF_A], delegate.context)).toEqual(
+          refused('field-rules'),
+        );
+        expect(
+          await identity.changeFieldRules.execute(delegate.context, {
+            roleId: shaped,
+            version: 1,
+            definitionId: DEF_A,
+            rules: [{ fieldId: NOTE, mode: 'hidden' }],
+          }),
+        ).toEqual({ ok: true, value: undefined });
+        expect(await scope(shaped, 2, READ, [DEF_A], delegate.context)).toEqual({
+          ok: true,
+          value: undefined,
+        });
+        // Opening a sensitive field the delegate cannot see itself is refused.
+        expect(
+          await identity.changeFieldRules.execute(delegate.context, {
+            roleId: shaped,
+            version: 3,
+            definitionId: DEF_A,
+            rules: [
+              { fieldId: NOTE, mode: 'hidden' },
+              { fieldId: NATIONAL_ID, mode: 'read' },
+            ],
+          }),
+        ).toEqual(refused('field-rules'));
+
+        // A role made wider by the administrator cannot be granted by the delegate.
+        const wide = await customRole([READ]);
+        await scope(wide, 1, READ, 'all');
+        const delegateGrants = await customRole([
+          'identity.role-assignments.manage',
+          'identity.roles.manage',
+          READ,
+          UPDATE,
+        ]);
+        await scope(delegateGrants, 1, READ, [DEF_A]);
+        const granter = await staffMember('field-granter');
+        await assigned(granter.id, delegateGrants);
+        const target = await staffMember('field-target');
+        expect(
+          await identity.assign.execute(granter.context, {
+            accountId: target.id,
+            roleId: wide,
+            placement: { level: 'tenant' },
+          }),
+        ).toEqual(refused('definition'));
+      });
+
+      it('keeps the qualifier and rule rows valid and inside their tenant in the database', async () => {
+        const roleId = await role('custom', 'tenant', [READ]);
+        await expect(
+          sql(
+            tenant,
+            `INSERT INTO identity.role_definition_scope (tenant_id, role_id, permission_key, all_definitions, definition_ids)
+             VALUES ($1, $2, $3, true, $4)`,
+            [tenant.tenantId, roleId, READ, [DEF_A]],
+          ),
+        ).rejects.toMatchObject({ constraint: 'role_definition_scope_definition_ids_check' });
+        await expect(
+          sql(
+            tenant,
+            `INSERT INTO identity.role_field_rule (tenant_id, role_id, definition_id, field_id, mode)
+             VALUES ($1, $2, $3, $4, 'write')`,
+            [tenant.tenantId, roleId, DEF_A, NAME],
+          ),
+        ).rejects.toMatchObject({ constraint: 'role_field_rule_mode_check' });
+        await sql(
+          tenant,
+          `INSERT INTO identity.role_field_rule (tenant_id, role_id, definition_id, field_id, mode)
+           VALUES ($1, $2, $3, $4, 'read')`,
+          [tenant.tenantId, roleId, DEF_A, NAME],
+        );
+        // Row-level security: the other tenant neither sees nor writes this tenant's rows.
+        await writer.query('BEGIN');
+        try {
+          await writer.query("SELECT pg_catalog.set_config('app.tenant_id', $1, true)", [
+            other.tenantId,
+          ]);
+          const seen = await writer.query(
+            'SELECT count(*)::int AS n FROM identity.role_field_rule WHERE role_id = $1',
+            [roleId],
+          );
+          expect(seen.rows[0]).toEqual({ n: 0 });
+        } finally {
+          await writer.query('ROLLBACK');
+        }
+        await expect(
+          sql(
+            other,
+            `INSERT INTO identity.role_field_rule (tenant_id, role_id, definition_id, field_id, mode)
+             VALUES ($1, $2, $3, $4, 'read')`,
+            [tenant.tenantId, roleId, DEF_A, NOTE],
+          ),
+        ).rejects.toThrow(/row-level security/);
       });
     });
 

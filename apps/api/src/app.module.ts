@@ -22,6 +22,7 @@ import { TenantContextModule } from './platform/tenant-context/tenant-context.mo
 import { WorkerModule } from './platform/worker/worker.module';
 import { FormsModule } from './modules/forms';
 import { IdentityAccessModule, IdentityModule } from './modules/identity';
+import { ProcessModule } from './modules/process';
 import { TenancyModule, TenancySiteAncestryModule } from './modules/tenancy';
 
 /**
@@ -60,11 +61,12 @@ export class AppModule {
         CommandsModule,
         PersistenceModule,
         AuditModule,
-        // Identity authenticates sessions and answers the gate; tenancy answers subtree
-        // questions. No fail-closed placeholder of platform/authz stays bound (ADR-0010).
+        // Identity authenticates sessions, answers the gate and reads field rules; tenancy
+        // answers subtree questions. No fail-closed placeholder of platform/authz stays bound (ADR-0010).
         AuthzModule.register({
           authentication: IdentityAccessModule,
           authorisation: IdentityAccessModule,
+          fieldRules: IdentityAccessModule,
           siteAncestry: TenancySiteAncestryModule,
         }),
         StorageModule,
@@ -73,6 +75,7 @@ export class AppModule {
         TenancyModule,
         IdentityModule,
         FormsModule,
+        ProcessModule,
       ],
       providers: [
         ...GLOBAL_GUARDS.map((guard) => ({ provide: APP_GUARD, useClass: guard })),

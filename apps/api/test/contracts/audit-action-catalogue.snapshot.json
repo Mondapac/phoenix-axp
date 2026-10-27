@@ -177,6 +177,40 @@
     }
   },
   {
+    "action": "identity.role.definition-scope-changed",
+    "targetType": "identity.role",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "coverage": "enumOf(none|all|listed)",
+      "definitionIds": "listOf(id, max 256)",
+      "permissionKey": "permissionKey"
+    },
+    "after": {
+      "coverage": "enumOf(none|all|listed)",
+      "definitionIds": "listOf(id, max 256)",
+      "permissionKey": "permissionKey"
+    }
+  },
+  {
+    "action": "identity.role.field-rules-changed",
+    "targetType": "identity.role",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "definitionId": "id",
+      "edit": "listOf(id, max 256)",
+      "hidden": "listOf(id, max 256)",
+      "read": "listOf(id, max 256)"
+    },
+    "after": {
+      "definitionId": "id",
+      "edit": "listOf(id, max 256)",
+      "hidden": "listOf(id, max 256)",
+      "read": "listOf(id, max 256)"
+    }
+  },
+  {
     "action": "identity.role.founding-assigned",
     "targetType": "identity.role-assignment",
     "targetId": "id",
@@ -237,6 +271,16 @@
     "before": null,
     "after": {
       "boundSubjectId": "id"
+    }
+  },
+  {
+    "action": "process.revision.published",
+    "targetType": "process.revision",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "revision": "integer"
     }
   },
   {

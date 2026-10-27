@@ -1,5 +1,13 @@
 import { TEST_TENANTS } from '../../../../../test/support/test-config';
-import { effectiveKeysOf, grantingActorsOf, heldKeysOf, keyFitsRole } from './acting-assignments';
+import { FIELD_MODES, MAX_QUALIFIER_DEFINITIONS } from '../../../../platform/authz';
+import { MAX_ROLE_QUALIFIER_DEFINITIONS, ROLE_FIELD_MODES } from '../../domain/role';
+import {
+  definitionAccessOf,
+  effectiveKeysOf,
+  grantingActorsOf,
+  heldKeysOf,
+  keyFitsRole,
+} from './acting-assignments';
 import {
   testCatalogue,
   testGrant,
@@ -75,5 +83,57 @@ describe.each(TEST_TENANTS)('acting assignments (tenant %s)', () => {
       [site.role.id, false, { level: 'site', siteId, includeDescendants: true }],
     ]);
     expect(actors.every((a) => a.accountId === account)).toBe(true);
+  });
+});
+
+describe.each(TEST_TENANTS)('definition access of a role (tenant %s)', () => {
+  const READ = 'records.item.read';
+  const UPDATE = 'records.item.update';
+  const DEF = testId<'Definition'>();
+  const FIELD = testId<'Field'>();
+
+  it('repeats the field modes and qualifier bound of platform/authz in the domain', () => {
+    expect(ROLE_FIELD_MODES).toEqual(FIELD_MODES);
+    expect(MAX_ROLE_QUALIFIER_DEFINITIONS).toBe(MAX_QUALIFIER_DEFINITIONS);
+  });
+
+  it('gives a system role every definition for each qualified key, and no rule', () => {
+    const access = definitionAccessOf(testRole({ kind: 'system', scope: 'tenant' }), testCatalogue);
+    expect([...access.qualifiers.keys()].sort()).toEqual([READ, UPDATE]);
+    expect(access.qualifiers.get(READ)).toEqual({ all: true });
+    expect(access.fieldRules.size).toBe(0);
+  });
+
+  it("keeps a custom role's stored qualifiers of keys it confers that are still qualified", () => {
+    const role = testRole({
+      scope: 'site',
+      permissionKeys: [READ, 'content.items.edit'],
+      definitionScopes: [
+        { permissionKey: READ, allDefinitions: false, definitionIds: [DEF] },
+        { permissionKey: UPDATE, allDefinitions: true, definitionIds: [] },
+        { permissionKey: 'content.items.edit', allDefinitions: true, definitionIds: [] },
+      ],
+      fieldRules: [{ definitionId: DEF, fieldId: FIELD, mode: 'hidden' }],
+    });
+    const access = definitionAccessOf(role, testCatalogue);
+    expect([...access.qualifiers.keys()]).toEqual([READ]);
+    expect(access.qualifiers.get(READ)).toEqual({ all: false, definitionIds: new Set([DEF]) });
+    expect(access.fieldRules.get(DEF)?.get(FIELD)).toBe('hidden');
+  });
+
+  it('hands the acting grant its role definition access', () => {
+    const role = testRole({
+      permissionKeys: ['identity.role-assignments.manage', READ],
+      definitionScopes: [{ permissionKey: READ, allDefinitions: true, definitionIds: [] }],
+    });
+    const grant = testGrant(role);
+    const [actor] = grantingActorsOf(
+      grant.accountId,
+      'tenant-staff',
+      [grant],
+      MANAGE,
+      testCatalogue,
+    );
+    expect(actor?.definitionAccess?.qualifiers.get(READ)).toEqual({ all: true });
   });
 });

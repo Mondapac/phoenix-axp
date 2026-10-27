@@ -21,7 +21,12 @@ import {
   type AccountNotLocal,
   type OwnAccount,
 } from '../failures';
-import { grantingActorsOf, heldKeysOf, type KeyCatalogue } from '../roles/acting-assignments';
+import {
+  grantingActorsOf,
+  heldDefinitionGrantsOf,
+  heldKeysOf,
+  type KeyCatalogue,
+} from '../roles/acting-assignments';
 import type { RoleRepository } from '../roles/role.repository';
 import type { SessionRepository } from '../session.repository';
 
@@ -90,6 +95,7 @@ export class DisableStaffAccount extends UseCase<
           accountId: account.id,
           population: account.population,
           effectiveKeys: heldKeysOf(held, account.population, this.catalogue),
+          definitionGrants: heldDefinitionGrantsOf(held, account.population, this.catalogue),
         };
         const actors = grantingActorsOf(
           actor.accountId,
