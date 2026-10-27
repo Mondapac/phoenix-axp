@@ -1,0 +1,5 @@
+[
+  { "name": "alpha.purge-expired", "rule": "system" },
+  { "name": "alpha.sign-in", "rule": "anonymous" },
+  { "name": "alpha.sign-out", "rule": "own-resources" }
+]

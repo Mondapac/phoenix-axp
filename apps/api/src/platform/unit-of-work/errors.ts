@@ -49,6 +49,7 @@ export type InvalidUnitOfWorkOptionsReason =
   | 'read-only-with-isolation'
   | 'read-only-with-timeout'
   | 'read-only-with-lock-timeout'
+  | 'read-only-run-once'
   | 'unknown-isolation'
   | 'timeout-out-of-range'
   | 'lock-timeout-out-of-range';

@@ -157,6 +157,63 @@ module.exports = {
       },
     },
     {
+      // Ported from Mondapac (rule 9 of 8.2, first half; identity design 5.2).
+      name: 'use-cases-are-the-only-way-in',
+      comment:
+        'An entry point of a module (presentation/, which holds controllers, jobs/ and ' +
+        'subscribers/; contracts/; and every *.facade.ts implementation) imports from its ' +
+        "module's application/ only use-cases/*.use-case.ts, so the UseCaseGate runs for " +
+        "everything an entry point reaches. The module's index.ts is an entry point too.",
+      severity: 'error',
+      from: {
+        path: '^src/modules/([^/]+)/(?:presentation/|contracts/|index\\.ts$|.+\\.facade\\.ts$)',
+      },
+      to: {
+        path: '^src/modules/$1/application/',
+        pathNot: '^src/modules/$1/application/use-cases/[^/]+\\.use-case\\.ts$',
+      },
+    },
+    {
+      // Ported from Mondapac (rule 9 of 8.2, second half).
+      name: 'repositories-stay-behind-use-cases',
+      comment:
+        'A repository (a *.repository.ts file) is imported only by application/ and ' +
+        "infrastructure/ of a module, and by the module's Nest module, which binds the " +
+        'implementation to its port. Controllers, jobs, subscribers and facades go through a ' +
+        'use case.',
+      severity: 'error',
+      from: {
+        pathNot: [
+          '^src/modules/[^/]+/(application|infrastructure)/',
+          '^src/modules/[^/]+/[^/]+\\.module\\.ts$',
+        ],
+      },
+      to: { path: '^src/modules/[^/]+/.+\\.repository\\.ts$' },
+    },
+    {
+      // Ported from Mondapac (security review of slice 1c, M1).
+      name: 'use-case-gate-is-built-by-authz',
+      comment:
+        'Only platform/authz/ imports the gate file, which holds the factory that builds a ' +
+        'UseCaseGate: a gate built elsewhere could bind a lenient registry or check. Modules ' +
+        'inject USE_CASE_GATE from the platform/authz barrel.',
+      severity: 'error',
+      from: { pathNot: '^src/platform/authz/' },
+      to: { path: '^src/platform/authz/use-case-gate\\.ts$' },
+    },
+    {
+      // Ported from Mondapac (security review of slice 1c, M1). Phoenix: the placeholders and
+      // the role policies are reached through the barrel too.
+      name: 'modules-reach-authz-through-its-barrel',
+      comment:
+        'A module imports from platform/authz/ only its index.ts: the base class, the ' +
+        "declaration types, the permission helpers, the answers, the gate's token and type, " +
+        'the two ports and the role model.',
+      severity: 'error',
+      from: { path: '^src/modules/' },
+      to: { path: '^src/platform/authz/', pathNot: '^src/platform/authz/index\\.ts$' },
+    },
+    {
       name: 'module-public-api-only',
       comment: "A module may import another module only through that module's index.ts.",
       severity: 'error',

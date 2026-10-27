@@ -50,3 +50,14 @@ model AlphaLookup {
   @@map("lookup")
   @@schema("alpha")
 }
+
+/// The module's outbox: the same fields as every other outbox (ported from Mondapac's fixture).
+model AlphaOutbox {
+  eventId  String @id @map("event_id") @db.Uuid
+  tenantId String @map("tenant_id")
+  type     String
+  payload  Json
+
+  @@map("outbox")
+  @@schema("alpha")
+}

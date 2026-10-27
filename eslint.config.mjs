@@ -250,6 +250,52 @@ const APP_ROLE_IS_READ_IN_TWO_PLACES = {
   property: 'appRole',
   message: 'app-role-is-read-in-two-places: only main.ts and platform/worker/ read appRole.',
 };
+// use-case-entry-is-the-gate (ported from Mondapac eslint.config.mjs, slice 1c and slice 2;
+// Phoenix ADR-0004 decision 4): UseCase.execute is the one entry that checks the access rule; a
+// use case implements the protected `handle` and never overrides `execute` (application/
+// use-cases/ only). In every file of src/modules/, a facade, a job or an event handler reaches a
+// use case through execute too: no `handle` member on another object, no `handle` destructured,
+// no 'handle' named to Reflect, and no reflection over a class's methods (`.prototype`,
+// `__proto__`, Object.getPrototypeOf, Object.getOwnPropertyDescriptor(s)). `this.handle(` stays
+// allowed (UseCase.execute is in platform/authz/, outside modules). A handler object in a module
+// names its method something else.
+const GATE = 'use-case-entry-is-the-gate';
+const useCaseNeverOverridesExecute = {
+  selector:
+    "ClassBody > :matches(MethodDefinition, PropertyDefinition):matches([key.name='execute'], [key.value='execute'])",
+  message: `${GATE}: a use case never overrides execute.`,
+};
+const HANDLE_ONLY_BY_EXECUTE = `${GATE}: handle is called only by UseCase.execute.`;
+const NO_METHOD_REFLECTION = `${GATE}: no reflection over a class's methods in a module (it reaches handle). Use Object.hasOwn, or a platform helper for plain-object checks; interceptors (CallHandler.handle) live in platform/.`;
+const handleIsReachedOnlyByExecute = [
+  {
+    // The member, not the call, so that x['handle'](), x.handle.call(...) and x.handle.bind(...)
+    // are caught too.
+    selector:
+      "MemberExpression:matches([property.name='handle'], [property.value='handle'])[object.type!='ThisExpression']",
+    message: HANDLE_ONLY_BY_EXECUTE,
+  },
+  {
+    selector: "ObjectPattern > Property:matches([key.name='handle'], [key.value='handle'])",
+    message: HANDLE_ONLY_BY_EXECUTE,
+  },
+  {
+    selector:
+      "CallExpression[callee.object.name='Reflect'] > :matches(Literal[value='handle'], TemplateLiteral > TemplateElement[value.raw='handle'])",
+    message: HANDLE_ONLY_BY_EXECUTE,
+  },
+  {
+    selector:
+      'CallExpression:matches([callee.name=/^(getPrototypeOf|getOwnPropertyDescriptors?)$/], [callee.property.name=/^(getPrototypeOf|getOwnPropertyDescriptors?)$/])',
+    message: NO_METHOD_REFLECTION,
+  },
+  {
+    selector:
+      'MemberExpression:matches([property.name=/^(prototype|__proto__)$/], [property.value=/^(prototype|__proto__)$/])',
+    message: NO_METHOD_REFLECTION,
+  },
+];
+
 // The selector groups of the modules block and of the domain and application block.
 const MODULE_SYNTAX = [
   ...noTenantLiterals,
@@ -258,6 +304,7 @@ const MODULE_SYNTAX = [
   ...contextsAreMintedByPlatform,
   ...noRawSqlOrTransactionInModules,
   ...moduleStaticImportsOnly,
+  ...handleIsReachedOnlyByExecute,
 ];
 const domainApplicationSyntax = (contextRules) => [
   ...noTenantLiterals,
@@ -267,6 +314,7 @@ const domainApplicationSyntax = (contextRules) => [
   ...contextRules,
   ...noRawSqlOrTransactionInModules,
   ...moduleStaticImportsOnly,
+  ...handleIsReachedOnlyByExecute,
 ];
 const DOMAIN_APPLICATION_SYNTAX = domainApplicationSyntax(contextsAreMintedByPlatform);
 
@@ -396,6 +444,15 @@ export default tseslint.config(
     ignores: SPEC_FILES,
     rules: {
       'no-restricted-syntax': ['error', ...DOMAIN_APPLICATION_SYNTAX],
+    },
+  },
+  {
+    // Use cases: the gate rule joins the domain and application list (a later block replaces
+    // the selectors of an earlier one).
+    files: [`**/src/modules/*/application/use-cases/**/*.${TS}`],
+    ignores: SPEC_FILES,
+    rules: {
+      'no-restricted-syntax': ['error', ...DOMAIN_APPLICATION_SYNTAX, useCaseNeverOverridesExecute],
     },
   },
   {

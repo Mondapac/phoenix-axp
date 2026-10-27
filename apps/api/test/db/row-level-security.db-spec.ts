@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { ok } from '@phoenix/shared-kernel';
 import { Client } from 'pg';
 import { TEST_TENANTS } from '../support/test-config';
@@ -202,6 +203,50 @@ describe('row-level security (database integration, ADR-0002)', () => {
       await owner.query('ROLLBACK');
     }
   });
+
+  it.each(TEST_TENANTS)(
+    'the owner sees, changes and deletes no audit row of %s: FORCE on platform.audit_log (S5-3)',
+    async (code) => {
+      const id = randomUUID();
+      await app.query('BEGIN');
+      try {
+        await setTenant(code);
+        await app.query(
+          `INSERT INTO platform.audit_log
+             (id, tenant_id, occurred_at, actor_type, action, target_type, target_id, after,
+              correlation_id)
+           VALUES ($1::uuid, $2, now(), 'SYSTEM', 'probe.thing-recorded', 'probe.thing',
+                   $1::text, '{"n": 1}'::jsonb, $3)`,
+          [id, code, `rls-${id}`],
+        );
+        await app.query('COMMIT');
+      } catch (error) {
+        await app.query('ROLLBACK');
+        throw error;
+      }
+      const seen = await inTransaction(async () => {
+        await setTenant(code);
+        return (await app.query('SELECT 1 FROM platform.audit_log WHERE id = $1', [id])).rowCount;
+      });
+      expect(seen).toBe(1);
+
+      expect(
+        (await owner.query('SELECT 1 FROM platform.audit_log WHERE id = $1', [id])).rowCount,
+      ).toBe(0);
+      // The append-only trigger fires per row, and the owner reaches no row to fire it on.
+      await owner.query('BEGIN');
+      try {
+        const updated = await owner.query(
+          "UPDATE platform.audit_log SET action = 'probe.nothing-happened' WHERE id = $1",
+          [id],
+        );
+        const deleted = await owner.query('DELETE FROM platform.audit_log WHERE id = $1', [id]);
+        expect([updated.rowCount, deleted.rowCount]).toEqual([0, 0]);
+      } finally {
+        await owner.query('ROLLBACK');
+      }
+    },
+  );
 
   it('a query without the tenant setting sees no rows', async () => {
     expect(await labels()).toEqual([]);

@@ -133,3 +133,14 @@ model AlphaExemptChild {
 
   @@schema("alpha")
 }
+
+/// Allowed (control): the outbox every other outbox is compared with.
+model AlphaOutbox {
+  eventId  String @id @map("event_id") @db.Uuid
+  tenantId String @map("tenant_id")
+  type     String
+  payload  Json
+
+  @@map("outbox")
+  @@schema("alpha")
+}

@@ -1,0 +1,65 @@
+// The event-path probe (schema "probe"). Not a business module: like platform.isolation_probe,
+// these tables exist to prove a platform mechanism end to end against PostgreSQL, here the
+// outbox, the relay, the in-process bus, the dispatcher and the inbox of ADR-0006, with no
+// business data. Only the database tests write them (apps/api/test/db/event-path.db-spec.ts),
+// through the platform's OutboxWriter and UnitOfWork.runOnce. No source file under src/ names
+// them. The CHECKs, the grants and the row-level security policies are hand-written in the
+// migration. Ported in shape from Mondapac's identity outbox and inbox (identity.prisma).
+
+/// The probe module's outbox (ADR-0006): written only by the platform OutboxWriter in the unit of
+/// the state change, read and marked only by the relay. Every module outbox has exactly these
+/// fields (scripts/check-prisma-boundaries.mjs).
+model ProbeOutbox {
+  /// UUIDv7 stamped by the outbox writer.
+  eventId          String    @id @map("event_id") @db.Uuid
+  /// "probe.<subject>-<verb>.v<N>"; the CHECK refuses another module's type.
+  type             String    @db.VarChar(128)
+  /// The instant the use case took from Clock (UTC).
+  occurredAt       DateTime  @map("occurred_at") @db.Timestamptz(3)
+  /// The tenant of the unit that wrote the event (ADR-0002); stamped by the writer.
+  tenantId         String    @map("tenant_id") @db.VarChar(32)
+  aggregateType    String    @map("aggregate_type") @db.VarChar(64)
+  aggregateId      String    @map("aggregate_id") @db.Uuid
+  /// The aggregate's version after the change; unique per aggregate.
+  aggregateVersion Int       @map("aggregate_version")
+  correlationId    String    @map("correlation_id") @db.VarChar(128)
+  /// The consumed event that caused this one, or null.
+  causationId      String?   @map("causation_id") @db.Uuid
+  payload          Json      @db.JsonB
+  /// Set by the relay when the event was handed to the bus; the only column that changes.
+  publishedAt      DateTime? @map("published_at") @db.Timestamptz(3)
+
+  /// No two events of one aggregate share a version; led by the tenant (ADR-0002).
+  @@unique([tenantId, aggregateId, aggregateVersion], map: "outbox_tenant_id_aggregate_id_aggregate_version_key")
+  @@map("outbox")
+  @@schema("probe")
+}
+
+/// Events the probe module's subscribers have handled (ADR-0006): `runOnce` inserts
+/// (tenant, event, handler) in the handler's own unit and skips the work when the row exists.
+/// Written only by platform/persistence/outbox/.
+model ProbeInbox {
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  eventId     String   @map("event_id") @db.Uuid
+  /// The subscriber's name, "probe.<handler>".
+  handler     String   @db.VarChar(96)
+  processedAt DateTime @map("processed_at") @db.Timestamptz(3)
+
+  @@id([tenantId, eventId, handler])
+  @@map("inbox")
+  @@schema("probe")
+}
+
+/// What the probe's subscriber records: one row per handled event, so a test can count how
+/// often the work ran (once, whatever the number of deliveries).
+model ProbeReceipt {
+  tenantId   String   @map("tenant_id") @db.VarChar(32)
+  eventId    String   @map("event_id") @db.Uuid
+  /// The aggregate the event was about.
+  thingId    String   @map("thing_id") @db.Uuid
+  receivedAt DateTime @map("received_at") @db.Timestamptz(3)
+
+  @@id([tenantId, eventId])
+  @@map("receipt")
+  @@schema("probe")
+}

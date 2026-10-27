@@ -7,3 +7,24 @@ model BetaThing {
   @@map("thing")
   @@schema("beta")
 }
+
+/// Allowed: a second outbox identical to alpha's, and an inbox keyed by the tenant and the event.
+model BetaOutbox {
+  eventId  String @id @map("event_id") @db.Uuid
+  tenantId String @map("tenant_id")
+  type     String
+  payload  Json
+
+  @@map("outbox")
+  @@schema("beta")
+}
+
+model BetaInbox {
+  tenantId String @map("tenant_id")
+  eventId  String @map("event_id") @db.Uuid
+  handler  String
+
+  @@id([tenantId, eventId, handler])
+  @@map("inbox")
+  @@schema("beta")
+}
