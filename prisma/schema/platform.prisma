@@ -162,8 +162,9 @@ model AuditChainCheckpoint {
 /// with AES-256-GCM under the deployment's key-encryption key (SUBJECT_KEY_KEK), with the
 /// tenant and the subject as associated data; the plain key never reaches the database.
 /// Destroying sets `wrapped_key` to null for good: what was encrypted under it is unreadable.
-/// Written by platform/subject-keys only. The CHECKs, grants and row-level security are
-/// hand-written in the migration.
+/// Written by platform/subject-keys only. Versioning (ADR-0007): none; a key is inserted once
+/// and only ever destroyed, which a trigger makes final. The CHECKs, grants and row-level
+/// security are hand-written in the migration.
 model SubjectKey {
   tenantId    String    @map("tenant_id") @db.VarChar(32)
   /// The subject: the record whose personal data the key protects (a form submission).
@@ -182,7 +183,8 @@ model SubjectKey {
 
 /// One fixed window of one rate-limit bucket (ADR-0010 `rate-limit`). The bucket is an HMAC of
 /// the rule's name and its subject (a client address, an account id), so no address is stored.
-/// Pruned by `platform.rate-limit-prune` once the window is a day old.
+/// Pruned by `platform.rate-limit-prune` once the window is a day old. Versioning (ADR-0007):
+/// none; a counter, not a record.
 model RateLimitWindow {
   tenantId    String   @map("tenant_id") @db.VarChar(32)
   /// Hex HMAC-SHA-256 of `<rule>\n<subject>`.
@@ -199,7 +201,8 @@ model RateLimitWindow {
 }
 
 /// A solved proof-of-work challenge (platform/captcha), kept until it expires so a solution
-/// counts once. Pruned by `platform.rate-limit-prune`.
+/// counts once. Pruned by `platform.captcha-prune`. Versioning (ADR-0007): none; inserted
+/// once and deleted when it expires.
 model CaptchaSpent {
   tenantId      String   @map("tenant_id") @db.VarChar(32)
   /// Hex SHA-256 of the challenge.

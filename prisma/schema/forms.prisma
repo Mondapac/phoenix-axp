@@ -117,7 +117,8 @@ model FormSubmission {
   /// The form inbox: one form's submissions, newest first.
   @@index([tenantId, formId, submittedAt, id], map: "form_submission_tenant_id_form_id_submitted_at_id_idx")
   /// The retention job's scan.
-  @@index([tenantId, eraseAfter], map: "form_submission_tenant_id_erase_after_idx")
+  /// The retention job's scan: only rows not yet erased, by due time.
+  @@index([tenantId, erasedAt, eraseAfter], map: "form_submission_tenant_id_erased_at_erase_after_idx")
   @@map("form_submission")
   @@schema("forms")
 }

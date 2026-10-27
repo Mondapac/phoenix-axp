@@ -29,7 +29,7 @@ CREATE TABLE "forms"."form_submission" (
 CREATE INDEX "form_submission_tenant_id_form_id_submitted_at_id_idx" ON "forms"."form_submission"("tenant_id", "form_id", "submitted_at", "id");
 
 -- CreateIndex
-CREATE INDEX "form_submission_tenant_id_erase_after_idx" ON "forms"."form_submission"("tenant_id", "erase_after");
+CREATE INDEX "form_submission_tenant_id_erased_at_erase_after_idx" ON "forms"."form_submission"("tenant_id", "erased_at", "erase_after");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "form_submission_tenant_id_id_key" ON "forms"."form_submission"("tenant_id", "id");
@@ -71,6 +71,9 @@ ALTER TABLE "forms"."form_submission"
   ),
   ADD CONSTRAINT "form_submission_erase_after_check" CHECK (
     "erase_after" IS NULL OR "erase_after" > "submitted_at"
+  ),
+  ADD CONSTRAINT "form_submission_erased_at_check" CHECK (
+    "erased_at" IS NULL OR "erased_at" >= "submitted_at"
   ),
   ADD CONSTRAINT "form_submission_version_check" CHECK ("version" >= 1);
 

@@ -50,6 +50,9 @@ ALTER TABLE "platform"."subject_key"
   ADD CONSTRAINT "subject_key_state_check" CHECK (
     ("destroyed_at" IS NULL AND "wrapped_key" IS NOT NULL AND octet_length("wrapped_key") = 61)
     OR ("destroyed_at" IS NOT NULL AND "wrapped_key" IS NULL)
+  ),
+  ADD CONSTRAINT "subject_key_destroyed_at_check" CHECK (
+    "destroyed_at" IS NULL OR "destroyed_at" >= "created_at"
   );
 
 ALTER TABLE "platform"."rate_limit_window"
