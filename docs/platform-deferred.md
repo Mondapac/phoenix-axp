@@ -91,9 +91,11 @@ trigger that brings each one in. When a trigger fires, port the component from t
   and the kernel's `canonical-json`, `content-hash` and `audit-action`, Market adapted to
   Tenant, with these changes:
   - `platform.audit_log`, `audit_log_seal` and `audit_chain_checkpoint` are under row-level
-    security like every tenant table: the application login sees and writes only the rows of
-    `app.tenant_id`. It holds `SELECT, INSERT` only, and a trigger refuses every `UPDATE`,
-    `DELETE` and `TRUNCATE` (the owner too, unless it turns the user triggers off).
+    security like every tenant table, forced on the owner too (migration 20261027150000,
+    security review S5-3): the application login sees and writes only the rows of
+    `app.tenant_id`, and the owner sees none. It holds `SELECT, INSERT` only, and a trigger
+    refuses every `UPDATE`, `DELETE` and `TRUNCATE` (the owner too, unless it lifts FORCE and
+    turns the user triggers off; see the forward requirements below).
   - The chain is per tenant: one chain, one watermark and one checkpoint series per tenant;
     the sealer and the verifier run per hosted tenant in a unit of that tenant.
   - A row carries one `tenant_id` and no market or "acting as" column (Mondapac's
@@ -113,10 +115,12 @@ trigger that brings each one in. When a trigger fires, port the component from t
     `platform/persistence/audit/` (the Prisma boundary check), and a module reaches the writer
     only through the `AUDIT_WRITER` port, never the Prisma writer (dependency-cruiser).
 - **Row-level security binds the owner too.** Every tenant-scoped table has `ENABLE` and
-  `FORCE ROW LEVEL SECURITY` and one policy to `phoenix_app` (migration 20261026120200,
-  security review S2-1). The migration role owns the tables but matches no policy, so it sees
+  `FORCE ROW LEVEL SECURITY` and one policy to `phoenix_app` (migrations 20261026120200 and
+  20261027150000, security reviews S2-1 and S5-3). The migration role owns the tables but matches no policy, so it sees
   and writes no tenant row; migrations are DDL only. A maintenance path that must cross
-  tenants gets its own reviewed policy or role in its own migration; none exists today.
+  tenants gets its own reviewed policy or role in its own migration; none exists today. The
+  database tests that use the owner as an operator or attacker (event path, audit chain, audit
+  writer) run on copies where `global-setup.ts` lifts FORCE, as such an owner could.
 
 ## Forward requirements (gates on later slices)
 

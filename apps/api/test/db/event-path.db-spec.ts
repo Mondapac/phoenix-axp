@@ -75,8 +75,8 @@ describe('event path: publish, relay, consume (database integration)', () => {
     await db.close();
   });
 
-  // Every test starts with nothing due: what an earlier test left is set aside (as the owner,
-  // who is not subject to row-level security).
+  // Every test starts with nothing due: what an earlier test left is set aside (as the owner;
+  // FORCE ROW LEVEL SECURITY is lifted on this copy, global-setup.ts).
   afterEach(async () => {
     await owner.query(`UPDATE probe.outbox SET published_at = now() WHERE published_at IS NULL`);
     await owner.query(
