@@ -37,3 +37,18 @@ trigger that brings each one in. When a trigger fires, port the component from t
   tenant-scoped request; `HOSTED_TENANTS` lists the tenants of a deployment.
 - **Market and vertical literal bans** became one tenant-literal ban, built from
   `config/tenants/*.json` (ids, locales, time zones).
+- **Row-level security binds the owner too.** Every tenant-scoped table has `ENABLE` and
+  `FORCE ROW LEVEL SECURITY` and one policy to `phoenix_app` (migration 20261026120200,
+  security review S2-1). The migration role owns the tables but matches no policy, so it sees
+  and writes no tenant row; migrations are DDL only. A maintenance path that must cross
+  tenants gets its own reviewed policy or role in its own migration; none exists today.
+
+## Forward requirements (gates on later slices)
+
+Requirements found by the reviews that belong to a slice not built yet. Each names the slice
+it gates; that slice does not merge without it.
+
+| Requirement | Why | Gate |
+| --- | --- | --- |
+| **Session tenant binding** (security review S2-3). Identity's `Authenticator` refuses a session whose tenant differs from the request's tenant (the one `TenantContextGuard` resolved from `x-tenant-id`), with a test on both tenant fixtures. Deployment (Helm, on-prem compose) keeps the API port reachable only from the BFFs; add a `HOST` setting so the API can bind a single interface (today `app.listen(port)` binds all). | `x-tenant-id` is trusted from any caller that reaches the API port (`tenant-context.guard.ts`). Today that only selects a tenant's anonymous surface; once sessions exist, user A of tenant X could send `x-tenant-id: Y` and act in Y. | The identity slice: no session is honoured before the check and its test exist. |
+| **Composite hand-written foreign keys** (security review S2-4). Every foreign key written by hand in a migration between tenant-scoped tables includes `tenant_id` on both sides, as the Prisma-declared ones must (`check-prisma-boundaries`). | PostgreSQL checks a foreign key without row-level security, so an id-only key could point at another tenant's row. | Every migration review. |
