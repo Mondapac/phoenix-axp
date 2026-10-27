@@ -1,8 +1,9 @@
 # PoC 1 (slice 0.6): tenant isolation, guard + RLS, PgBouncer, site subtree
 
-Status: Phase 0 spike, report only (D5). Branch `spike/poc-1-2-tenancy-identity`; the code is not
-for merge, Phase 1 copies from it. Rules under test: ADR-0002 (tenant as a first-class dimension,
-guard + row-level security), ADR-0018 (site tree, subtree grants), ADR-0009 (licences).
+Status: Phase 0 spike, report only (D5). Branch `spike/poc-1-2-tenancy-identity` at `73ecee4`
+(spike code in `8aafd6b`); the code is not for merge, Phase 1 copies from it. Rules under test:
+ADR-0002 (tenant as a first-class dimension, guard + row-level security), ADR-0018 (site tree,
+subtree grants), ADR-0009 (licences).
 
 ## خلاصه برای صاحب پروژه
 

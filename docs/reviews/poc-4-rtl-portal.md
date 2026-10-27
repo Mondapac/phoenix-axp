@@ -1,6 +1,6 @@
 # PoC 4 (slice 0.9): RTL portal page, Jalali form and Puck editor
 
-**Track:** frontend · **Branch:** `spike/poc-4-rtl-portal` (from `chore/skeleton`) · **Date:** 2026-10-27
+**Track:** frontend · **Branch:** `spike/poc-4-rtl-portal` at `1fa15c0` (from `chore/skeleton`; spike code in `bf0523b` and `0846e90`) · **Date:** 2026-10-27
 **Mode:** report-only spike (owner decision D5). The code stays on the branch and is not merged.
 **Criterion:** WCAG 2.1 AA (design doc section 5, ADR-0008 consequences).
 

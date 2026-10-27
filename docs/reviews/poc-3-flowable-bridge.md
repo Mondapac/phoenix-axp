@@ -1,7 +1,7 @@
 # PoC 3 (slice 0.8): the Flowable bridge
 
-Status: report only (owner decision D5). The code is on branch `spike/poc-3-flowable-bridge` and
-is not merged; Phase 1 and Phase 2 copy from it.
+Status: report only (owner decision D5). The code is on branch `spike/poc-3-flowable-bridge` at
+`03c8fc8` (spike code in `328fe0b`) and is not merged; Phase 1 and Phase 2 copy from it.
 
 ## خلاصه برای صاحب پروژه
 

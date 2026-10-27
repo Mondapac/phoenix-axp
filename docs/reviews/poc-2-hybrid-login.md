@@ -1,7 +1,7 @@
 # PoC 2 (slice 0.7): hybrid login, revoke and disable on the next request
 
-Status: Phase 0 spike, report only (D5). Branch `spike/poc-1-2-tenancy-identity`; the code is not
-for merge, Phase 1 copies from it. Rules under test: ADR-0004 as amended by ADR-0019, ADR-0018
+Status: Phase 0 spike, report only (D5). Branch `spike/poc-1-2-tenancy-identity` at `73ecee4`
+(spike code in `8aafd6b`); the code is not for merge, Phase 1 copies from it. Rules under test: ADR-0004 as amended by ADR-0019, ADR-0018
 (site-scoped grants), ADR-0009 (licences).
 
 ## خلاصه برای صاحب پروژه
