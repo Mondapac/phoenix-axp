@@ -29,7 +29,7 @@ function reject(code: TenantRejection): BadRequestException {
 }
 
 /**
- * Resolves the tenant of every HTTP request from `x-tenant-id` (ADR-02) and attaches the
+ * Resolves the tenant of every HTTP request from `x-tenant-id` (ADR-0002) and attaches the
  * minted context for `@Tenant()`. It is the first global guard, so a request refused here
  * reaches nothing else and reads nothing from the database. Every controller is
  * tenant-scoped unless its class carries `@NoTenantContext()`.

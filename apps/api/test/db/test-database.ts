@@ -36,7 +36,13 @@ function exported(
     | 'TEST_DATABASE_URL'
     | 'TEST_OWNER_DATABASE_URL'
     | 'TEST_LOCKING_DATABASE_URL'
-    | 'TEST_LOCKING_OWNER_DATABASE_URL',
+    | 'TEST_LOCKING_OWNER_DATABASE_URL'
+    | 'TEST_DELIVERY_DATABASE_URL'
+    | 'TEST_DELIVERY_OWNER_DATABASE_URL'
+    | 'TEST_AUDIT_DATABASE_URL'
+    | 'TEST_AUDIT_OWNER_DATABASE_URL'
+    | 'TEST_AUDIT_WRITER_DATABASE_URL'
+    | 'TEST_AUDIT_WRITER_OWNER_DATABASE_URL',
 ): string {
   const url = process.env[name];
   if (!url) {
@@ -68,3 +74,39 @@ export function lockingOwnerTestDatabaseUrl(): string {
 }
 
 export { REPO_ROOT };
+
+/**
+ * The copy of the run database that event-path.db-spec.ts relays and dispatches on
+ * (global-setup.ts), as the application login and as its owner.
+ */
+export function deliveryTestDatabaseUrl(): string {
+  return exported('TEST_DELIVERY_DATABASE_URL');
+}
+
+export function deliveryOwnerTestDatabaseUrl(): string {
+  return exported('TEST_DELIVERY_OWNER_DATABASE_URL');
+}
+
+/**
+ * The copy of the run database that platform-audit-chain.db-spec.ts seals and verifies
+ * (global-setup.ts), as the application login and as its owner.
+ */
+export function auditTestDatabaseUrl(): string {
+  return exported('TEST_AUDIT_DATABASE_URL');
+}
+
+export function auditOwnerTestDatabaseUrl(): string {
+  return exported('TEST_AUDIT_OWNER_DATABASE_URL');
+}
+
+/**
+ * The copy of the run database that platform-audit.db-spec.ts writes and reads audit rows on
+ * (global-setup.ts), as the application login and as its owner (FORCE lifted there).
+ */
+export function auditWriterTestDatabaseUrl(): string {
+  return exported('TEST_AUDIT_WRITER_DATABASE_URL');
+}
+
+export function auditWriterOwnerTestDatabaseUrl(): string {
+  return exported('TEST_AUDIT_WRITER_OWNER_DATABASE_URL');
+}

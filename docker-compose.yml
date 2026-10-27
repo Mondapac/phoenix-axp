@@ -1,7 +1,8 @@
-# Local development dependencies only (ADR-05, ADR-11, ADR-12, ADR-13). The API and the worker
-# run on the host (`pnpm dev`, `pnpm dev:worker`). Credentials here are local-only defaults,
-# never secrets, and every port is published on 127.0.0.1 only so other machines on the
-# network cannot reach them. Host ports can be moved with the variables listed in .env.example.
+# Local development dependencies only (ADR-0014 decision 7; the licences of the bundled
+# services: ADR-0009 decision 6). The API and the worker run on the host (`pnpm dev`,
+# `pnpm dev:worker`). Credentials here are local-only defaults, never secrets, and every port
+# is published on 127.0.0.1 only so other machines on the network cannot reach them. Host
+# ports can be moved with the variables listed in .env.example.
 #
 # PostgreSQL roles: `postgres` is the bootstrap superuser and nothing else; no URL names it. On
 # a fresh volume the image runs scripts/db/bootstrap-dev.sql once, which creates the migration
@@ -15,8 +16,8 @@ name: phoenix
 
 services:
   postgres:
-    # PostgreSQL 17, the major version of production (ADR-05). Alpine variant of the official
-    # image; the minor version floats within 17.
+    # PostgreSQL 17, the major version of production (ADR-0003, ADR-0014). Alpine variant of
+    # the official image; the minor version floats within 17.
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: postgres

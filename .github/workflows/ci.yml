@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Tenant matrix (ADR-02): each entry is one deployment's HOSTED_TENANTS, booted and
+        # Tenant matrix (ADR-0002): each entry is one deployment's HOSTED_TENANTS, booted and
         # probed below. Every entry names tenants that have a file in config/tenants/. The test
         # suites always run against both fixtures, whatever the entry.
         tenants:

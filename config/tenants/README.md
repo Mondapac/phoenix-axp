@@ -13,7 +13,7 @@ at start-up and refuses to start when one is missing or invalid (`apps/api/src/p
 | `calendar`         | Unicode calendar id (`persian`, `gregory`), as `Intl` supports it.           |
 | `direction`        | Text direction of the default locale: `rtl` or `ltr`.                        |
 
-The two fixtures cover the dimensions every tenant-scoped test must exercise (ADR-02):
+The two fixtures cover the dimensions every tenant-scoped test must exercise (ADR-0002):
 
 - `demo-fa`: Persian, Jalali (`persian`) calendar, `Asia/Tehran`, right to left.
 - `demo-en`: a synthetic English tenant, Gregorian calendar, `America/Toronto` (daylight saving), left to right.

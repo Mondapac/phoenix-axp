@@ -15,7 +15,7 @@ export class MissingCorrelationIdError extends Error {
 }
 
 /**
- * The `CallContext` of the request (ADR-01): its tenant (from TenantContextGuard), its actor
+ * The `CallContext` of the request (ADR-0001): its tenant (from TenantContextGuard), its actor
  * (from ActorGuard) and the correlation id the request logger generated. A controller passes
  * it, unchanged, as the first argument of a use case. It throws when any part is missing, so
  * no handler runs with a default.

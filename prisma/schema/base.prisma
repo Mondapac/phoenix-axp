@@ -1,4 +1,4 @@
-// Shared Prisma configuration (ADR-02). Models live in one file per module next to this one;
+// Shared Prisma configuration (ADR-0003). Models live in one file per module next to this one;
 // each module owns exactly one PostgreSQL schema and no relation may cross schemas.
 
 generator client {
@@ -17,5 +17,5 @@ generator modelMap {
 
 datasource db {
   provider = "postgresql"
-  schemas  = ["platform"]
+  schemas  = ["platform", "probe"]
 }

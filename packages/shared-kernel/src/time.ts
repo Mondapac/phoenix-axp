@@ -3,7 +3,7 @@
 // this file only. The kernel installs no global `Temporal`.
 //
 // The `full` build, not the basic one: tenants may use a non-ISO calendar (the Persian/Jalali
-// tenant fixture, ADR-02), and only the full build implements the Intl calendars.
+// tenant fixture, ADR-0002), and only the full build implements the Intl calendars.
 import { Temporal } from 'temporal-polyfill/full';
 
 export { Temporal };

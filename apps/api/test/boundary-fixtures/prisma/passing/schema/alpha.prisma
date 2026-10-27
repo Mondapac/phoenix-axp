@@ -1,7 +1,8 @@
 // Allowed cases of the persistence boundaries (each says why).
 
-/// A scoped parent. Its keys all contain tenantId: the composite key children point at, a
-/// `name:`-named selector, and a selector whose tenantId is not the leading field.
+/// A scoped parent. Its keys and indexes all lead with tenantId: the composite key children
+/// point at, a `name:`-named selector, a second selector and plain indexes (one in the named
+/// `fields:` form, one with a sort modifier).
 model AlphaParent {
   id       String       @id @db.Uuid
   tenantId String       @map("tenant_id")
@@ -11,7 +12,9 @@ model AlphaParent {
 
   @@unique([tenantId, id])
   @@unique([tenantId, code], name: "byCode", map: "alpha_parent_code_key")
-  @@unique([kind, tenantId])
+  @@unique([tenantId, kind])
+  @@index([tenantId, code(sort: Desc)])
+  @@index(fields: [tenantId, kind])
   @@map("parent")
   @@schema("alpha")
 }
@@ -28,7 +31,7 @@ model AlphaChild {
   @@schema("alpha")
 }
 
-/// A compound @@id that contains tenantId (the throttle shape).
+/// A compound @@id led by tenantId (the throttle shape).
 model AlphaThrottle {
   tenantId String @map("tenant_id")
   kind     String
@@ -45,5 +48,16 @@ model AlphaLookup {
   label String
 
   @@map("lookup")
+  @@schema("alpha")
+}
+
+/// The module's outbox: the same fields as every other outbox (ported from Mondapac's fixture).
+model AlphaOutbox {
+  eventId  String @id @map("event_id") @db.Uuid
+  tenantId String @map("tenant_id")
+  type     String
+  payload  Json
+
+  @@map("outbox")
   @@schema("alpha")
 }

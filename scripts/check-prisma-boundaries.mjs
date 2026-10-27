@@ -1,5 +1,5 @@
-// Persistence boundaries (ADR-01, ADR-02). Run by `pnpm boundaries`, so by `pnpm verify` and
-// CI; fixtures in apps/api/test/boundary-fixtures/prisma/ are asserted by
+// Persistence boundaries (ADR-0001, ADR-0002, ADR-0003). Run by `pnpm boundaries`, so by
+// `pnpm verify` and CI; fixtures in apps/api/test/boundary-fixtures/prisma/ are asserted by
 // apps/api/test/boundaries.spec.ts.
 //
 // Schema checks (prisma/schema/*.prisma, read by scripts/prisma-schema.mjs):
@@ -7,10 +7,14 @@
 //     underscores); base.prisma declares none; no relation crosses schemas;
 //   - every model is tenant-scoped (tenantId) or exempt ("/// @tenant-scope none: <reason>"),
 //     never neither or both;
-//   - every @id, @unique, @@id and @@unique of a scoped model contains tenantId, except the
-//     single-column UUID @id;
+//   - every @id, @unique, @@id, @@unique and @@index of a scoped model leads with tenantId
+//     (ADR-0002 decision 3), except the single-column UUID @id (a UUIDv7 is unique across
+//     tenants; the exemption ADR-0002 names);
+//   - the tenantId field of a scoped model maps to the column "tenant_id", the column the
+//     row-level security policies and their database test read;
 //   - every @relation between two scoped models has tenantId in both `fields` and
-//     `references`, at the same position; a scoped and an exempt model never relate.
+//     `references`, at the same position; a scoped and an exempt model never relate;
+//   - every outbox model (@@map("outbox")) has the same fields (ported from Mondapac, PM1).
 // Source check, "model to owning module", on apps/api/src/modules/<m>/infrastructure/ and
 // apps/api/src/platform/persistence/: every reference to a Prisma model names a model of the
 // file's own module (platform/ owns platform.prisma). A reference is a property of the model's
@@ -19,6 +23,12 @@
 // name, or an import from its `models/` folder. A non-literal key on the result of a `tx(...)`
 // call (`tx(t)[key]`, `const { [key]: d } = tx(t)`) is refused, because it hides the model it
 // names.
+// Named exception (ported from Mondapac, P 9): files under platform/persistence/outbox/ reach the
+// models mapped to the tables in OUTBOX_TABLES of any module, and those models are reserved to
+// that folder: a module writes its outbox through the OutboxWriter and its inbox through
+// UnitOfWork.runOnce, never by name.
+// Likewise (ported from Mondapac) the platform models mapped to AUDIT_TABLES are reserved to
+// platform/persistence/audit/: the AuditWriter and the chain store, through `auditTx(tenant)`.
 // Raw SQL: raw SQL members (`$queryRaw`, `$executeRaw` and their Unsafe/Typed forms) and the
 // `pg` driver are used only by the files in RAW_SQL_FILES and DRIVER_FILES. A reviewed raw-read
 // port for modules (Mondapac ADR-0030) is deferred; see docs/platform-deferred.md.
@@ -29,13 +39,27 @@ import path from 'node:path';
 import ts from 'typescript';
 import { readPrismaSchema } from './prisma-schema.mjs';
 
-/** The calls whose result is a model view: `PrismaService.tx(tenant)`. */
-const VIEW_CALLS = ['tx'];
+/** The calls whose result is a model view: `PrismaService.tx(tenant)` and `auditTx(tenant)`. */
+const VIEW_CALLS = ['tx', 'auditTx'];
+
+/** The tables reserved to platform/persistence/outbox/ (the named exception). */
+const OUTBOX_TABLES = ['outbox', 'inbox'];
+const OUTBOX_FOLDER = 'platform/persistence/outbox/';
+
+/** The platform tables reserved to platform/persistence/audit/ (Phoenix ADR-0015). */
+const AUDIT_TABLES = ['audit_log', 'audit_log_seal', 'audit_chain_checkpoint'];
+const AUDIT_FOLDER = 'platform/persistence/audit/';
 
 /** The only files (relative to the source root) that may run raw SQL. */
 const RAW_SQL_FILES = new Set([
+  'platform/persistence/advisory-job-lock.ts',
   'platform/persistence/database-probe.ts',
   'platform/persistence/guarded-client.ts',
+  // The relay, the bus adapter and the dispatcher claim and mark rows of every module's outbox
+  // and of platform.event_delivery with fixed statements, setting the tenant first (ADR-0006).
+  'platform/persistence/outbox/in-process-event-bus.ts',
+  'platform/persistence/outbox/prisma-event-dispatcher.ts',
+  'platform/persistence/outbox/prisma-outbox-relay.ts',
   'platform/persistence/prisma-root.ts',
   'platform/persistence/prisma-unit-of-work.ts',
   'platform/persistence/session-statements.ts',
@@ -89,7 +113,7 @@ for (const model of models) {
     }
   }
 
-  // --- Scope (ADR-02).
+  // --- Scope (ADR-0002).
   if (isScoped(model) && model.exemptionReason !== undefined) {
     problems.push(`${model.file}: ${model.name} has tenantId and also an exemption line`);
   } else if (!isScoped(model) && model.exemptionReason === undefined) {
@@ -99,10 +123,17 @@ for (const model of models) {
     );
   }
 
-  // --- Unique keys of a scoped model contain tenantId.
+  // --- Every key and index of a scoped model leads with tenantId (ADR-0002 decision 3).
   if (isScoped(model)) {
-    for (const key of model.keys) {
-      if (key.fields.includes('tenantId')) continue;
+    const tenantField = model.fields.find((f) => f.name === 'tenantId');
+    if (tenantField.column !== 'tenant_id') {
+      problems.push(
+        `${model.file}: ${model.name}.tenantId maps to column "${tenantField.column}", ` +
+          'expected "tenant_id"',
+      );
+    }
+    for (const key of [...model.keys, ...model.indexes]) {
+      if (key.fields[0] === 'tenantId') continue;
       const field = model.fields.find((f) => f.name === key.fields[0]);
       const uuidId =
         key.kind === 'id' &&
@@ -110,10 +141,11 @@ for (const model of models) {
         field?.type === 'String' &&
         field.attributes.some((a) => a.name === 'db.Uuid');
       if (!uuidId) {
-        const label = key.single
-          ? `@${key.kind} on ${key.fields[0]}`
-          : `@@${key.kind}([${key.fields.join(', ')}])`;
-        problems.push(`${model.file}: ${model.name} ${label} does not contain tenantId`);
+        const label =
+          key.single && key.kind !== 'index'
+            ? `@${key.kind} on ${key.fields[0]}`
+            : `@@${key.kind}([${key.fields.join(', ')}])`;
+        problems.push(`${model.file}: ${model.name} ${label} does not lead with tenantId`);
       }
     }
   }
@@ -147,6 +179,20 @@ for (const model of models) {
           '(tenantId is at different positions in fields and references)',
       );
     }
+  }
+}
+
+// --- Every outbox has the same fields (Mondapac PM1): the relay reads them all alike.
+const outboxes = models.filter((model) => model.table === 'outbox');
+const shape = (model) =>
+  JSON.stringify(
+    model.fields.map((f) => [f.name, f.type, f.list, f.optional, f.attributes]).sort(),
+  );
+for (const model of outboxes.slice(1)) {
+  if (shape(model) !== shape(outboxes[0])) {
+    problems.push(
+      `${model.file}: ${model.name} is an outbox whose fields differ from ${outboxes[0].name}`,
+    );
   }
 }
 
@@ -198,18 +244,25 @@ function checkModelOwnership(root) {
     const relative = path.relative(root, file).split(path.sep).join('/');
     const owner = moduleOfFile(relative);
     if (owner === undefined) continue;
+    const inOutboxFolder = relative.startsWith(OUTBOX_FOLDER);
+    const inAuditFolder = relative.startsWith(AUDIT_FOLDER);
     const source = parse(file);
     const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
 
     const report = (node, model, how) => {
-      if (model.module === owner) return;
-      found.push(
-        `${relative}:${lineOf(node)}: ${how} names model ${model.name}, which belongs to ` +
-          `module "${model.module}"`,
-      );
+      const reserved = OUTBOX_TABLES.includes(model.table);
+      const audit = model.module === 'platform' && AUDIT_TABLES.includes(model.table);
+      const allowed = reserved ? inOutboxFolder : audit ? inAuditFolder : model.module === owner;
+      if (allowed) return;
+      const why = reserved
+        ? `is reserved to ${OUTBOX_FOLDER} (write it through OutboxWriter)`
+        : audit
+          ? `is reserved to ${AUDIT_FOLDER} (write it through AuditWriter)`
+          : `belongs to module "${model.module}"`;
+      found.push(`${relative}:${lineOf(node)}: ${how} names model ${model.name}, which ${why}`);
     };
 
-    /** Whether `node` is a `tx(...)` call, under any parentheses. */
+    /** Whether `node` is a `tx(...)` or `auditTx(...)` call, under any parentheses. */
     const isViewCall = (node) => {
       while (node && ts.isParenthesizedExpression(node)) node = node.expression;
       if (!node || !ts.isCallExpression(node)) return false;

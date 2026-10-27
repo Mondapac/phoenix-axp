@@ -16,6 +16,12 @@ export class OpenUnit implements GuardUnit {
     readonly tenant: TenantContext,
     readonly readOnly: boolean,
     readonly view: object,
+    /**
+     * The audit models of the same transaction client (ported from Mondapac): read only by
+     * `auditTx` in `platform/persistence/audit/`; `PrismaService.tx` hands out `view`, which
+     * lacks them.
+     */
+    readonly auditView: object,
   ) {
     Object.freeze(this);
   }

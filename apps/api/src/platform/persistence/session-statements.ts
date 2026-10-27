@@ -4,7 +4,7 @@ import { MAX_LOCK_TIMEOUT_MS } from '../unit-of-work/unit-of-work';
 
 /**
  * The only raw SQL the tenant guard lets through: the session statements the UnitOfWork issues
- * at the start of every unit, before `work` runs (ADR-02, row-level security).
+ * at the start of every unit, before `work` runs (ADR-0002, row-level security).
  *
  * - `SET TRANSACTION READ ONLY`, first statement of a read-only unit.
  * - `SELECT pg_catalog.set_config('app.tenant_id', $1, true)`, with the unit's own tenant as

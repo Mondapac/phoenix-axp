@@ -38,7 +38,8 @@ model AlphaIntId {
   @@schema("alpha")
 }
 
-/// Allowed (control): a `name:`-named selector and @@unique([kind, tenantId]).
+/// Allowed (control): keys and an index that lead with tenantId, a `name:`-named selector and
+/// an index field with a sort modifier.
 model AlphaParent {
   id         String                 @id @db.Uuid
   tenantId   String                 @map("tenant_id")
@@ -49,9 +50,32 @@ model AlphaParent {
   exemptRefs AlphaExemptChild[]
 
   @@unique([tenantId, id])
-  @@unique([id, tenantId])
   @@unique([tenantId, code], name: "byCode")
+  @@index([tenantId, kind(sort: Desc)])
+  @@schema("alpha")
+}
+
+/// Violations: tenantId is in a key and an index but does not lead them, an index has no
+/// tenantId at all, and the tenant field maps to a column other than "tenant_id".
+model AlphaTrailingTenant {
+  id       String @id @db.Uuid
+  tenantId String @map("tenant")
+  kind     String
+  code     String
+
+  @@unique([id, tenantId])
   @@unique([kind, tenantId])
+  @@index([code])
+  @@index(fields: [kind, tenantId])
+  @@schema("alpha")
+}
+
+/// Violation: a compound @@id with tenantId in second place.
+model AlphaTrailingId {
+  tenantId String @map("tenant_id")
+  kind     String
+
+  @@id([kind, tenantId])
   @@schema("alpha")
 }
 
@@ -107,5 +131,16 @@ model AlphaExemptChild {
   parentId String      @map("parent_id") @db.Uuid
   parent   AlphaParent @relation(fields: [parentId], references: [id])
 
+  @@schema("alpha")
+}
+
+/// Allowed (control): the outbox every other outbox is compared with.
+model AlphaOutbox {
+  eventId  String @id @map("event_id") @db.Uuid
+  tenantId String @map("tenant_id")
+  type     String
+  payload  Json
+
+  @@map("outbox")
   @@schema("alpha")
 }

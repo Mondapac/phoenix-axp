@@ -6,7 +6,7 @@ import { z } from 'zod';
 // apps/api/{src|dist}/platform/config -> repository root
 const DEFAULT_TENANT_CONFIG_DIR = path.resolve(__dirname, '../../../../../config/tenants');
 
-/** A tenant id as used in `tenant_id` columns (ADR-02), by the kernel's single rule. */
+/** A tenant id as used in `tenant_id` columns (ADR-0002), by the kernel's single rule. */
 const tenantCode = z.string().transform((value, context) => {
   const tenantId = parseTenantId(value);
   if (tenantId.ok) return tenantId.value;
@@ -17,7 +17,7 @@ const tenantCode = z.string().transform((value, context) => {
 const httpUrl = z.string().regex(/^https?:\/\/[^\s/]+(\/\S*)?$/, 'must be an http(s):// URL');
 
 const hostedTenants = z
-  .string({ error: 'HOSTED_TENANTS is required; there is no default tenant (ADR-02)' })
+  .string({ error: 'HOSTED_TENANTS is required; there is no default tenant (ADR-0002)' })
   .transform((value) =>
     value
       .split(',')
@@ -77,9 +77,14 @@ export interface AppConfig {
    */
   readonly appRole: AppRole;
   readonly nodeEnv: 'development' | 'test' | 'production';
+  /**
+   * Whether `NODE_ENV` was set at all. An unset `NODE_ENV` reads as `development` for logging,
+   * but counts as a production start for the placeholder check (Phoenix ADR-0010 decision 4).
+   */
+  readonly nodeEnvExplicit: boolean;
   readonly port: number;
   readonly logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
-  /** Tenants this deployment serves (ADR-02). Never empty, never defaulted. */
+  /** Tenants this deployment serves (ADR-0002). Never empty, never defaulted. */
   readonly hostedTenants: readonly TenantId[];
   /** Serve Swagger UI at /docs. Off unless explicitly enabled (fails closed). */
   readonly apiDocsEnabled: boolean;
@@ -137,6 +142,7 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
   return Object.freeze({
     appRole: parsed.data.APP_ROLE,
     nodeEnv: parsed.data.NODE_ENV,
+    nodeEnvExplicit: env.NODE_ENV !== undefined,
     port: parsed.data.PORT,
     logLevel: parsed.data.LOG_LEVEL,
     hostedTenants: Object.freeze([...parsed.data.HOSTED_TENANTS]),

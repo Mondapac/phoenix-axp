@@ -108,7 +108,7 @@ const tenantLiterals = (count = 1): string[] => syntax('no-tenant-literals', cou
 const kernelImports = (count = 1): string[] =>
   times(count, 'no-restricted-imports: kernel-imports-only-itself');
 
-describe('architecture boundaries (ADR-01, ADR-02)', () => {
+describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
   describe('dependency-cruiser', () => {
     let cruise: CruiseResult;
     let found: string[];
@@ -133,17 +133,21 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'kernel-testing-only-in-tests',
         'module-internals-are-private',
         'module-public-api-only',
+        'modules-reach-authz-through-its-barrel',
         'no-circular',
         'object-store-sdk-only-in-storage',
         'persistence-internals-are-private',
         'persistence-root-is-private',
         'platform-does-not-import-modules',
         'prisma-only-in-infrastructure',
+        'repositories-stay-behind-use-cases',
         'request-actor-is-attached-by-the-actor-guard',
         'temporal-only-through-kernel',
         'tenant-context-is-attached-by-the-guard',
         'tenant-context-only-through-the-decorator',
         'tenant-exemption-is-platform-only',
+        'use-case-gate-is-built-by-authz',
+        'use-cases-are-the-only-way-in',
       ]);
       expect(rules.filter((rule) => rule.severity !== 'error')).toEqual([]);
       expect(cruise.summary.violations.filter((v) => v.rule.severity !== 'error')).toEqual([]);
@@ -170,15 +174,19 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'kernel-testing-only-in-tests: src/platform/binds-test-fake.ts',
         'module-internals-are-private: src/platform/reaches-into-module.ts',
         'module-public-api-only: src/modules/alpha/application/reaches-into-module.ts',
+        'modules-reach-authz-through-its-barrel: src/modules/alpha/application/reaches-use-case-gate.ts',
         'no-circular: src/modules/alpha/domain/circular-a.ts',
         'object-store-sdk-only-in-storage: src/modules/alpha/infrastructure/uses-s3-sdk.ts',
         'object-store-sdk-only-in-storage: src/platform/uses-s3-sdk.ts',
+        'persistence-internals-are-private: src/modules/alpha/application/reaches-audit-writer.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-service.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-via-barrel.ts',
+        'persistence-root-is-private: src/modules/alpha/infrastructure/reaches-audit-writer.ts',
         'persistence-root-is-private: src/modules/alpha/infrastructure/uses-prisma-root.ts',
         'platform-does-not-import-modules: src/platform/imports-module-index.ts',
         'platform-does-not-import-modules: src/platform/reaches-into-module.ts',
         'prisma-only-in-infrastructure: src/modules/alpha/presentation/uses-prisma.ts',
+        'repositories-stay-behind-use-cases: src/modules/alpha/presentation/jobs/reaches-repository.ts',
         'request-actor-is-attached-by-the-actor-guard: src/modules/alpha/presentation/attaches-actor.ts',
         'temporal-only-through-kernel: src/platform/uses-js-temporal-polyfill.ts',
         'temporal-only-through-kernel: src/platform/uses-temporal-polyfill.ts',
@@ -189,6 +197,11 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         'tenant-context-only-through-the-decorator: src/modules/alpha/presentation/exempt-controller.ts',
         'tenant-exemption-is-platform-only: src/modules/alpha/presentation/exempt-controller.ts',
         'tenant-exemption-is-platform-only: src/platform/tenant-context/index.ts',
+        'use-case-gate-is-built-by-authz: src/modules/alpha/application/reaches-use-case-gate.ts',
+        'use-case-gate-is-built-by-authz: src/platform/builds-use-case-gate.ts',
+        'use-cases-are-the-only-way-in: src/modules/alpha/infrastructure/alpha.facade.ts',
+        'use-cases-are-the-only-way-in: src/modules/alpha/presentation/reaches-application-service.ts',
+        'use-cases-are-the-only-way-in: src/modules/beta/index.ts',
       ]);
     });
 
@@ -228,6 +241,14 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       'src/platform/uses-database-probe.ts',
       // A platform entry adapter builds actors and call contexts.
       'src/platform/scheduler/builds-system-context.ts',
+      // platform/authz builds the gate; an entry point reaches application/ through a use
+      // case; the module's Nest module binds a repository implementation; a use case reads its
+      // repository port.
+      'src/platform/authz/authz.module.ts',
+      'src/modules/alpha/presentation/calls-use-case.ts',
+      'src/modules/alpha/alpha.module.ts',
+      'src/modules/alpha/application/use-cases/find-thing.use-case.ts',
+      'src/modules/alpha/infrastructure/prisma-thing.repository.ts',
       // The S3 adapter is the one user of the AWS SDK.
       'src/platform/storage/s3-object-store.ts',
     ])('accepts the allowed file %s', (file) => {
@@ -267,7 +288,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ).toEqual({ status: 0, problems: [] });
     });
 
-    it('accepts the passing fixture: keys with tenantId (also not leading and name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, and raw SQL and the driver in the platform files', () => {
+    it('accepts the passing fixture: keys and indexes led by tenantId (also name:-named), a composite foreign key, a compound @@id, an exempt model, a UUID @id, raw SQL and the driver in the platform files, identical outboxes, an inbox, the outbox exception and the audit folder', () => {
       expect(
         checkPrisma(
           path.join(PRISMA_FIXTURES, 'passing/schema'),
@@ -289,10 +310,16 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'beta.prisma: enum BetaKind is in schema "alpha", but this file owns "beta"',
           'alpha.prisma: AlphaNeither is neither tenant-scoped (tenantId) nor exempt ("/// @tenant-scope none: <reason>")',
           'alpha.prisma: AlphaBoth has tenantId and also an exemption line',
-          'alpha.prisma: AlphaBadKeys @unique on ref does not contain tenantId',
-          'alpha.prisma: AlphaBadKeys @@id([kind, code]) does not contain tenantId',
-          'alpha.prisma: AlphaBadKeys @@unique([kind, ref]) does not contain tenantId',
-          'alpha.prisma: AlphaIntId @id on id does not contain tenantId',
+          'alpha.prisma: AlphaBadKeys @unique on ref does not lead with tenantId',
+          'alpha.prisma: AlphaBadKeys @@id([kind, code]) does not lead with tenantId',
+          'alpha.prisma: AlphaBadKeys @@unique([kind, ref]) does not lead with tenantId',
+          'alpha.prisma: AlphaIntId @id on id does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant.tenantId maps to column "tenant", expected "tenant_id"',
+          'alpha.prisma: AlphaTrailingTenant @@unique([id, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@unique([kind, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@index([code]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingTenant @@index([kind, tenantId]) does not lead with tenantId',
+          'alpha.prisma: AlphaTrailingId @@id([kind, tenantId]) does not lead with tenantId',
           'alpha.prisma: AlphaChildNoTenant.parent relates two tenant-scoped models without tenantId in both fields and references',
           'alpha.prisma: AlphaChildMisaligned.parent pairs tenantId with another column (tenantId is at different positions in fields and references)',
           'alpha.prisma: AlphaScopedChild.parent relates a tenant-scoped model to the exempt model AlphaExemptParent; exempt and tenant-scoped models may not relate',
@@ -303,6 +330,10 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'modules/alpha/infrastructure/hides-model.ts:10: destructured property "platformProbe" names model PlatformProbe, which belongs to module "platform"',
           'modules/alpha/infrastructure/hides-model.ts:11: a computed key on a tx(...) result hides the model it names; name the model as a property',
           'modules/alpha/infrastructure/hides-model.ts:12: a computed key on a tx(...) result hides the model it names; name the model as a property',
+          // The audit models are reserved to platform/persistence/audit/ (the AuditWriter).
+          'modules/alpha/infrastructure/hides-model.ts:13: destructured property "auditLog" names model AuditLog, which is reserved to platform/persistence/audit/ (write it through AuditWriter)',
+          'modules/alpha/infrastructure/hides-model.ts:14: property ".auditLog" names model AuditLog, which is reserved to platform/persistence/audit/ (write it through AuditWriter)',
+          'platform/persistence/reaches-module.ts:10: property ".auditLog" names model AuditLog, which is reserved to platform/persistence/audit/ (write it through AuditWriter)',
           'modules/alpha/infrastructure/reaches-beta.ts:2: import of "BetaThing" names model BetaThing, which belongs to module "beta"',
           'modules/alpha/infrastructure/reaches-beta.ts:3: import "../../../generated/prisma/models/BetaThing" names model BetaThing, which belongs to module "beta"',
           'modules/alpha/infrastructure/reaches-beta.ts:3: import of "BetaThingModel" names model BetaThing, which belongs to module "beta"',
@@ -310,7 +341,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'modules/alpha/infrastructure/reaches-beta.ts:8: property ["betaThing"] names model BetaThing, which belongs to module "beta"',
           'modules/alpha/infrastructure/reaches-beta.ts:9: property ".betaThing" names model BetaThing, which belongs to module "beta"',
           'modules/beta/infrastructure/reaches-alpha.ts:5: property ".alphaParent" names model AlphaParent, which belongs to module "alpha"',
-          'platform/persistence/reaches-module.ts:8: property ".alphaParent" names model AlphaParent, which belongs to module "alpha"',
+          'platform/persistence/reaches-module.ts:9: property ".alphaParent" names model AlphaParent, which belongs to module "alpha"',
           'modules/alpha/infrastructure/raw-forms.ts:7: raw SQL outside the files of RAW_SQL_FILES',
           'modules/alpha/infrastructure/raw-forms.ts:8: raw SQL outside the files of RAW_SQL_FILES',
           'modules/alpha/infrastructure/raw-forms.ts:9: raw SQL outside the files of RAW_SQL_FILES',
@@ -321,7 +352,71 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
           'modules/alpha/infrastructure/raw-forms.ts:14: require/import() needs a string literal specifier (a computed one could load the database driver)',
           'modules/alpha/infrastructure/raw-forms.ts:18: import of the database driver "postgres" outside the files of DRIVER_FILES',
           'modules/alpha/infrastructure/raw-forms.ts:19: import of the database driver "@prisma/adapter-pg" outside the files of DRIVER_FILES',
-          'platform/persistence/reaches-module.ts:9: raw SQL outside the files of RAW_SQL_FILES',
+          'platform/persistence/reaches-module.ts:11: raw SQL outside the files of RAW_SQL_FILES',
+          // Every outbox has the same fields; outbox and inbox models are reserved to
+          // platform/persistence/outbox/, which reaches nothing else of a module.
+          'beta.prisma: BetaOutbox is an outbox whose fields differ from AlphaOutbox',
+          'modules/alpha/infrastructure/writes-own-outbox.ts:6: property ".alphaOutbox" names model AlphaOutbox, which is reserved to platform/persistence/outbox/ (write it through OutboxWriter)',
+          'platform/persistence/outbox/reaches-module.ts:7: property ".betaThing" names model BetaThing, which belongs to module "beta"',
+        ].sort(),
+      );
+    });
+  });
+
+  describe('module bindings (scripts/check-module-bindings.mjs, security review S5-1)', () => {
+    /** Runs the real script, as `pnpm boundaries` does; answers its exit code and problems. */
+    function checkBindings(srcDir: string): { status: number; problems: string[] } {
+      try {
+        execFileSync(
+          process.execPath,
+          [path.join(REPO_ROOT, 'scripts/check-module-bindings.mjs'), '--src', srcDir],
+          { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        return { status: 0, problems: [] };
+      } catch (error) {
+        const { status, stderr } = error as { status: number; stderr: string };
+        const problems = stderr
+          .split('\n')
+          .filter((line) => line.startsWith('  - '))
+          .map((line) => line.slice(4));
+        return { status, problems };
+      }
+    }
+
+    it('accepts the real sources', () => {
+      expect(checkBindings(path.join(API_ROOT, 'src'))).toEqual({ status: 0, problems: [] });
+    });
+
+    it('rejects every binding that does not name its own module, and nothing else', () => {
+      const { status, problems } = checkBindings(path.join(FIXTURES, 'bindings/src'));
+      const own = "a module binds only its own name ('content')";
+      const platform = "the platform binds only 'platform' or 'platform.<component>'";
+      const literal = 'needs a string literal module name as its first argument';
+      const computed = 'with a key that is not a string literal; call the binding by its name';
+
+      expect(status).toBe(1);
+      expect(problems.sort()).toEqual(
+        [
+          'app.module.ts:6: registerPermissions(...) outside a module and outside platform/; a module binds itself',
+          `modules/content/computed-keys.ts:11: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:12: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:13: PersistenceModule[...] ${computed}`,
+          `modules/content/computed-keys.ts:14: stubs[...] ${computed}`,
+          'modules/content/computed-keys.ts:16: PersistenceModule destructured with a computed key; call the binding by its name',
+          'modules/content/content.module.ts:7: registerPermissions is imported or exported under another name',
+          `modules/content/content.module.ts:25: auditWriterFor('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:26: outboxWriterFor('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:27: registerSubscriptionsFrom('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:28: registerAuditActions('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:29: registerJobsFrom('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:30: auditWriterFor('platform.authz') in module "content"; ${own}`,
+          `modules/content/content.module.ts:31: outboxWriterFor(...) ${literal}`,
+          `modules/content/content.module.ts:32: registerAuditActions(...) ${literal}`,
+          `modules/content/content.module.ts:33: auditWriterFor('identity') in module "content"; ${own}`,
+          'modules/content/content.module.ts:37: auditWriterFor is used without being called; call it directly',
+          'modules/content/content.module.ts:38: outboxWriterFor is used without being called; call it directly',
+          `platform/audit/audit.module.ts:13: auditWriterFor('identity') in platform/; ${platform}`,
+          `platform/audit/audit.module.ts:14: registerPermissions('content') in platform/; ${platform}`,
         ].sort(),
       );
     });
@@ -361,7 +456,7 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
         compoundSelectors: [
           { name: 'tenantId_id', fields: ['tenantId', 'id'] },
           { name: 'byCode', fields: ['tenantId', 'code'] },
-          { name: 'kind_tenantId', fields: ['kind', 'tenantId'] },
+          { name: 'tenantId_kind', fields: ['tenantId', 'kind'] },
         ],
         foreignKeys: [],
       });
@@ -387,6 +482,17 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       });
       expect(map.models.AlphaLookup).toMatchObject({ scope: 'exempt' });
       expect(map.models.PlatformProbe).toMatchObject({ module: 'platform', scope: 'scoped' });
+    });
+
+    it("names each module's outbox and inbox model, by table", () => {
+      const { output } = generate(path.join(FIXTURES, 'prisma/passing/schema'));
+      const map = JSON.parse(output) as { modules: Record<string, unknown> };
+
+      expect(map.modules).toEqual({
+        alpha: { schema: 'alpha', outboxModel: 'AlphaOutbox', inboxModel: null },
+        beta: { schema: 'beta', outboxModel: 'BetaOutbox', inboxModel: 'BetaInbox' },
+        platform: { schema: 'platform', outboxModel: null, inboxModel: null },
+      });
     });
 
     it('fails on a model with neither scope marker or with both', () => {
@@ -515,6 +621,23 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
     const rulesIn = (file: string): string[] => messagesIn(file).map(label).sort();
     const textsIn = (file: string): string[] => messagesIn(file).map((m) => m.message);
 
+    it('has a fixture that breaks every design rule named in eslint.config.mjs', () => {
+      // Every restricted-syntax, -imports or -properties message carries its rule name
+      // ("<design-rule>: ..."); a rule added without a fixture that fires it fails here (QA
+      // review 2.6).
+      const config = readFileSync(path.join(REPO_ROOT, 'eslint.config.mjs'), 'utf8');
+      const declared = [
+        ...new Set([...config.matchAll(/[`'"]([a-z]+(?:-[a-z]+)+): /g)].map((m) => m[1]!)),
+      ].sort();
+      const messages = [...results.values()].flat().map((message) => message.message);
+      const fired = new Set(
+        declared.filter((rule) => messages.some((text) => text.includes(`${rule}: `))),
+      );
+
+      expect(declared.length).toBeGreaterThanOrEqual(8);
+      expect(declared.filter((rule) => !fired.has(rule))).toEqual([]);
+    });
+
     it('reports every message of every fixture as an error', () => {
       const notErrors = [...results].flatMap(([file, messages]) =>
         messages.filter((message) => message.severity !== 2).map(() => file),
@@ -615,6 +738,28 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ],
       ['src/modules/identity/application/access/session-authenticator.ts', []],
       ['src/platform/mints-authenticated-actor.ts', []],
+      // use-case-entry-is-the-gate (ADR-0004 decision 4): no execute override in use-cases/;
+      // no `handle` reached on another object, by destructuring or by reflection in any file
+      // of a module.
+      [
+        'src/modules/alpha/application/use-cases/overrides-execute.ts',
+        syntax('use-case-entry-is-the-gate', 3),
+      ],
+      [
+        'src/modules/alpha/application/use-cases/calls-handle.ts',
+        syntax('use-case-entry-is-the-gate', 4),
+      ],
+      ['src/modules/alpha/presentation/calls-handle.ts', syntax('use-case-entry-is-the-gate')],
+      ['src/modules/alpha/application/use-cases/allowed-use-case.ts', []],
+      [
+        'src/modules/alpha/application/calls-handler-object.ts',
+        syntax('use-case-entry-is-the-gate'),
+      ],
+      [
+        'src/modules/alpha/infrastructure/calls-handle.facade.ts',
+        syntax('use-case-entry-is-the-gate'),
+      ],
+      ['src/modules/alpha/application/reflects-handle.ts', syntax('use-case-entry-is-the-gate', 7)],
       // Only the guard attaches a TenantContext, in every part of the API.
       [
         'src/platform/attaches-tenant-context.ts',
@@ -647,6 +792,18 @@ describe('architecture boundaries (ADR-01, ADR-02)', () => {
       ['src/modules/alpha/application/clean.ts', []],
     ])('%s reports exactly %j', (file, expected) => {
       expect(rulesIn(file)).toEqual([...expected].sort());
+    });
+
+    it('names each use-case-entry-is-the-gate message', () => {
+      expect(textsIn('src/modules/alpha/application/use-cases/overrides-execute.ts')).toEqual(
+        Array(3).fill('use-case-entry-is-the-gate: a use case never overrides execute.'),
+      );
+      expect(textsIn('src/modules/alpha/application/use-cases/calls-handle.ts')).toEqual(
+        Array(4).fill('use-case-entry-is-the-gate: handle is called only by UseCase.execute.'),
+      );
+      expect(textsIn('src/modules/alpha/application/reflects-handle.ts')).toEqual(
+        Array(7).fill(expect.stringMatching(/^use-case-entry-is-the-gate: /)),
+      );
     });
 
     it('names each wall-clock read', () => {

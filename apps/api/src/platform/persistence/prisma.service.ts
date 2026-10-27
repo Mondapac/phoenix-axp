@@ -16,7 +16,7 @@ export type { TenantTransaction } from './guarded-client';
  * `tx(tenant)` returns the open unit's model delegates. It throws `NoUnitOfWorkError` when no
  * unit is open (or the unit has ended) and `TenantMismatchError` when `tenant` is not the
  * unit's tenant. Every query it serves still passes the tenant guard (P 4) and, in the
- * database, the row-level security policies (ADR-02).
+ * database, the row-level security policies (ADR-0002).
  */
 @Injectable()
 export class PrismaService {

@@ -1,5 +1,5 @@
 // Violations: a model of another module hidden from the property check by destructuring or
-// by a computed key on a tx(...) result.
+// by a computed key on a tx(...) result, and the audit model named by a module.
 type View = Record<string, { findMany(args: unknown): Promise<unknown> }>;
 declare const prisma: { tx(tenant: unknown): View };
 declare const tenant: unknown;
@@ -10,5 +10,7 @@ export async function hide(): Promise<void> {
   const { ['betaThing']: quoted, platformProbe: probe } = prisma.tx(tenant);
   const { [key]: computed } = prisma.tx(tenant);
   await prisma.tx(tenant)[key]!.findMany({});
-  void [betaThing, quoted, probe, computed];
+  const { auditLog } = prisma.tx(tenant);
+  await prisma.tx(tenant).auditLog.findMany({});
+  void [betaThing, quoted, probe, computed, auditLog];
 }

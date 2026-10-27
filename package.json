@@ -14,7 +14,7 @@
     "dev:worker": "node scripts/dev-worker.mjs",
     "build": "pnpm db:generate && pnpm -r build && node scripts/check-built-kernel.mjs",
     "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
-    "lint": "eslint . && prettier --check .",
+    "lint": "eslint . && prettier --check . && node scripts/check-adr-references.mjs",
     "format": "prettier --write .",
     "test": "pnpm -r test",
     "test:db": "pnpm --filter @phoenix/api test:db",
@@ -26,7 +26,7 @@
     "db:bootstrap": "docker compose exec -T postgres psql -U postgres -d phoenix -f /docker-entrypoint-initdb.d/10-bootstrap-dev.sql",
     "licences": "node scripts/check-licences.mjs",
     "verify": "pnpm db:generate && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm licences && pnpm test && pnpm test:db && pnpm test:storage && pnpm db:check-reversible",
-    "boundaries": "pnpm --filter @phoenix/api boundaries && node scripts/check-prisma-boundaries.mjs"
+    "boundaries": "pnpm --filter @phoenix/api boundaries && node scripts/check-prisma-boundaries.mjs && node scripts/check-module-bindings.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

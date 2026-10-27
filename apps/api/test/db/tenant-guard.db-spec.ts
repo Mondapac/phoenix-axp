@@ -1,8 +1,10 @@
 import { ok } from '@phoenix/shared-kernel';
+import { AUDIT_PROPERTIES } from '../../src/platform/persistence/guarded-client';
 import { TenantGuardError } from '../../src/platform/unit-of-work/errors';
 import { TEST_TENANTS } from '../support/test-config';
 import {
   createPersistence,
+  modelMap,
   otherTenantOf,
   probeRow,
   tenantOf,
@@ -76,7 +78,18 @@ describe('tenant guard (database integration)', () => {
         return Promise.resolve(Object.keys(view));
       });
 
-      expect(keys).toEqual({ ok: true, value: ['isolationProbe'] });
+      // One delegate per model of the map but the audit tables (only `auditTx` hands those
+      // out), and nothing else ($queryRaw, $transaction, ...).
+      expect(keys.ok).toBe(true);
+      const names = keys.ok ? [...keys.value].sort() : [];
+      const audit: readonly string[] = AUDIT_PROPERTIES;
+      expect(names).toEqual(
+        Object.values(modelMap.models)
+          .map((model) => model.clientProperty)
+          .filter((property) => !audit.includes(property))
+          .sort(),
+      );
+      expect(names.some((name) => audit.includes(name))).toBe(false);
     });
 
     it("never sees the other tenant's rows, even by id", async () => {

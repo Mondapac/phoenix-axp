@@ -27,3 +27,14 @@ enum BetaKind {
 
   @@schema("alpha")
 }
+
+/// Violation: an outbox whose fields differ from alpha's (no payload, an extra column).
+model BetaOutbox {
+  eventId  String @id @map("event_id") @db.Uuid
+  tenantId String @map("tenant_id")
+  type     String
+  note     String
+
+  @@map("outbox")
+  @@schema("beta")
+}
