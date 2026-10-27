@@ -1,7 +1,7 @@
 // The tenancy module (schema "tenancy"; Phase 1 slice 1.4): the site tree and its closure
 // table, the organization tree and its closure table, the link of a site to an organization,
 // site domains and the tenant's editable settings (ADR-0002, ADR-0018). The tenant itself, its
-// locales, calendar and time zone stay in config/tenants/ and HOSTED_TENANTS (ADR-02). The
+// locales, calendar and time zone stay in config/tenants/ and HOSTED_TENANTS (ADR-0002). The
 // CHECKs, the grants and the row-level security policies are hand-written in the migration.
 // Shape copied from the PoC 1 spike (site.prisma), which measured subtree checks at about 3 ms
 // for a tenant of 500 sites.

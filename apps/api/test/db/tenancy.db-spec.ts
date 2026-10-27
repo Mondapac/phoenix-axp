@@ -40,7 +40,7 @@ import {
   tenantOf,
   type Persistence,
 } from './persistence-support';
-import { ownerTestDatabaseUrl } from './test-database';
+import { testDatabaseUrl } from './test-database';
 
 // Phase 1 slice 1.4: the tenancy use cases end to end against PostgreSQL, through the real
 // repositories, UnitOfWork, tenant guard and row-level security. The gate admits a staff actor
@@ -82,7 +82,19 @@ describe.each(TEST_TENANTS)('the tenancy module in tenant %s (database integrati
   const ids = new SequenceIdGenerator(clock);
   const audit = new RecordingAuditWriter();
   let persistence: Persistence;
-  let owner: Client;
+  /** The application login, reading rows of the tenant under row-level security. */
+  let reader: Client;
+  async function rowsOf<R extends object>(sql: string, params: unknown[]): Promise<R[]> {
+    await reader.query('BEGIN');
+    try {
+      await reader.query("SELECT pg_catalog.set_config('app.tenant_id', $1, true)", [
+        tenant.tenantId,
+      ]);
+      return (await reader.query<R>(sql, params)).rows;
+    } finally {
+      await reader.query('ROLLBACK');
+    }
+  }
 
   const staff = (of: TenantContext): CallContext =>
     testCallContext(
@@ -143,13 +155,13 @@ describe.each(TEST_TENANTS)('the tenancy module in tenant %s (database integrati
 
   beforeAll(async () => {
     persistence = createPersistence();
-    owner = new Client({ connectionString: ownerTestDatabaseUrl() });
-    await owner.connect();
+    reader = new Client({ connectionString: testDatabaseUrl() });
+    await reader.connect();
     useCases = build(persistence);
   });
 
   afterAll(async () => {
-    await owner.end();
+    await reader.end();
     await persistence.close();
   });
 
@@ -164,15 +176,15 @@ describe.each(TEST_TENANTS)('the tenancy module in tenant %s (database integrati
     return created.value.id;
   }
 
-  /** The closure rows the parent pointers imply, against the stored ones (seen by the owner). */
+  /** The closure rows the parent pointers imply, against the stored ones (read under the tenant's own policy). */
   async function closureMatchesParents(): Promise<void> {
-    const sites = await owner.query<{ id: string; parent_site_id: string | null; depth: number }>(
+    const sites = await rowsOf<{ id: string; parent_site_id: string | null; depth: number }>(
       'SELECT id, parent_site_id, depth FROM tenancy.site WHERE tenant_id = $1',
       [tenant.tenantId],
     );
-    const parent = new Map(sites.rows.map((row) => [row.id, row.parent_site_id]));
+    const parent = new Map(sites.map((row) => [row.id, row.parent_site_id]));
     const expected: string[] = [];
-    for (const row of sites.rows) {
+    for (const row of sites) {
       let ancestor: string | null = row.id;
       let distance = 0;
       while (ancestor !== null) {
@@ -182,11 +194,11 @@ describe.each(TEST_TENANTS)('the tenancy module in tenant %s (database integrati
       }
       expect(row.depth).toBe(distance - 1);
     }
-    const stored = await owner.query<{ ancestor_id: string; descendant_id: string; depth: number }>(
+    const stored = await rowsOf<{ ancestor_id: string; descendant_id: string; depth: number }>(
       'SELECT ancestor_id, descendant_id, depth FROM tenancy.site_ancestry WHERE tenant_id = $1',
       [tenant.tenantId],
     );
-    expect(stored.rows.map((r) => `${r.ancestor_id}>${r.descendant_id}:${r.depth}`).sort()).toEqual(
+    expect(stored.map((r) => `${r.ancestor_id}>${r.descendant_id}:${r.depth}`).sort()).toEqual(
       expected.sort(),
     );
   }
@@ -439,11 +451,11 @@ describe.each(TEST_TENANTS)('the tenancy module in tenant %s (database integrati
       expect(byId.get(deputy)).toMatchObject({ parentId: elsewhere, depth: 1 });
       expect(byId.get(office)).toMatchObject({ name: 'اداره کل', depth: 2, version: 2 });
 
-      const rows = await owner.query<{ ancestor_id: string; depth: number }>(
+      const rows = await rowsOf<{ ancestor_id: string; depth: number }>(
         'SELECT ancestor_id, depth FROM tenancy.organization_ancestry WHERE tenant_id = $1 AND descendant_id = $2 ORDER BY depth',
         [tenant.tenantId, office],
       );
-      expect(rows.rows).toEqual([
+      expect(rows).toEqual([
         { ancestor_id: office, depth: 0 },
         { ancestor_id: deputy, depth: 1 },
         { ancestor_id: elsewhere, depth: 2 },

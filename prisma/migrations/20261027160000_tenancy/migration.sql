@@ -182,38 +182,45 @@ GRANT SELECT, INSERT, UPDATE ("parent_id", "name", "depth", "version", "updated_
 GRANT SELECT, INSERT, DELETE ON TABLE "tenancy"."organization_ancestry" TO "phoenix_app";
 GRANT SELECT, INSERT, UPDATE ("sign_in_sources", "max_site_depth", "structure_version", "version", "updated_at") ON TABLE "tenancy"."tenant_settings" TO "phoenix_app";
 
--- Row-level security (ADR-02), the reference policy of platform.isolation_probe on every table.
+-- Row-level security (ADR-0002), enabled and forced (the owner too, security review S2-1),
+-- with the reference policy of platform.isolation_probe on every table.
 ALTER TABLE "tenancy"."site" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tenancy"."site" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "site_tenant_isolation" ON "tenancy"."site"
   AS PERMISSIVE FOR ALL TO "phoenix_app"
   USING ("tenant_id" = "platform"."current_tenant_id"())
   WITH CHECK ("tenant_id" = "platform"."current_tenant_id"());
 
 ALTER TABLE "tenancy"."site_ancestry" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tenancy"."site_ancestry" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "site_ancestry_tenant_isolation" ON "tenancy"."site_ancestry"
   AS PERMISSIVE FOR ALL TO "phoenix_app"
   USING ("tenant_id" = "platform"."current_tenant_id"())
   WITH CHECK ("tenant_id" = "platform"."current_tenant_id"());
 
 ALTER TABLE "tenancy"."site_domain" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tenancy"."site_domain" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "site_domain_tenant_isolation" ON "tenancy"."site_domain"
   AS PERMISSIVE FOR ALL TO "phoenix_app"
   USING ("tenant_id" = "platform"."current_tenant_id"())
   WITH CHECK ("tenant_id" = "platform"."current_tenant_id"());
 
 ALTER TABLE "tenancy"."organization" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tenancy"."organization" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "organization_tenant_isolation" ON "tenancy"."organization"
   AS PERMISSIVE FOR ALL TO "phoenix_app"
   USING ("tenant_id" = "platform"."current_tenant_id"())
   WITH CHECK ("tenant_id" = "platform"."current_tenant_id"());
 
 ALTER TABLE "tenancy"."organization_ancestry" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tenancy"."organization_ancestry" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "organization_ancestry_tenant_isolation" ON "tenancy"."organization_ancestry"
   AS PERMISSIVE FOR ALL TO "phoenix_app"
   USING ("tenant_id" = "platform"."current_tenant_id"())
   WITH CHECK ("tenant_id" = "platform"."current_tenant_id"());
 
 ALTER TABLE "tenancy"."tenant_settings" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tenancy"."tenant_settings" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "tenant_settings_tenant_isolation" ON "tenancy"."tenant_settings"
   AS PERMISSIVE FOR ALL TO "phoenix_app"
   USING ("tenant_id" = "platform"."current_tenant_id"())

@@ -19,7 +19,7 @@ export interface TenantSettingsView extends TenantSettings {
 
 /**
  * Locale, calendar, time zone and direction come from the tenant's configuration file
- * (ADR-02, ADR-0008) and change with a deployment; sign-in sources and the site ceiling are
+ * (ADR-0002, ADR-0008) and change with a deployment; sign-in sources and the site ceiling are
  * the tenant's own and change through {@link UpdateTenantSettings}.
  */
 export class ViewTenantSettings extends UseCase<void, TenantSettingsView> {
