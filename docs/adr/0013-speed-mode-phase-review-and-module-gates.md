@@ -24,6 +24,10 @@ see and decide every phase before it is built.
    search, media, commerce — one combined gate; tier C — reporting and P2+ features without
    effect on permissions, personal data or processes — product-owner approval. Register:
    `docs/modules/README.md`.
+   *(Amended by the Phase 2 review, owner decision D2 of 2026-10-27: for forms, process and
+   objects, G1 is the decisions of `docs/phases/phase-2-review.md` and G2 runs in each slice PR
+   with software-architect, database-designer and security-tester review; no separate module
+   brief.)*
 3. **Speed mode** is active from day one with the nine rules of `docs/process/speed-mode.md`,
    until the owner lifts it. It never removes tests, the Definition of Done, the security review
    of sensitive paths, or an independent penetration test before real data.
