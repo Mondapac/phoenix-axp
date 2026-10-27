@@ -1,9 +1,14 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { parseId, Temporal } from '@phoenix/shared-kernel';
 import type { CallContext } from '@phoenix/shared-kernel';
+import type { InboxCursor } from '../application/use-cases/list-form-submissions.use-case';
 import { z } from 'zod';
 import { Call } from '../../../platform/call-context/call-context.decorator';
 import { CreateForm } from '../application/use-cases/create-form.use-case';
+import { EraseFormSubmission } from '../application/use-cases/erase-form-submission.use-case';
+import { ListFormSubmissions } from '../application/use-cases/list-form-submissions.use-case';
+import { ViewFormSubmission } from '../application/use-cases/view-form-submission.use-case';
 import { ListForms } from '../application/use-cases/list-forms.use-case';
 import { PublishForm } from '../application/use-cases/publish-form.use-case';
 import { RetireForm } from '../application/use-cases/retire-form.use-case';
@@ -12,6 +17,7 @@ import { UpdateFormSettings } from '../application/use-cases/update-form-setting
 import { UpdateForm } from '../application/use-cases/update-form.use-case';
 import { ViewFormRevision } from '../application/use-cases/view-form-revision.use-case';
 import { ViewForm } from '../application/use-cases/view-form.use-case';
+import { PORTAL_MODES } from '../domain/form-fields';
 import { FORM_STATUSES } from '../domain/lifecycle';
 import { answer, idField, idParam, parseRequest } from './http';
 
@@ -44,7 +50,24 @@ const updateBody = z.strictObject({
 });
 const settingsBody = z.strictObject({ version: z.number().int().min(1), ...settings });
 // The documents are checked by the use case, which answers with the problem and its place.
-const revisionBody = z.strictObject({ jsonSchema: z.unknown(), uiSchema: z.unknown() });
+const fieldSetting = z.strictObject({
+  id: idField<'Field'>().optional(),
+  sensitive: z.boolean().optional(),
+  portal: z.enum(PORTAL_MODES).optional(),
+});
+const revisionBody = z.strictObject({
+  jsonSchema: z.unknown(),
+  uiSchema: z.unknown(),
+  fields: z.record(z.string().max(256), fieldSetting).optional(),
+});
+const inboxQuery = z.strictObject({
+  after: z
+    .string()
+    .regex(/^\d{1,16}\.[0-9a-f-]{36}$/)
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+const eraseBody = z.strictObject({ version: z.number().int().min(1) });
 const publishBody = z.strictObject({
   version: z.number().int().min(1),
   revisionId: idField<'FormRevision'>(),
@@ -65,6 +88,9 @@ export class FormsController {
     private readonly viewFormRevision: ViewFormRevision,
     private readonly publishForm: PublishForm,
     private readonly retireForm: RetireForm,
+    private readonly listFormSubmissions: ListFormSubmissions,
+    private readonly viewFormSubmission: ViewFormSubmission,
+    private readonly eraseFormSubmission: EraseFormSubmission,
   ) {}
 
   @Get('forms')
@@ -164,4 +190,62 @@ export class FormsController {
       await this.retireForm.execute(context, { formId: id, ...parseRequest(retireBody, body) }),
     );
   }
+
+  /**
+   * The form inbox, newest first. `after` is the `next` cursor of the previous page
+   * (`<epoch ms>.<submission id>`).
+   */
+  @Get('forms/:formId/submissions')
+  async listSubmissions(
+    @Call() context: CallContext,
+    @Param('formId') formId: string,
+    @Query() query: unknown,
+  ) {
+    const id = idParam<'Form'>(formId, FORM_NOT_FOUND);
+    const { after, limit } = parseRequest(inboxQuery, query);
+    const page = answer(
+      await this.listFormSubmissions.execute(context, {
+        formId: id,
+        after: after === undefined ? null : cursorOf(after),
+        limit: limit ?? 50,
+      }),
+    );
+    return {
+      ...page,
+      next:
+        page.next === null ? null : `${page.next.submittedAt.epochMilliseconds}.${page.next.id}`,
+    };
+  }
+
+  @Get('submissions/:submissionId')
+  async viewSubmission(@Call() context: CallContext, @Param('submissionId') submissionId: string) {
+    const id = idParam<'FormSubmission'>(submissionId, 'forms.submission.not-found');
+    return answer(await this.viewFormSubmission.execute(context, { submissionId: id }));
+  }
+
+  /** Erases the personal data of a submission on request (owner decision D5). */
+  @Post('submissions/:submissionId/erase')
+  @HttpCode(204)
+  async eraseSubmission(
+    @Call() context: CallContext,
+    @Param('submissionId') submissionId: string,
+    @Body() body: unknown,
+  ): Promise<void> {
+    const id = idParam<'FormSubmission'>(submissionId, 'forms.submission.not-found');
+    answer(
+      await this.eraseFormSubmission.execute(context, {
+        submissionId: id,
+        ...parseRequest(eraseBody, body),
+      }),
+    );
+  }
+}
+
+/** The inbox cursor `<epoch ms>.<id>`; a malformed one is a 400. */
+function cursorOf(text: string): InboxCursor {
+  const [millis, id] = text.split('.');
+  const parsed = parseId<'FormSubmission'>(id ?? '');
+  // At most 15 digits: inside Temporal's range, so a crafted cursor is a 400, never a 500.
+  if (!parsed.ok || !/^\d{1,15}$/.test(millis ?? '')) return parseRequest(z.never(), text);
+  return { submittedAt: Temporal.Instant.fromEpochMilliseconds(Number(millis)), id: parsed.value };
 }

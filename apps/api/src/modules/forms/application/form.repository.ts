@@ -1,4 +1,5 @@
 import type { ContentHash, Id, Temporal, TenantContext } from '@phoenix/shared-kernel';
+import type { FormField } from '../domain/form-fields';
 import type { Retention, SubmissionPolicy } from '../domain/form-settings';
 import type { JsonObject } from '../domain/form-schema';
 import type { FormStatus } from '../domain/lifecycle';
@@ -31,6 +32,15 @@ export interface FormRevisionSummary {
 export interface FormRevisionRecord extends FormRevisionSummary {
   readonly jsonSchema: JsonObject;
   readonly uiSchema: JsonObject;
+  /** Null for a revision saved before field ids existed (slice 2.4). */
+  readonly fields: readonly FormField[] | null;
+}
+
+/** A revision's fields only, for reading answers stored under it. */
+export interface RevisionFields {
+  readonly id: Id<'FormRevision'>;
+  readonly number: number;
+  readonly fields: readonly FormField[] | null;
 }
 
 export interface FormFilter {
@@ -54,6 +64,7 @@ export interface FormChanges {
  */
 export interface FormRepository {
   find(tenant: TenantContext, id: Id<'Form'>): Promise<FormRecord | null>;
+  findByKey(tenant: TenantContext, key: string): Promise<FormRecord | null>;
   /** The tenant's forms, by name then id. */
   list(tenant: TenantContext, filter: FormFilter): Promise<FormRecord[]>;
   /** `key-taken` when the key is in use in the tenant. */
@@ -71,15 +82,28 @@ export interface FormRepository {
     at: Temporal.Instant,
   ): Promise<void>;
   /**
-   * Takes the form's next revision number (a row lock on the form until the unit ends, so
-   * numbers never repeat or skip) and inserts the revision under it; null when the form does
-   * not exist. Does not change the form's version.
+   * Takes the form's next revision number: a row lock on the form until the unit ends, so
+   * numbers never repeat or skip and concurrent saves of one form run one after the other.
+   * Null when the form does not exist. Does not change the form's version.
    */
-  appendRevision(
+  takeRevisionNumber(tenant: TenantContext, formId: Id<'Form'>): Promise<number | null>;
+  /** The fields of the form's revision `number`; null when it has none or does not exist. */
+  revisionFields(
     tenant: TenantContext,
-    revision: Omit<FormRevisionRecord, 'number'>,
-  ): Promise<{ readonly number: number } | null>;
+    formId: Id<'Form'>,
+    number: number,
+  ): Promise<readonly FormField[] | null>;
+  /** Inserts a revision under a number taken by {@link takeRevisionNumber} in this unit. */
+  insertRevision(
+    tenant: TenantContext,
+    revision: FormRevisionRecord & { readonly fields: readonly FormField[] },
+  ): Promise<void>;
   findRevision(tenant: TenantContext, id: Id<'FormRevision'>): Promise<FormRevisionRecord | null>;
+  /** The fields of the revisions asked, by id; an unknown id is absent. */
+  fieldsOfRevisions(
+    tenant: TenantContext,
+    ids: readonly Id<'FormRevision'>[],
+  ): Promise<ReadonlyMap<string, RevisionFields>>;
   /** Newest first. */
   listRevisions(tenant: TenantContext, formId: Id<'Form'>): Promise<FormRevisionSummary[]>;
 }

@@ -3,9 +3,10 @@ import request from 'supertest';
 import { createTestApp } from './support/test-app';
 import { TEST_TENANTS } from './support/test-config';
 
-// The HTTP edge of the forms module (slice 2.4), without a database: every request here is
-// anonymous, so each studio route is refused by the gate before any unit of work opens, and
-// a malformed request before the gate. The database behaviour is in test/db/forms.db-spec.ts.
+// The HTTP edge of the forms module (slices 2.4 and 2.5), without a database: every request
+// here is anonymous, so each studio route is refused by the gate before any unit of work opens,
+// and a malformed request before the gate. The database behaviour is in test/db/forms.db-spec.ts
+// and test/db/forms-submissions.db-spec.ts.
 
 const unauthenticated = { statusCode: 401, code: 'access.unauthenticated' };
 
@@ -40,6 +41,9 @@ describe('the forms studio API (HTTP)', () => {
       ['get', `/forms/revisions/${ID}`, undefined],
       ['post', `/forms/forms/${ID}/publish`, { version: 1, revisionId: ID }],
       ['post', `/forms/forms/${ID}/retire`, { version: 1 }],
+      ['get', `/forms/forms/${ID}/submissions`, undefined],
+      ['get', `/forms/submissions/${ID}`, undefined],
+      ['post', `/forms/submissions/${ID}/erase`, { version: 1 }],
     ] as const)('refuses an anonymous %s %s with 401', async (method, path, body) => {
       const response = await call(method, path).send(body);
       expect(response.status).toBe(401);
@@ -63,6 +67,28 @@ describe('the forms studio API (HTTP)', () => {
       expect(extra.body).toMatchObject({ code: 'request.invalid' });
       const status = await call('get', '/forms/forms?status=archived');
       expect(status.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'status' });
+    });
+
+    it('refuses a malformed public submission or tracking request before any use case', async () => {
+      const extra = await call('post', '/public/forms/visit/submissions').send({
+        answers: {},
+        submittedBy: 'someone',
+      });
+      expect(extra.status).toBe(400);
+      expect(extra.body).toMatchObject({ code: 'request.invalid' });
+      const captcha = await call('post', '/public/forms/visit/submissions').send({
+        answers: {},
+        captcha: 'x'.repeat(2049),
+      });
+      expect(captcha.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'captcha' });
+      const tracking = await call('post', '/public/forms/tracking').send({ trackingCode: 1234 });
+      expect(tracking.body).toEqual({
+        statusCode: 400,
+        code: 'request.invalid',
+        field: 'trackingCode',
+      });
+      const inbox = await call('get', `/forms/forms/${ID}/submissions?limit=0`);
+      expect(inbox.status).toBe(400);
     });
 
     it('answers 404 for a path id that is not an id', async () => {

@@ -27,6 +27,11 @@ export const TEST_TENANT_IDS: readonly TenantId[] = TEST_TENANTS.map(testTenantI
  * Application config for tests: both tenants hosted, the `api` role, logging quiet unless
  * overridden (`testAppConfig({ APP_ROLE: 'worker' })` for the worker role).
  */
+/** A test-only key-encryption key of the subject keys (32 bytes, base64url). */
+export const TEST_SUBJECT_KEY_KEK = Buffer.from('test-only-subject-key-kek-32byte').toString(
+  'base64url',
+);
+
 export function testAppConfig(overrides: Record<string, string> = {}): AppConfig {
   return {
     ...loadAppConfig({
@@ -35,6 +40,7 @@ export function testAppConfig(overrides: Record<string, string> = {}): AppConfig
       HOSTED_TENANTS: TEST_TENANTS.join(','),
       // Never connected to unless a suite overrides it with a real database.
       DATABASE_URL: 'postgresql://unused:unused@127.0.0.1:1/unused',
+      SUBJECT_KEY_KEK: TEST_SUBJECT_KEY_KEK,
       ...overrides,
     }),
     tenantConfigDirs: TEST_TENANT_CONFIG_DIRS,

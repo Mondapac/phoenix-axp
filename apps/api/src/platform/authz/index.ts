@@ -7,6 +7,12 @@
 // policy with its port (identity implements it) and the definition qualifier (ADR-0024). The gate's
 // factory, the declaration checks and the placeholders stay inside `platform/`.
 export { ACCESS_DENIED_STATUS, type AccessDenied } from './access-denied';
+export {
+  ACTOR_GRANT_READER,
+  grantsCoverSite,
+  type ActorGrant,
+  type ActorGrantReader,
+} from './actor-grants';
 export type { AccessDeclaration, AccessRule, PermissionKey } from './access-rule';
 export {
   AUTHENTICATOR,

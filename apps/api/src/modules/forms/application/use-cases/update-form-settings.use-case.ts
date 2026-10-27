@@ -7,6 +7,7 @@ import { FORMS_FORMS_PUBLISH } from '../../contracts/permissions';
 import { FORM_UPDATED } from '../../domain/audit-actions';
 import { FORM_NOT_FOUND, type FormNotFound, type InvalidValue } from '../failures';
 import { parseSettings, settingsAudit, type FormSettingsInput } from '../form-settings-input';
+import type { FormReach } from '../form-reach';
 import type { FormRepository } from '../form.repository';
 
 export interface UpdateFormSettingsInput extends FormSettingsInput {
@@ -37,18 +38,22 @@ export class UpdateFormSettings extends UseCase<
     gate: UseCaseGate,
     private readonly unitOfWork: UnitOfWork,
     private readonly forms: FormRepository,
+    private readonly reach: FormReach,
     private readonly audit: AuditWriter,
     private readonly clock: Clock,
   ) {
     super(gate);
   }
 
-  protected handle(
+  protected async handle(
     context: CallContext,
     input: UpdateFormSettingsInput,
   ): Promise<Result<void, UpdateFormSettingsFailure>> {
     const settings = parseSettings(input);
-    if (!settings.ok) return Promise.resolve(settings);
+    if (!settings.ok) return settings;
+    if ((await this.reach.form(context, FORMS_FORMS_PUBLISH.key, input.formId)) === null) {
+      return err(FORM_NOT_FOUND);
+    }
     const { policy, retention } = settings.value;
     const { tenant } = context;
 

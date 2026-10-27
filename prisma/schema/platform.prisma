@@ -156,3 +156,61 @@ model AuditChainCheckpoint {
   @@map("audit_chain_checkpoint")
   @@schema("platform")
 }
+
+/// The data key of one subject of personal data (ADR-0003, ADR-0007: "personal data is
+/// encrypted under per-subject keys; erasure = destroy the key"). The key is random, wrapped
+/// with AES-256-GCM under the deployment's key-encryption key (SUBJECT_KEY_KEK), with the
+/// tenant and the subject as associated data; the plain key never reaches the database.
+/// Destroying sets `wrapped_key` to null for good: what was encrypted under it is unreadable.
+/// Written by platform/subject-keys only. Versioning (ADR-0007): none; a key is inserted once
+/// and only ever destroyed, which a trigger makes final. The CHECKs, grants and row-level
+/// security are hand-written in the migration.
+model SubjectKey {
+  tenantId    String    @map("tenant_id") @db.VarChar(32)
+  /// The subject: the record whose personal data the key protects (a form submission).
+  subjectId   String    @map("subject_id") @db.Uuid
+  /// The module that owns the subject (`forms`): a closed code, for operations and erasure.
+  module      String    @db.VarChar(32)
+  /// version byte | IV (12) | tag (16) | wrapped key (32); null once destroyed.
+  wrappedKey  Bytes?    @map("wrapped_key")
+  createdAt   DateTime  @map("created_at") @db.Timestamptz(3)
+  destroyedAt DateTime? @map("destroyed_at") @db.Timestamptz(3)
+
+  @@id([tenantId, subjectId], map: "subject_key_pkey")
+  @@map("subject_key")
+  @@schema("platform")
+}
+
+/// One fixed window of one rate-limit bucket (ADR-0010 `rate-limit`). The bucket is an HMAC of
+/// the rule's name and its subject (a client address, an account id), so no address is stored.
+/// Pruned by `platform.rate-limit-prune` once the window is a day old. Versioning (ADR-0007):
+/// none; a counter, not a record.
+model RateLimitWindow {
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  /// Hex HMAC-SHA-256 of `<rule>\n<subject>`.
+  bucket      String   @db.VarChar(64)
+  /// The start of the window, a multiple of the rule's window length since the epoch.
+  windowStart DateTime @map("window_start") @db.Timestamptz(3)
+  hits        Int
+
+  @@id([tenantId, bucket, windowStart], map: "rate_limit_window_pkey")
+  /// The prune job's scan.
+  @@index([tenantId, windowStart], map: "rate_limit_window_tenant_id_window_start_idx")
+  @@map("rate_limit_window")
+  @@schema("platform")
+}
+
+/// A solved proof-of-work challenge (platform/captcha), kept until it expires so a solution
+/// counts once. Pruned by `platform.captcha-prune`. Versioning (ADR-0007): none; inserted
+/// once and deleted when it expires.
+model CaptchaSpent {
+  tenantId      String   @map("tenant_id") @db.VarChar(32)
+  /// Hex SHA-256 of the challenge.
+  challengeHash String   @map("challenge_hash") @db.VarChar(64)
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@id([tenantId, challengeHash], map: "captcha_spent_pkey")
+  @@index([tenantId, expiresAt], map: "captcha_spent_tenant_id_expires_at_idx")
+  @@map("captcha_spent")
+  @@schema("platform")
+}

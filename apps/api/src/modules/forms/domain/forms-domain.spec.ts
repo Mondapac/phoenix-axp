@@ -220,6 +220,9 @@ describe('the audit actions of the forms module', () => {
         'forms.form-revision.saved',
         'forms.form.published',
         'forms.form.retired',
+        'forms.form-revision.sensitivity-lowered',
+        'forms.submission.received',
+        'forms.submission.erased',
       ],
     );
   });

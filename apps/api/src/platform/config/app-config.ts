@@ -69,6 +69,12 @@ const envSchema = z.object({
     .regex(/^[A-Za-z0-9_-]{43,}$/, 'must be at least 32 random bytes, base64url')
     .optional(),
   PANEL_ORIGINS: z.string().optional(),
+  // The key-encryption key of the per-subject keys (ADR-0003, ADR-0007): exactly 32 random
+  // bytes, base64url. Required in production; unset elsewhere, personal data cannot be stored.
+  SUBJECT_KEY_KEK: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{43}$/, 'must be exactly 32 random bytes, base64url without padding')
+    .optional(),
   STAFF_SESSION_HOURS: z.coerce.number().int().min(1).max(24).default(8),
   // Keycloak (ADR-0004 decision 1): the URL, the studio client's secret and its callback URL
   // together, or none.
@@ -161,6 +167,12 @@ export interface AppConfig {
    * answers `sign-in.unavailable`. Required in production.
    */
   readonly keycloak: KeycloakConfig | null;
+  /**
+   * The key-encryption key of platform/subject-keys (`SUBJECT_KEY_KEK`), or `null` when unset
+   * outside production: then every write of personal data is refused. A credential: never log
+   * it. Required in production.
+   */
+  readonly subjectKeyKek: Buffer | null;
   /**
    * The process engine (Flowable REST, ADR-0005), or `null` when `FLOWABLE_*` is unset: then
    * every engine call fails as unavailable and process commands wait. Required in production.
@@ -303,6 +315,8 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
             adminClientSecret: data.KEYCLOAK_ADMIN_CLIENT_SECRET ?? null,
           })
         : null,
+    subjectKeyKek:
+      data.SUBJECT_KEY_KEK === undefined ? null : Buffer.from(data.SUBJECT_KEY_KEK, 'base64url'),
     flowable:
       data.FLOWABLE_URL && data.FLOWABLE_USER && data.FLOWABLE_PASSWORD
         ? Object.freeze({
@@ -334,6 +348,11 @@ function sessionIssues(env: Record<string, string | undefined>, nodeEnv: string)
   const issues: string[] = [];
   if (production && !env.SESSION_SECRET) {
     issues.push('SESSION_SECRET: required in production (sessions, ADR-0004)');
+  }
+  if (production && !env.SUBJECT_KEY_KEK) {
+    issues.push('SUBJECT_KEY_KEK: required in production (personal data, ADR-0003)');
+  } else if (production && env.SUBJECT_KEY_KEK === DEVELOPMENT_SUBJECT_KEY_KEK) {
+    issues.push('SUBJECT_KEY_KEK: the local development key is refused in production');
   }
   for (const origin of originsOf(env.PANEL_ORIGINS)) {
     if (!ORIGIN.test(origin) || (production && !origin.startsWith('https://'))) {
@@ -384,6 +403,8 @@ function storageIssues(env: Record<string, string | undefined>, nodeEnv: string)
 
 /** The local development key of infra/seaweedfs/s3.json: never a production credential. */
 const DEVELOPMENT_SECRET = 'phoenix-dev-secret';
+/** The KEK of `.env.example`: public, so never a production key. */
+const DEVELOPMENT_SUBJECT_KEY_KEK = 'ZGV2LW9ubHktc3ViamVjdC1rZXkta2VrLTMyYnl0ZXM';
 
 /** Production serves signed URLs over https only, and never with the development key. */
 function productionStorageIssues(env: Record<string, string | undefined>): string[] {

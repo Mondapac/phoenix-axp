@@ -1,6 +1,7 @@
 // The forms module (schema "forms"; Phase 2 slice 2.4): form definitions and their immutable
-// revisions (ADR-0007 pattern V1). Submissions arrive with slice 2.5. The site is tenancy's: a
-// plain id, no foreign key across schemas. The CHECKs, the grants and the row-level security
+// revisions (ADR-0007 pattern V1), and their submissions (slice 2.5; V3: a submission keeps
+// the revision id and its hash). The site is tenancy's: a plain id, no foreign key across
+// schemas. The CHECKs, the grants and the row-level security
 // policies are hand-written in the migration.
 
 /// A form of a tenant, owned by one site (its form inbox). Pattern V1: the form points at the
@@ -33,6 +34,7 @@ model Form {
   createdAt           DateTime      @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime      @map("updated_at") @db.Timestamptz(3)
   revisions           FormRevision[] @relation("FormRevisions")
+  submissions         FormSubmission[]
   /// The published revision is one of the form's own: the key includes the form.
   publishedRevision   FormRevision? @relation("FormPublishedRevision", fields: [tenantId, id, publishedRevisionId], references: [tenantId, formId, id], onDelete: Restrict, onUpdate: Restrict, map: "form_published_revision_fkey")
 
@@ -58,13 +60,65 @@ model FormRevision {
   uiSchema    Json     @map("ui_schema") @db.JsonB
   /// `sha256:` over the canonical JSON of { jsonSchema, uiSchema }.
   contentHash String   @map("content_hash") @db.VarChar(80)
+  /// The fields: `[{ id, name, sensitive, portal? }]`, one per top-level property of the JSON
+  /// Schema. `id` is a UUIDv7 minted when the field first appears and kept across revisions
+  /// and renames (ADR-0024: field rules key on it). Null for a revision saved before slice 2.5,
+  /// which can be neither published nor submitted until it is saved again.
+  fields      Json?    @db.JsonB
   createdAt   DateTime @map("created_at") @db.Timestamptz(3)
   form        Form     @relation("FormRevisions", fields: [tenantId, formId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "form_revision_form_fkey")
   publishedBy Form[]   @relation("FormPublishedRevision")
+  submissions FormSubmission[]
 
   @@unique([tenantId, id], map: "form_revision_tenant_id_id_key")
   @@unique([tenantId, formId, number], map: "form_revision_tenant_id_form_id_number_key")
   @@unique([tenantId, formId, id], map: "form_revision_tenant_id_form_id_id_key")
   @@map("form_revision")
+  @@schema("forms")
+}
+
+/// One submission of a form (slice 2.5; ADR-0007 V3: the revision it was made under and that
+/// revision's content hash). The answers are personal data: encrypted under the submission's
+/// own subject key (platform.subject_key, subject = this id), keyed by field id, never in a
+/// log, an event or the audit log. Erasure (on request or when the form's retention ends)
+/// destroys the key and sets `erased_at`. The CHECKs, grants and row-level security are
+/// hand-written in the migration.
+model FormSubmission {
+  /// UUIDv7 from the IdGenerator; also the subject id of its key.
+  id               String         @id @db.Uuid
+  tenantId         String         @map("tenant_id") @db.VarChar(32)
+  formId           String         @map("form_id") @db.Uuid
+  revisionId       String         @map("revision_id") @db.Uuid
+  /// The revision's content hash at submission (V3).
+  revisionHash     String         @map("revision_hash") @db.VarChar(80)
+  /// The form's site at submission: whose form inbox holds it.
+  siteId           String         @map("site_id") @db.Uuid
+  /// Hex SHA-256 of the tracking code; the code itself is shown once, to the submitter.
+  trackingCodeHash String         @map("tracking_code_hash") @db.VarChar(64)
+  /// anonymous | portal-user | staff | on-behalf.
+  channel          String         @db.VarChar(16)
+  /// The signed-in submitter's account (the staff member for on-behalf); null when anonymous.
+  submittedBy      String?        @map("submitted_by") @db.Uuid
+  /// received (until the process link of slice 2.6 adds the next statuses).
+  status           String         @db.VarChar(16)
+  /// AES-256-GCM under the subject key: canonical JSON of the answers by field id.
+  data             Bytes
+  submittedAt      DateTime       @map("submitted_at") @db.Timestamptz(3)
+  /// When the retention of the form at submission ends; null keeps it (owner decision D5).
+  eraseAfter       DateTime?      @map("erase_after") @db.Timestamptz(3)
+  erasedAt         DateTime?      @map("erased_at") @db.Timestamptz(3)
+  version          Int
+  form             Form           @relation(fields: [tenantId, formId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "form_submission_form_fkey")
+  /// The revision is one of the form's own.
+  revision         FormRevision   @relation(fields: [tenantId, formId, revisionId], references: [tenantId, formId, id], onDelete: Restrict, onUpdate: Restrict, map: "form_submission_revision_fkey")
+
+  @@unique([tenantId, id], map: "form_submission_tenant_id_id_key")
+  @@unique([tenantId, trackingCodeHash], map: "form_submission_tenant_id_tracking_code_hash_key")
+  /// The form inbox: one form's submissions, newest first.
+  @@index([tenantId, formId, submittedAt, id], map: "form_submission_tenant_id_form_id_submitted_at_id_idx")
+  /// The retention job's scan.
+  /// The retention job's scan: only rows not yet erased, by due time.
+  @@index([tenantId, erasedAt, eraseAfter], map: "form_submission_tenant_id_erased_at_erase_after_idx")
+  @@map("form_submission")
   @@schema("forms")
 }

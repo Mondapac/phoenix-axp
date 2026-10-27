@@ -9,6 +9,7 @@ import {
 } from '@phoenix/shared-kernel/testing';
 import { Client } from 'pg';
 import type { AuditWriter } from '../../src/platform/audit/audit-writer';
+import type { ActorGrant } from '../../src/platform/authz/actor-grants';
 import type { PermissionDeclaration } from '../../src/platform/authz/permission';
 import { createUseCaseGate } from '../../src/platform/authz/use-case-gate';
 import { loadTenantConfigs } from '../../src/platform/tenant-config/tenant-config';
@@ -23,10 +24,11 @@ import { UpdateFormSettings } from '../../src/modules/forms/application/use-case
 import { UpdateForm } from '../../src/modules/forms/application/use-cases/update-form.use-case';
 import { ViewFormRevision } from '../../src/modules/forms/application/use-cases/view-form-revision.use-case';
 import { ViewForm } from '../../src/modules/forms/application/use-cases/view-form.use-case';
+import { FormReach } from '../../src/modules/forms/application/form-reach';
 import { FORMS_PERMISSIONS } from '../../src/modules/forms/contracts/permissions';
 import { FORMS_AUDIT_ACTIONS } from '../../src/modules/forms/domain/audit-actions';
-import { AjvFormSchemaChecker } from '../../src/modules/forms/infrastructure/ajv-form-schema-checker';
 import { PrismaFormRepository } from '../../src/modules/forms/infrastructure/prisma-form.repository';
+import { WorkerSchemaEngine } from '../../src/modules/forms/infrastructure/worker-schema-engine';
 import { CreateSite } from '../../src/modules/tenancy/application/use-cases/create-site.use-case';
 import { TENANCY_PERMISSIONS } from '../../src/modules/tenancy/contracts/permissions';
 import { PrismaOrganizationRepository } from '../../src/modules/tenancy/infrastructure/prisma-organization.repository';
@@ -43,10 +45,11 @@ import {
 import { testDatabaseUrl } from './test-database';
 
 // Phase 2 slice 2.4: the forms use cases end to end against PostgreSQL, through the real
-// repository, UnitOfWork, tenant guard, row-level security and the Ajv checker. Sites come from
-// tenancy's use case and its closure-table reader, as in the running application. The gate
-// admits a staff actor; the audit writer is a recorder that checks every entry against its
-// definition, as the platform writer does.
+// repository, UnitOfWork, tenant guard, row-level security and the Ajv checker in its worker.
+// Sites come from tenancy's use case and its closure-table reader, as in the running
+// application. The gate admits a staff actor, whose one grant is tenant-wide with every forms
+// key (site narrowing has its own tests in forms-submissions.db-spec); the audit writer is a
+// recorder that checks every entry against its definition, as the platform writer does.
 
 const DEFINITIONS = new Map(FORMS_AUDIT_ACTIONS.map((d) => [d.action as string, d]));
 
@@ -125,6 +128,13 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
     );
   const context = staff(tenant);
 
+  const everyKey: ActorGrant = {
+    roleId: ids.next<'Role'>(),
+    scope: { level: 'tenant' },
+    keys: new Set(FORMS_PERMISSIONS.declarations.map((d) => d.key)),
+  };
+  const engine = new WorkerSchemaEngine();
+
   let useCases: ReturnType<typeof build>;
   function build(p: Persistence) {
     const declared = new Map<string, PermissionDeclaration>(
@@ -145,7 +155,13 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
     const sites = new PrismaSiteRepository(p.service);
     const forms = new PrismaFormRepository(p.service);
     const reader = new ClosureSiteAncestryReader(uow, sites);
-    const checker = new AjvFormSchemaChecker();
+    const reach = new FormReach(
+      uow,
+      forms,
+      { grantsOf: () => Promise.resolve([everyKey]) },
+      reader,
+    );
+    const checker = engine;
     return {
       createSite: new CreateSite(
         gate,
@@ -157,15 +173,15 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
         clock,
         ids,
       ),
-      createForm: new CreateForm(gate, uow, forms, reader, audit, clock, ids),
-      updateForm: new UpdateForm(gate, uow, forms, audit, clock),
-      updateSettings: new UpdateFormSettings(gate, uow, forms, audit, clock),
-      saveRevision: new SaveFormRevision(gate, uow, forms, checker, audit, clock, ids),
-      publishForm: new PublishForm(gate, uow, forms, audit, clock),
-      retireForm: new RetireForm(gate, uow, forms, audit, clock),
-      listForms: new ListForms(gate, uow, forms),
-      viewForm: new ViewForm(gate, uow, forms),
-      viewRevision: new ViewFormRevision(gate, uow, forms),
+      createForm: new CreateForm(gate, uow, forms, reach, reader, audit, clock, ids),
+      updateForm: new UpdateForm(gate, uow, forms, reach, audit, clock),
+      updateSettings: new UpdateFormSettings(gate, uow, forms, reach, audit, clock),
+      saveRevision: new SaveFormRevision(gate, uow, forms, reach, checker, audit, clock, ids),
+      publishForm: new PublishForm(gate, uow, forms, reach, checker, audit, clock),
+      retireForm: new RetireForm(gate, uow, forms, reach, audit, clock),
+      listForms: new ListForms(gate, uow, forms, reach),
+      viewForm: new ViewForm(gate, uow, forms, reach),
+      viewRevision: new ViewFormRevision(gate, uow, forms, reach),
     };
   }
 
@@ -177,6 +193,7 @@ describe.each(TEST_TENANTS)('the forms module in tenant %s (database integration
   });
 
   afterAll(async () => {
+    engine.onApplicationShutdown();
     await app.end();
     await persistence.close();
   });
