@@ -69,7 +69,7 @@ export function createPersistence(options: PersistenceOptions = {}): Persistence
 
 export const tenantOf = (code: string): TenantContext => testTenantContext(code);
 
-/** The other tenant fixture (ADR-02). */
+/** The other tenant fixture (ADR-0002). */
 export const otherTenantOf = (code: string): string => (code === 'demo-fa' ? 'demo-en' : 'demo-fa');
 
 /** A unique label: the probe table's (tenant, label) key never meets another test's row. */

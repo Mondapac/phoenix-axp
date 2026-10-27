@@ -1,4 +1,4 @@
-// Architecture boundaries of the modular monolith, enforced in CI (ADR-01). Ported from
+// Architecture boundaries of the modular monolith, enforced in CI (ADR-0001). Ported from
 // Mondapac's configuration with its marketplace-specific rules dropped. Paths are relative to
 // apps/api; the shared kernel, reached through the `paths` of tsconfig.json, appears as
 // `../../packages/shared-kernel/...`. Every rule has a deliberate violation in
@@ -42,7 +42,7 @@ module.exports = {
       name: 'tenant-exemption-is-platform-only',
       comment:
         'Only the tenant guard and the health controller may import @NoTenantContext(): only ' +
-        'health and docs are exempt from tenant resolution (ADR-02). An allow-list of ' +
+        'health and docs are exempt from tenant resolution (ADR-0002). An allow-list of ' +
         'importers, so that a re-export cannot carry the exemption elsewhere.',
       severity: 'error',
       from: { pathNot: TENANT_EXEMPTION_IMPORTERS },

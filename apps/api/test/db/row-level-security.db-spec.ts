@@ -11,7 +11,7 @@ import {
 } from './persistence-support';
 import { ownerTestDatabaseUrl, testDatabaseUrl } from './test-database';
 
-// ADR-02, the database's half of tenant isolation: Postgres row-level security on every
+// ADR-0002, the database's half of tenant isolation: Postgres row-level security on every
 // tenant-scoped table, keyed on the transaction-local setting `app.tenant_id` that the
 // UnitOfWork sets first in every unit. These tests talk to the database as the application
 // login directly (no guard), so they prove what the database alone refuses.
@@ -119,7 +119,7 @@ function policyProblems(table: TableSecurity): string[] {
   return problems;
 }
 
-describe('row-level security (database integration, ADR-02)', () => {
+describe('row-level security (database integration, ADR-0002)', () => {
   let persistence: Persistence;
   let app: Client;
   let owner: Client;

@@ -6,7 +6,7 @@ import { z } from 'zod';
 // apps/api/{src|dist}/platform/config -> repository root
 const DEFAULT_TENANT_CONFIG_DIR = path.resolve(__dirname, '../../../../../config/tenants');
 
-/** A tenant id as used in `tenant_id` columns (ADR-02), by the kernel's single rule. */
+/** A tenant id as used in `tenant_id` columns (ADR-0002), by the kernel's single rule. */
 const tenantCode = z.string().transform((value, context) => {
   const tenantId = parseTenantId(value);
   if (tenantId.ok) return tenantId.value;
@@ -15,7 +15,7 @@ const tenantCode = z.string().transform((value, context) => {
 });
 
 const hostedTenants = z
-  .string({ error: 'HOSTED_TENANTS is required; there is no default tenant (ADR-02)' })
+  .string({ error: 'HOSTED_TENANTS is required; there is no default tenant (ADR-0002)' })
   .transform((value) =>
     value
       .split(',')
@@ -59,7 +59,7 @@ export interface AppConfig {
   readonly nodeEnv: 'development' | 'test' | 'production';
   readonly port: number;
   readonly logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
-  /** Tenants this deployment serves (ADR-02). Never empty, never defaulted. */
+  /** Tenants this deployment serves (ADR-0002). Never empty, never defaulted. */
   readonly hostedTenants: readonly TenantId[];
   /** Serve Swagger UI at /docs. Off unless explicitly enabled (fails closed). */
   readonly apiDocsEnabled: boolean;

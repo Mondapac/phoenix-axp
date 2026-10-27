@@ -91,7 +91,7 @@ export function checkUnitOfWorkOptions(options: UnitOfWorkOptions): void {
  * Every unit is one interactive transaction per attempt, a fresh {@link OpenUnit} around its
  * client, `work` awaited inside `unitStorage.run` (P 3.2). Its first statements, before
  * `work`, are the session statements: `SET TRANSACTION READ ONLY` for a read-only unit, then
- * `set_config('app.tenant_id', <tenant>, true)` for row-level security (ADR-02), then the
+ * `set_config('app.tenant_id', <tenant>, true)` for row-level security (ADR-0002), then the
  * optional `SET LOCAL lock_timeout`.
  *
  * - Read-write: READ COMMITTED sends no `isolationLevel`; `serializable` sends `Serializable`.

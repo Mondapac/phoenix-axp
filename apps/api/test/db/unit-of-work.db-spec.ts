@@ -218,7 +218,7 @@ describe('UnitOfWork (database integration)', () => {
       });
     });
 
-    describe('session statements (ADR-02)', () => {
+    describe('session statements (ADR-0002)', () => {
       const read = async () =>
         ok(await db.service.tx(tenant).isolationProbe.count({ where: { tenantId: code } }));
 

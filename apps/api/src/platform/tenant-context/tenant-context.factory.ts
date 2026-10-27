@@ -8,7 +8,7 @@ export type TenantContextError =
   { readonly code: 'tenant-id.invalid' } | { readonly code: 'tenant.not-hosted' };
 
 /**
- * The only production constructor of a `TenantContext` (ADR-02): it parses the id, asks the
+ * The only production constructor of a `TenantContext` (ADR-0002): it parses the id, asks the
  * registry whether this deployment hosts the tenant, and mints the context. It never
  * substitutes a tenant and has no default or fallback.
  *

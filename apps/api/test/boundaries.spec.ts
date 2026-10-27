@@ -108,7 +108,7 @@ const tenantLiterals = (count = 1): string[] => syntax('no-tenant-literals', cou
 const kernelImports = (count = 1): string[] =>
   times(count, 'no-restricted-imports: kernel-imports-only-itself');
 
-describe('architecture boundaries (ADR-01, ADR-02)', () => {
+describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
   describe('dependency-cruiser', () => {
     let cruise: CruiseResult;
     let found: string[];

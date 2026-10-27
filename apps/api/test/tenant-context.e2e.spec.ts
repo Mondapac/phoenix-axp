@@ -51,7 +51,7 @@ function expectNowhere(value: string, response: request.Response, logLines: LogL
 
 // One application per file: nestjs-pino keeps one logger per Jest module registry, so a
 // second application here would leave these log assertions without lines.
-describe('tenant resolution (HTTP, ADR-02)', () => {
+describe('tenant resolution (HTTP, ADR-0002)', () => {
   let app: NestExpressApplication;
   let logLines: LogLine[];
   const get = (path: string) => request(app.getHttpServer()).get(path);

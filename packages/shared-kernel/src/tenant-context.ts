@@ -5,12 +5,12 @@ import type { Result } from './result';
 
 /**
  * The id of a tenant: the mandatory isolation dimension of every request, job, event and
- * tenant-scoped row (ADR-02). It fits `tenant_id varchar(32)`.
+ * tenant-scoped row (ADR-0002). It fits `tenant_id varchar(32)`.
  */
 export type TenantId = string & { readonly __brand: 'TenantId' };
 
 /**
- * The tenant a piece of work belongs to (ADR-01, ADR-02): present, well formed, immutable and
+ * The tenant a piece of work belongs to (ADR-0001, ADR-0002): present, well formed, immutable and
  * minted. There is no default tenant and no fallback.
  *
  * It holds nothing else: locale, calendar and time zone are tenant configuration, read by

@@ -1,5 +1,5 @@
-// Persistence boundaries (ADR-01, ADR-02). Run by `pnpm boundaries`, so by `pnpm verify` and
-// CI; fixtures in apps/api/test/boundary-fixtures/prisma/ are asserted by
+// Persistence boundaries (ADR-0001, ADR-0002, ADR-0003). Run by `pnpm boundaries`, so by
+// `pnpm verify` and CI; fixtures in apps/api/test/boundary-fixtures/prisma/ are asserted by
 // apps/api/test/boundaries.spec.ts.
 //
 // Schema checks (prisma/schema/*.prisma, read by scripts/prisma-schema.mjs):
@@ -92,7 +92,7 @@ for (const model of models) {
     }
   }
 
-  // --- Scope (ADR-02).
+  // --- Scope (ADR-0002).
   if (isScoped(model) && model.exemptionReason !== undefined) {
     problems.push(`${model.file}: ${model.name} has tenantId and also an exemption line`);
   } else if (!isScoped(model) && model.exemptionReason === undefined) {

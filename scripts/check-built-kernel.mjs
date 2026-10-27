@@ -24,7 +24,7 @@ const platformFile = path.join(
   root,
   'apps/api/dist/platform/tenant-context/attached-tenant-context.js',
 );
-// Both tenant fixtures (ADR-02): the Persian/Jalali tenant and the synthetic English one.
+// Both tenant fixtures (ADR-0002): the Persian/Jalali tenant and the synthetic English one.
 const tenants = ['demo-fa', 'demo-en'];
 const problems = [];
 

@@ -7,7 +7,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-/** The documentation line that exempts a model from the tenant scope (ADR-02). */
+/** The documentation line that exempts a model from the tenant scope (ADR-0002). */
 export const TENANT_SCOPE_EXEMPTION = /^@tenant-scope none:\s*(\S.*)$/;
 
 /** Removes a `//` comment that is not a `///` documentation line, outside string literals. */

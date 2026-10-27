@@ -57,7 +57,7 @@ const tenantSchema = z
     'supportedLocales has duplicates',
   );
 
-/** One tenant's checked configuration (ADR-02). Frozen at boot. */
+/** One tenant's checked configuration (ADR-0002). Frozen at boot. */
 export interface TenantConfig {
   readonly code: TenantId;
   readonly displayName: string;
