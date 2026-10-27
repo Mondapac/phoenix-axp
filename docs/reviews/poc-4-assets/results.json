@@ -1,0 +1,971 @@
+{
+  "axeVersion": "4.14.0",
+  "axe": [
+    {
+      "page": "fa-IR home (demo-fa / moe)",
+      "violations": [],
+      "incomplete": [],
+      "passes": 19,
+      "violationNodes": 0
+    },
+    {
+      "page": "fa-IR home, child site (demo-fa / fars)",
+      "violations": [],
+      "incomplete": [],
+      "passes": 19,
+      "violationNodes": 0
+    },
+    {
+      "page": "en-CA home (demo-en / main)",
+      "violations": [],
+      "incomplete": [],
+      "passes": 19,
+      "violationNodes": 0
+    },
+    {
+      "page": "fa-IR home at 200% zoom (640 CSS px)",
+      "violations": [],
+      "incomplete": [],
+      "passes": 19,
+      "violationNodes": 0
+    },
+    {
+      "page": "fa-IR form, initial",
+      "violations": [],
+      "incomplete": [],
+      "passes": 26,
+      "violationNodes": 0
+    },
+    {
+      "page": "fa-IR form, errors shown",
+      "violations": [],
+      "incomplete": [],
+      "passes": 26,
+      "violationNodes": 0
+    },
+    {
+      "page": "fa-IR form, calendar open",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "impact": "serious",
+          "help": "ARIA hidden element must not be focusable or contain focusable elements",
+          "nodes": 6,
+          "targets": [
+            "span[data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(2)",
+            "span[data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(4)",
+            "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(5)",
+            "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(7)",
+            "span[data-type=\"inside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(1)"
+          ],
+          "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state"
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "impact": "critical",
+          "help": "ARIA attributes must conform to valid values",
+          "nodes": 1,
+          "targets": [
+            "#base-ui-_R_flcjeav5ubt9fivb_"
+          ],
+          "summary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"_R_lcjeav5ubt9fivb_\""
+        },
+        {
+          "id": "label-content-name-mismatch",
+          "impact": "serious",
+          "help": "Elements must have their visible text as part of their accessible name",
+          "nodes": 9,
+          "targets": [
+            "button[aria-label=\"۱ خرداد ۱۳۶۹\"]",
+            "button[aria-label=\"۲ خرداد ۱۳۶۹\"]",
+            "button[aria-label=\"۳ خرداد ۱۳۶۹\"]",
+            "button[aria-label=\"۴ خرداد ۱۳۶۹\"]",
+            "button[aria-label=\"۵ خرداد ۱۳۶۹\"]"
+          ],
+          "summary": "Fix any of the following:\n  Unable to determine if the visible text is part of the accessible name"
+        }
+      ],
+      "passes": 33,
+      "violationNodes": 0
+    },
+    {
+      "page": "en-CA form, initial",
+      "violations": [],
+      "incomplete": [],
+      "passes": 26,
+      "violationNodes": 0
+    },
+    {
+      "page": "en-CA form, errors shown",
+      "violations": [],
+      "incomplete": [],
+      "passes": 26,
+      "violationNodes": 0
+    },
+    {
+      "page": "en-CA form, calendar open",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "impact": "serious",
+          "help": "ARIA hidden element must not be focusable or contain focusable elements",
+          "nodes": 6,
+          "targets": [
+            "span[data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(2)",
+            "span[data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(4)",
+            "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(5)",
+            "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(7)",
+            "span[data-type=\"inside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(1)"
+          ],
+          "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state"
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "impact": "critical",
+          "help": "ARIA attributes must conform to valid values",
+          "nodes": 1,
+          "targets": [
+            "#base-ui-_R_7qnjeav5ubt9fivb_"
+          ],
+          "summary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"_R_anjeav5ubt9fivb_\""
+        },
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 1,
+          "targets": [
+            "#_R_njeav5ubt9fivbH1_"
+          ],
+          "summary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+        }
+      ],
+      "passes": 33,
+      "violationNodes": 0
+    },
+    {
+      "page": "Puck editor (fa-IR), outer document",
+      "violations": [
+        {
+          "id": "aria-prohibited-attr",
+          "impact": "serious",
+          "help": "Elements must only use permitted ARIA attributes",
+          "nodes": 1,
+          "targets": [
+            "._Loader_1w5zn_13"
+          ],
+          "summary": "Fix all of the following:\n  aria-label attribute cannot be used on \"span\" elements with no valid role attribute."
+        },
+        {
+          "id": "frame-title",
+          "impact": "serious",
+          "help": "Frames must have an accessible name",
+          "nodes": 1,
+          "targets": [
+            "#preview-frame"
+          ],
+          "summary": "Fix any of the following:\n  Element has no title attribute\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Element's default semantics were not overridden with role=\"none\" or r"
+        },
+        {
+          "id": "select-name",
+          "impact": "critical",
+          "help": "Select element must have an accessible name",
+          "nodes": 1,
+          "targets": [
+            "select"
+          ],
+          "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+        }
+      ],
+      "incomplete": [
+        {
+          "id": "aria-allowed-attr",
+          "impact": "critical",
+          "help": "Elements must only use supported ARIA attributes",
+          "nodes": 5,
+          "targets": [
+            "div[data-testid=\"drawer-item:SiteHeader\"]",
+            "div[data-testid=\"drawer-item:Hero\"]",
+            "div[data-testid=\"drawer-item:NewsList\"]",
+            "div[data-testid=\"drawer-item:CardGrid\"]",
+            "div[data-testid=\"drawer-item:SiteFooter\"]"
+          ],
+          "summary": "Fix all of the following:\n  The attribute is deprecated and should not be used: aria-grabbed"
+        },
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "nodes": 2,
+          "targets": [
+            "div:nth-child(4) > ._Drawer-draggable_1n90m_8 > ._Drawer-draggableBg_1n90m_12 > ._DrawerItem_1n90m_22[data-testid=\"\"][data-puck-drawer-item=\"true\"] > div > div > ._DrawerItem-draggable_1n90m_22 > ._DrawerItem-name_1n90m_72",
+            "select"
+          ],
+          "summary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+        }
+      ],
+      "passes": 26,
+      "violationNodes": 3
+    }
+  ],
+  "checks": [
+    {
+      "name": "fa-IR home (demo-fa / moe): <html lang=\"fa-IR\" dir=\"rtl\">",
+      "pass": true,
+      "detail": "{\"lang\":\"fa-IR\",\"dir\":\"rtl\",\"title\":\"وزارت آموزش (نمونه)\"}"
+    },
+    {
+      "name": "fa-IR home (demo-fa / moe): one banner, main, contentinfo and h1; named navs",
+      "pass": true,
+      "detail": "{\"header\":1,\"main\":1,\"footer\":1,\"h1\":1,\"navNames\":[\"منوی اصلی\",\"پیوندهای پایین صفحه\"]}"
+    },
+    {
+      "name": "fa-IR home (demo-fa / moe): header mirrors with the direction",
+      "pass": true,
+      "detail": "{\"brandX\":989,\"navX\":80}"
+    },
+    {
+      "name": "fa-IR home, child site (demo-fa / fars): <html lang=\"fa-IR\" dir=\"rtl\">",
+      "pass": true,
+      "detail": "{\"lang\":\"fa-IR\",\"dir\":\"rtl\",\"title\":\"ادارهٔ کل آموزش استان فارس (نمونه)\"}"
+    },
+    {
+      "name": "fa-IR home, child site (demo-fa / fars): one banner, main, contentinfo and h1; named navs",
+      "pass": true,
+      "detail": "{\"header\":1,\"main\":1,\"footer\":1,\"h1\":1,\"navNames\":[\"منوی اصلی\",\"پیوندهای پایین صفحه\"]}"
+    },
+    {
+      "name": "fa-IR home, child site (demo-fa / fars): header mirrors with the direction",
+      "pass": true,
+      "detail": "{\"brandX\":841,\"navX\":80}"
+    },
+    {
+      "name": "en-CA home (demo-en / main): <html lang=\"en-CA\" dir=\"ltr\">",
+      "pass": true,
+      "detail": "{\"lang\":\"en-CA\",\"dir\":\"ltr\",\"title\":\"City Services (demo)\"}"
+    },
+    {
+      "name": "en-CA home (demo-en / main): one banner, main, contentinfo and h1; named navs",
+      "pass": true,
+      "detail": "{\"header\":1,\"main\":1,\"footer\":1,\"h1\":1,\"navNames\":[\"Main\",\"Footer\"]}"
+    },
+    {
+      "name": "en-CA home (demo-en / main): header mirrors with the direction",
+      "pass": true,
+      "detail": "{\"brandX\":80,\"navX\":912}"
+    },
+    {
+      "name": "no raw HTML from data: markup in a title shows as text, no element injected",
+      "pass": true,
+      "detail": "{\"injectedImg\":0,\"injectedScriptText\":false,\"inFlightPayloadOnly\":true,\"shownAsText\":true,\"javascriptLinks\":0,\"unknownBlockRendered\":false}"
+    },
+    {
+      "name": "javascript: URL from data is not rendered as a link",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "unregistered block type (RawHtml) renders nothing",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "news date in Jalali with Persian digits",
+      "pass": true,
+      "detail": "۳ آبان ۱۴۰۵"
+    },
+    {
+      "name": "child site inherits the parent brand colour (locked token kept)",
+      "pass": true,
+      "detail": "moe rgb(11, 79, 67), fars rgb(11, 79, 67)"
+    },
+    {
+      "name": "child site overrides an open token (accent)",
+      "pass": true,
+      "detail": "moe rgb(11, 92, 74), fars rgb(138, 59, 18)"
+    },
+    {
+      "name": "child override of the locked token is refused and reported",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "second tenant has its own theme (no shared literal)",
+      "pass": true,
+      "detail": "{\"brand\":\"rgb(38, 33, 92)\",\"accent\":\"rgb(59, 50, 155)\",\"radius\":\"999px\"}"
+    },
+    {
+      "name": "en-CA date in Gregorian with Latin digits",
+      "pass": true,
+      "detail": "October 23, 2026"
+    },
+    {
+      "name": "unknown host answers 404 (no default tenant)",
+      "pass": true,
+      "detail": "404"
+    },
+    {
+      "name": "fa-IR home: first Tab stop is the skip link, shown when focused",
+      "pass": true,
+      "detail": "رفتن به محتوای اصلی"
+    },
+    {
+      "name": "fa-IR home: every Tab stop has a visible focus indicator",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "fa-IR home: Tab order follows the reading order (top to bottom)",
+      "pass": true,
+      "detail": "18,30,30,30,30,234,455,579,1068,1068,1068,1191,1191"
+    },
+    {
+      "name": "fa-IR home: skip link moves the next Tab into <main>",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "en-CA home: first Tab stop is the skip link, shown when focused",
+      "pass": true,
+      "detail": "Skip to main content"
+    },
+    {
+      "name": "en-CA home: every Tab stop has a visible focus indicator",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "en-CA home: Tab order follows the reading order (top to bottom)",
+      "pass": true,
+      "detail": "18,30,30,30,234,455,579,943,943,943,1067,1067"
+    },
+    {
+      "name": "en-CA home: skip link moves the next Tab into <main>",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "fa-IR home at 200% zoom (640 CSS px): no horizontal scroll",
+      "pass": true,
+      "detail": "{\"scrollWidth\":640,\"innerWidth\":640}"
+    },
+    {
+      "name": "fa-IR home at 400% / 320 px reflow: no horizontal scroll",
+      "pass": true,
+      "detail": "{\"scrollWidth\":320,\"innerWidth\":320}"
+    },
+    {
+      "name": "en-CA home at 200% zoom (640 CSS px): no horizontal scroll",
+      "pass": true,
+      "detail": "{\"scrollWidth\":640,\"innerWidth\":640}"
+    },
+    {
+      "name": "en-CA home at 400% / 320 px reflow: no horizontal scroll",
+      "pass": true,
+      "detail": "{\"scrollWidth\":320,\"innerWidth\":320}"
+    },
+    {
+      "name": "fa-IR form at 200% zoom (640 CSS px): no horizontal scroll",
+      "pass": true,
+      "detail": "{\"scrollWidth\":640,\"innerWidth\":640}"
+    },
+    {
+      "name": "fa-IR form at 400% / 320 px reflow: no horizontal scroll",
+      "pass": true,
+      "detail": "{\"scrollWidth\":320,\"innerWidth\":320}"
+    },
+    {
+      "name": "form Tab order: name, national code, mobile, date, calendar button, type, details, submit",
+      "pass": true,
+      "detail": "field-fullName > field-nationalCode > field-mobile > field-birthDate > انتخاب تاریخ از تقویم > field-requestType > field-description > button"
+    },
+    {
+      "name": "empty submit: error summary appears and takes focus",
+      "pass": true,
+      "detail": "«نام و نام خانوادگی» را وارد کنید. | «کد ملی» را وارد کنید. | «شمارهٔ همراه» را وارد کنید. | «تاریخ تولد» را وارد کنید. | «نوع درخواست» را وارد کنید."
+    },
+    {
+      "name": "validation messages are Persian, one per required field",
+      "pass": true,
+      "detail": "«نام و نام خانوادگی» را وارد کنید. | «کد ملی» را وارد کنید. | «شمارهٔ همراه» را وارد کنید. | «تاریخ تولد» را وارد کنید. | «نوع درخواست» را وارد کنید."
+    },
+    {
+      "name": "each invalid field: label, aria-invalid, aria-required, error in aria-describedby",
+      "pass": true,
+      "detail": "[[\"field-fullName\",\"true\",\"«نام و نام خانوادگی» را وارد کنید.\"],[\"field-nationalCode\",\"true\",\"ده رقم، بدون خط تیره. / «کد ملی» را وارد کنید.\"],[\"field-mobile\",\"true\",\"«شمارهٔ همراه» را وارد کنید.\"],[\"field-birthDate\",\"true\",\"به شکل سال/ماه/روز، مثلاً ۱۴۰۵/۰۸/۰۵. / «تاریخ تول\"],[\"field-requestType\",\"true\",\"«نوع درخواست» را وارد کنید.\"]]"
+    },
+    {
+      "name": "error summary link moves focus to its field",
+      "pass": true,
+      "detail": "field-fullName"
+    },
+    {
+      "name": "ی/ي and ک/ك normalised as typed",
+      "pass": true,
+      "detail": "علی کریمی"
+    },
+    {
+      "name": "identifier digits shown in Persian digits whatever was typed",
+      "pass": true,
+      "detail": "۰۰۱۲۳۴۵۶۷۸ ۰۹۱۲۱۲۳۴۵۶۷"
+    },
+    {
+      "name": "typed Jalali date re-shown with Persian digits",
+      "pass": true,
+      "detail": "۱۳۶۹/۰۲/۱۱"
+    },
+    {
+      "name": "calendar opens on the chosen date with focus on it",
+      "pass": true,
+      "detail": "{\"focus\":\"۱۱ اردیبهشت ۱۳۶۹\",\"heading\":\"اردیبهشت ۱۳۶۹\",\"dialogDir\":\"rtl\",\"firstWeekday\":\"شنبه\"}"
+    },
+    {
+      "name": "calendar week starts on Saturday for fa-IR (from Intl week info)",
+      "pass": true,
+      "detail": "شنبه"
+    },
+    {
+      "name": "ArrowLeft in RTL moves to the next day",
+      "pass": true,
+      "detail": "۱۲ اردیبهشت ۱۳۶۹"
+    },
+    {
+      "name": "ArrowDown +7 days, PageDown next month",
+      "pass": true,
+      "detail": "{\"focus\":\"۱۹ خرداد ۱۳۶۹\",\"heading\":\"خرداد ۱۳۶۹\"}"
+    },
+    {
+      "name": "Enter chooses the date, closes, returns focus to the button",
+      "pass": true,
+      "detail": "{\"open\":false,\"value\":\"۱۳۶۹/۰۳/۱۹\",\"focus\":\"انتخاب تاریخ از تقویم\"}"
+    },
+    {
+      "name": "Escape closes the calendar and returns focus",
+      "pass": true,
+      "detail": "{\"open\":false,\"focus\":\"انتخاب تاریخ از تقویم\"}"
+    },
+    {
+      "name": "select operable with the keyboard",
+      "pass": true,
+      "detail": "complaint"
+    },
+    {
+      "name": "submit accepted by the BFF (201)",
+      "pass": true,
+      "detail": "201"
+    },
+    {
+      "name": "stored values normalised: ASCII digits for identifiers, ISO date, Persian letters",
+      "pass": true,
+      "detail": "{\"fullName\":\"علی کریمی\",\"nationalCode\":\"0012345678\",\"mobile\":\"09121234567\",\"birthDate\":\"1990-06-09\",\"requestType\":\"complaint\",\"description\":\"پلاک ۱۲\"}"
+    },
+    {
+      "name": "success announced in a status region",
+      "pass": true,
+      "detail": "درخواست شما ثبت شد."
+    },
+    {
+      "name": "BFF rejects invalid data on its own (422 with ajv errors)",
+      "pass": true,
+      "detail": "422 additionalProperties,pattern,pattern,format,enum"
+    },
+    {
+      "name": "BFF refuses a cross-origin submission",
+      "pass": true,
+      "detail": "403"
+    },
+    {
+      "name": "en-CA form: LTR, Gregorian hint with Latin digits",
+      "pass": true,
+      "detail": "Visit date*(required)Year/month/day, for example 2026/10/27."
+    },
+    {
+      "name": "en-CA calendar: week starts on Sunday; ArrowRight is the next day",
+      "pass": true,
+      "detail": "Sunday; October 28, 2026"
+    },
+    {
+      "name": "Puck: the preview iframe takes the host lang and dir (no override needed)",
+      "pass": true,
+      "detail": "{\"dir\":\"rtl\",\"lang\":\"fa-IR\",\"computed\":\"rtl\"}"
+    },
+    {
+      "name": "Puck: editor chrome mirrors in RTL (component list on the right, fields on the left)",
+      "pass": true,
+      "detail": "[{\"x\":1082,\"w\":290,\"text\":\"سرصفحه و منوسرصفحه و منوبنر اص\"},{\"x\":0,\"w\":290,\"text\":\"صفحهعنوان صفحه\"}]"
+    },
+    {
+      "name": "Puck default text field shows a URL right-to-left (bidi defect, needs an LTR field)",
+      "pass": true,
+      "detail": "{\"direction\":\"rtl\",\"dirAttr\":null}"
+    },
+    {
+      "name": "Puck with the LTR custom field: URL input is left-to-right",
+      "pass": true,
+      "detail": "{\"direction\":\"ltr\",\"dirAttr\":\"ltr\"}"
+    },
+    {
+      "name": "Puck: editing a text field updates the RTL preview",
+      "pass": true,
+      "detail": "عنوان تازه با ارقام ۱۲۳ و حروف ي ك"
+    },
+    {
+      "name": "Puck: editor does not normalise ي/ك typed into a field (needs a field transform)",
+      "pass": true,
+      "detail": "عنوان تازه با ارقام ۱۲۳ و حروف ي ك"
+    },
+    {
+      "name": "Puck: text fields inherit RTL",
+      "pass": true,
+      "detail": "rtl"
+    },
+    {
+      "name": "Puck defect confirmed: a block cannot be added from the drawer with the keyboard",
+      "pass": true,
+      "detail": "3 -> 3"
+    }
+  ],
+  "keyboard": {
+    "fa-IR home": [
+      {
+        "tag": "a",
+        "text": "رفتن به محتوای اصلی",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 1102,
+        "y": 8
+      },
+      {
+        "tag": "a",
+        "text": "وزارت آموزش (نمونه)",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 989,
+        "y": 18
+      },
+      {
+        "tag": "a",
+        "text": "خانه",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 328,
+        "y": 30
+      },
+      {
+        "tag": "a",
+        "text": "خبرها",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 271,
+        "y": 30
+      },
+      {
+        "tag": "a",
+        "text": "خدمات",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 204,
+        "y": 30
+      },
+      {
+        "tag": "a",
+        "text": "درخواست نوبت",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 80,
+        "y": 30
+      },
+      {
+        "tag": "a",
+        "text": "ثبت درخواست نوبت",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 1006,
+        "y": 234
+      },
+      {
+        "tag": "a",
+        "text": "آغاز ثبت‌نام مدارس برای سال تحصیلی جدید",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 823,
+        "y": 455
+      },
+      {
+        "tag": "a",
+        "text": "بخشنامهٔ ستاد: ساعت کاری ادارات در پاییز",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 837,
+        "y": 579
+      },
+      {
+        "tag": "a",
+        "text": "ورود به خدمت: گواهی اشتغال به تحصیل",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 1070,
+        "y": 1068
+      },
+      {
+        "tag": "a",
+        "text": "ورود به خدمت: ثبت شکایت",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 692,
+        "y": 1068
+      },
+      {
+        "tag": "a",
+        "text": "ورود به خدمت: نوبت حضوری",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 313,
+        "y": 1068
+      },
+      {
+        "tag": "a",
+        "text": "دسترس‌پذیری",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 287,
+        "y": 1191
+      },
+      {
+        "tag": "a",
+        "text": "حریم خصوصی",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 170,
+        "y": 1191
+      }
+    ],
+    "en-CA home": [
+      {
+        "tag": "a",
+        "text": "Skip to main content",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 8,
+        "y": 8
+      },
+      {
+        "tag": "a",
+        "text": "City Services (demo)",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 80,
+        "y": 18
+      },
+      {
+        "tag": "a",
+        "text": "Home",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 912,
+        "y": 30
+      },
+      {
+        "tag": "a",
+        "text": "News",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 977,
+        "y": 30
+      },
+      {
+        "tag": "a",
+        "text": "Book an appointment",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 1039,
+        "y": 30
+      },
+      {
+        "tag": "a",
+        "text": "Book an appointment",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 80,
+        "y": 234
+      },
+      {
+        "tag": "a",
+        "text": "Winter parking rules start November 15",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 80,
+        "y": 455
+      },
+      {
+        "tag": "a",
+        "text": "New library hours",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 80,
+        "y": 579
+      },
+      {
+        "tag": "a",
+        "text": "Start: Pay a parking ticket",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 101,
+        "y": 943
+      },
+      {
+        "tag": "a",
+        "text": "Start: Report a pothole",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 480,
+        "y": 943
+      },
+      {
+        "tag": "a",
+        "text": "Start: Book an appointment",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 858,
+        "y": 943
+      },
+      {
+        "tag": "a",
+        "text": "Accessibility",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 1029,
+        "y": 1067
+      },
+      {
+        "tag": "a",
+        "text": "Privacy",
+        "outline": "solid 3px",
+        "visible": true,
+        "onScreen": true,
+        "x": 1144,
+        "y": 1067
+      }
+    ],
+    "fa-IR form": [
+      "field-fullName",
+      "field-nationalCode",
+      "field-mobile",
+      "field-birthDate",
+      "انتخاب تاریخ از تقویم",
+      "field-requestType",
+      "field-description",
+      "button"
+    ]
+  },
+  "editor": {
+    "ltr=0": {
+      "outerDir": "rtl",
+      "sidebars": [
+        {
+          "x": 1082,
+          "w": 290,
+          "text": "سرصفحه و منوسرصفحه و منوبنر اص"
+        },
+        {
+          "x": 0,
+          "w": 290,
+          "text": "صفحهعنوان صفحه"
+        }
+      ],
+      "nav": 1372,
+      "english": [
+        "RawHtml",
+        "RawHtml"
+      ],
+      "frame": {
+        "dir": "rtl",
+        "lang": "fa-IR",
+        "computed": "rtl"
+      },
+      "ctaHref": {
+        "direction": "rtl",
+        "dirAttr": null
+      }
+    },
+    "ltr=1": {
+      "outerDir": "rtl",
+      "sidebars": [
+        {
+          "x": 1082,
+          "w": 290,
+          "text": "سرصفحه و منوسرصفحه و منوبنر اص"
+        },
+        {
+          "x": 0,
+          "w": 290,
+          "text": "صفحهعنوان صفحه"
+        }
+      ],
+      "nav": 1372,
+      "english": [
+        "RawHtml",
+        "RawHtml"
+      ],
+      "frame": {
+        "dir": "rtl",
+        "lang": "fa-IR",
+        "computed": "rtl"
+      },
+      "ctaHref": {
+        "direction": "ltr",
+        "dirAttr": "ltr"
+      }
+    },
+    "editedTitle": "عنوان تازه با ارقام ۱۲۳ و حروف ي ك",
+    "fieldDirection": "rtl",
+    "tabStops": [
+      "textarea:بیش از ۴۰ خدمت در ۳۱ است",
+      "input:",
+      "input:",
+      "body:رفتن به محتوای اصلیویرای",
+      "a:رفتن به محتوای اصلی",
+      "button:نمایش یا پنهان کردن ستون",
+      "button:نمایش یا پنهان کردن ستون",
+      "button:واگرد",
+      "div:سرصفحه و منو",
+      "div:بنر اصلی",
+      "div:فهرست خبر",
+      "div:کارت‌های خدمت",
+      "div:پاصفحه",
+      "button:نمایش در اندازهٔ Small",
+      "button:نمایش در اندازهٔ Medium",
+      "button:نمایش در اندازهٔ Full-wi",
+      "button:کوچک‌نمایی",
+      "select:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:",
+      "iframe:"
+    ],
+    "drawerItem": {
+      "tabIndex": 0,
+      "role": "button",
+      "roledescription": "draggable"
+    },
+    "keyboardInsert": {
+      "before": 3,
+      "after": 3
+    },
+    "untranslated": [
+      "RawHtml",
+      "RawHtml"
+    ]
+  },
+  "console": [],
+  "form": {
+    "fieldA11y": [
+      {
+        "id": "field-fullName",
+        "label": "نام و نام خانوادگی*(الزامی)",
+        "invalid": "true",
+        "required": "true",
+        "describedByText": "«نام و نام خانوادگی» را وارد کنید."
+      },
+      {
+        "id": "field-nationalCode",
+        "label": "کد ملی*(الزامی)",
+        "invalid": "true",
+        "required": "true",
+        "describedByText": "ده رقم، بدون خط تیره. / «کد ملی» را وارد کنید."
+      },
+      {
+        "id": "field-mobile",
+        "label": "شمارهٔ همراه*(الزامی)",
+        "invalid": "true",
+        "required": "true",
+        "describedByText": "«شمارهٔ همراه» را وارد کنید."
+      },
+      {
+        "id": "field-birthDate",
+        "label": "تاریخ تولد*(الزامی)",
+        "invalid": "true",
+        "required": "true",
+        "describedByText": "به شکل سال/ماه/روز، مثلاً ۱۴۰۵/۰۸/۰۵. / «تاریخ تولد» را وارد کنید."
+      },
+      {
+        "id": "field-requestType",
+        "label": "نوع درخواست*(الزامی)",
+        "invalid": "true",
+        "required": "true",
+        "describedByText": "«نوع درخواست» را وارد کنید."
+      }
+    ],
+    "typed": {
+      "name": "علی کریمی",
+      "nationalCode": "۰۰۱۲۳۴۵۶۷۸",
+      "mobile": "۰۹۱۲۱۲۳۴۵۶۷",
+      "date": "۱۳۶۹/۰۲/۱۱"
+    },
+    "submitted": {
+      "status": 201,
+      "body": {
+        "data": {
+          "fullName": "علی کریمی",
+          "nationalCode": "0012345678",
+          "mobile": "09121234567",
+          "birthDate": "1990-06-09",
+          "requestType": "complaint",
+          "description": "پلاک ۱۲"
+        },
+        "form": {
+          "form": "appointment",
+          "revision": 1,
+          "publishedAt": "2026-10-20T09:00:00Z"
+        },
+        "owner": "moe"
+      }
+    }
+  },
+  "javascript": {
+    "fa-IR home (static, ISR)": 132,
+    "fa-IR form": 243,
+    "Puck editor": 302
+  },
+  "summary": {
+    "checks": 63,
+    "failed": [],
+    "axeViolationRules": 3
+  }
+}
