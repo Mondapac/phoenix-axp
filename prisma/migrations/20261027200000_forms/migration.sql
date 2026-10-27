@@ -42,6 +42,9 @@ CREATE TABLE "forms"."form_revision" (
 CREATE INDEX "form_tenant_id_site_id_idx" ON "forms"."form"("tenant_id", "site_id");
 
 -- CreateIndex
+CREATE INDEX "form_tenant_id_name_id_idx" ON "forms"."form"("tenant_id", "name", "id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "form_tenant_id_id_key" ON "forms"."form"("tenant_id", "id");
 
 -- CreateIndex
@@ -88,6 +91,11 @@ ALTER TABLE "forms"."form_revision"
   ADD CONSTRAINT "form_revision_content_hash_check" CHECK ("content_hash" ~ '^sha256:[0-9a-f]{64}$'),
   ADD CONSTRAINT "form_revision_documents_check" CHECK (
     jsonb_typeof("json_schema") = 'object' AND jsonb_typeof("ui_schema") = 'object'
+  ),
+  -- Backs MAX_DOCUMENT_LENGTH (256 Ki UTF-16 units, at most 768 KiB of UTF-8) with room for
+  -- the jsonb text form's spacing.
+  ADD CONSTRAINT "form_revision_documents_size_check" CHECK (
+    octet_length("json_schema"::text) <= 1048576 AND octet_length("ui_schema"::text) <= 1048576
   );
 
 -- Grants. The group role "phoenix_app" is created by the cluster bootstrap, never by a

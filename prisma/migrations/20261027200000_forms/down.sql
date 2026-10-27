@@ -1,5 +1,6 @@
 -- Reverses 20261027200000_forms: the policies and grants first, then the two tables (the
--- foreign key between them first, since each references the other), then the schema.
+-- form's foreign key to its published revision first, so the revisions can go), then the
+-- schema.
 DROP POLICY "form_revision_tenant_isolation" ON "forms"."form_revision";
 DROP POLICY "form_tenant_isolation" ON "forms"."form";
 

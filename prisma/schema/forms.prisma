@@ -39,6 +39,8 @@ model Form {
   @@unique([tenantId, id], map: "form_tenant_id_id_key")
   @@unique([tenantId, key], map: "form_tenant_id_key_key")
   @@index([tenantId, siteId], map: "form_tenant_id_site_id_idx")
+  /// The list order (name, then id) of the studio's form list.
+  @@index([tenantId, name, id], map: "form_tenant_id_name_id_idx")
   @@map("form")
   @@schema("forms")
 }
