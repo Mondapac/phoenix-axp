@@ -25,7 +25,8 @@
     "db:bootstrap": "docker compose exec -T postgres psql -U postgres -d phoenix -f /docker-entrypoint-initdb.d/10-bootstrap-dev.sql",
     "licences": "node scripts/check-licences.mjs",
     "verify": "pnpm db:generate && pnpm typecheck && pnpm lint && pnpm boundaries && pnpm licences && pnpm test && pnpm test:db && pnpm db:check-reversible",
-    "boundaries": "pnpm --filter @phoenix/api boundaries && node scripts/check-prisma-boundaries.mjs"
+    "boundaries": "pnpm --filter @phoenix/api boundaries && node scripts/check-prisma-boundaries.mjs",
+    "test:poc": "pnpm --filter @phoenix/shared-kernel build && pnpm --filter @phoenix/api build && pnpm --filter @phoenix/api test:poc"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",

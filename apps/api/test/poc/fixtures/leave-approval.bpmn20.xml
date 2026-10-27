@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PoC 3 (spike): the administrative approval process of the bridge test. Process variables carry
+  ids and routing values only (ADR-0005 decision 7): requestId, approverId, managerId,
+  escalateAfter (ISO-8601 duration) and, at completion, decision (approve | reject).
+  The approver's task has an interrupting boundary timer: after `escalateAfter` the task is
+  removed and the same decision is asked of the manager instead.
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="https://phoenix-axp/process/leave-approval">
+  <process id="leave-approval" name="Leave approval" isExecutable="true">
+    <startEvent id="submitted" />
+    <sequenceFlow id="f1" sourceRef="submitted" targetRef="approve" />
+
+    <userTask id="approve" name="Approve leave" flowable:assignee="${approverId}"
+              flowable:formKey="leave-approval-decision" />
+    <boundaryEvent id="deadline" attachedToRef="approve" cancelActivity="true">
+      <timerEventDefinition>
+        <timeDuration>${escalateAfter}</timeDuration>
+      </timerEventDefinition>
+    </boundaryEvent>
+    <sequenceFlow id="f2" sourceRef="deadline" targetRef="approveEscalated" />
+    <userTask id="approveEscalated" name="Approve leave (escalated)"
+              flowable:assignee="${managerId}" flowable:formKey="leave-approval-decision" />
+
+    <sequenceFlow id="f3" sourceRef="approve" targetRef="decided" />
+    <sequenceFlow id="f4" sourceRef="approveEscalated" targetRef="decided" />
+    <exclusiveGateway id="decided" default="toRejected" />
+    <sequenceFlow id="toApproved" sourceRef="decided" targetRef="approved">
+      <conditionExpression xsi:type="tFormalExpression"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${decision == 'approve'}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toRejected" sourceRef="decided" targetRef="rejected" />
+    <endEvent id="approved" />
+    <endEvent id="rejected" />
+  </process>
+</definitions>

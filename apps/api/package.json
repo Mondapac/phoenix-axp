@@ -11,16 +11,18 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "test:db": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.db.config.cjs",
-    "boundaries": "depcruise src --config .dependency-cruiser.cjs"
+    "boundaries": "depcruise src --config .dependency-cruiser.cjs",
+    "test:poc": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.poc.config.cjs --runInBand"
   },
   "dependencies": {
-    "@phoenix/shared-kernel": "workspace:*",
     "@nestjs/common": "^12.1.2",
     "@nestjs/core": "^12.1.2",
     "@nestjs/platform-express": "^12.1.2",
     "@nestjs/swagger": "^12.0.2",
+    "@phoenix/shared-kernel": "workspace:*",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "ajv": "^8.20.0",
     "helmet": "^8.3.0",
     "nestjs-pino": "^5.2.1",
     "pg": "^8.23.1",

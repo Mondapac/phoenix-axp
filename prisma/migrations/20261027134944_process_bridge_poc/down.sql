@@ -1,0 +1,17 @@
+DROP POLICY "incident_tenant_isolation" ON "process"."incident";
+DROP POLICY "inbox_tenant_isolation" ON "process"."inbox";
+DROP POLICY "outbox_tenant_isolation" ON "process"."outbox";
+DROP POLICY "task_tenant_isolation" ON "process"."task";
+DROP POLICY "request_tenant_isolation" ON "process"."request";
+DROP POLICY "process_revision_tenant_isolation" ON "process"."process_revision";
+DROP POLICY "form_revision_tenant_isolation" ON "process"."form_revision";
+REVOKE ALL ON ALL TABLES IN SCHEMA "process" FROM "phoenix_app";
+REVOKE USAGE ON SCHEMA "process" FROM "phoenix_app";
+DROP TABLE "process"."incident";
+DROP TABLE "process"."inbox";
+DROP TABLE "process"."outbox";
+DROP TABLE "process"."task";
+DROP TABLE "process"."request";
+DROP TABLE "process"."process_revision";
+DROP TABLE "process"."form_revision";
+DROP SCHEMA "process";

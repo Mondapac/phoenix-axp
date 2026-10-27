@@ -3,6 +3,7 @@ import { TenantGuardError } from '../../src/platform/unit-of-work/errors';
 import { TEST_TENANTS } from '../support/test-config';
 import {
   createPersistence,
+  modelMap,
   otherTenantOf,
   probeRow,
   tenantOf,
@@ -76,7 +77,10 @@ describe('tenant guard (database integration)', () => {
         return Promise.resolve(Object.keys(view));
       });
 
-      expect(keys).toEqual({ ok: true, value: ['isolationProbe'] });
+      // Every model delegate of the map and nothing else (no $queryRaw, no $transaction).
+      const delegates = Object.values(modelMap.models).map((entry) => entry.clientProperty);
+      expect(keys).toEqual({ ok: true, value: delegates });
+      expect(delegates).toContain('isolationProbe');
     });
 
     it("never sees the other tenant's rows, even by id", async () => {

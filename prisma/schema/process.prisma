@@ -1,0 +1,132 @@
+// The `process` module (schema "process"): PoC 3 spike, the Flowable bridge (ADR-0005). The
+// core owns forms, submissions, the task inbox and the bridge's outbox and inbox; Flowable owns
+// execution (its own database, never this one). CHECK constraints, grants and row-level
+// security are hand-written in the migration.
+
+/// V1 immutable revision: a published form (JSON Schema + UI Schema). Never updated.
+model FormRevision {
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  formKey     String   @map("form_key") @db.VarChar(64)
+  revision    Int
+  jsonSchema  Json     @map("json_schema")
+  uiSchema    Json     @map("ui_schema")
+  /// SHA-256 of the canonical JSON of both schemas, hex.
+  contentHash String   @map("content_hash") @db.Char(64)
+  publishedAt DateTime @map("published_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, formKey, revision], map: "form_revision_tenant_id_form_key_revision_key")
+  @@map("form_revision")
+  @@schema("process")
+}
+
+/// V1 immutable revision: a process definition (BPMN XML) as the core published it. The engine
+/// deployment of it is per tenant (Flowable tenantId).
+model ProcessRevision {
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  processKey  String   @map("process_key") @db.VarChar(64)
+  revision    Int
+  bpmnXml     String   @map("bpmn_xml")
+  contentHash String   @map("content_hash") @db.Char(64)
+  publishedAt DateTime @map("published_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, processKey, revision], map: "process_revision_tenant_id_process_key_revision_key")
+  @@map("process_revision")
+  @@schema("process")
+}
+
+/// V3 snapshot at reference: one submitted request. It keeps the form revision, the process
+/// revision and a hash of what was submitted (ADR-0007).
+model Request {
+  id                String   @id @db.Uuid
+  tenantId          String   @map("tenant_id") @db.VarChar(32)
+  requesterId       String   @map("requester_id") @db.Uuid
+  formRevisionId    String   @map("form_revision_id") @db.Uuid
+  processRevisionId String   @map("process_revision_id") @db.Uuid
+  /// Spike: plain jsonb. Personal fields go under subject keys once `subject-keys` lands.
+  answers           Json
+  contentHash       String   @map("content_hash") @db.Char(64)
+  /// submitted | running | approved | rejected | cancelled
+  status            String   @db.VarChar(16)
+  /// The engine instance the core adopted (first writer wins); null until known.
+  processInstanceId String?  @map("process_instance_id") @db.VarChar(64)
+  submittedAt       DateTime @map("submitted_at") @db.Timestamptz(3)
+  version           Int
+
+  @@unique([tenantId, processInstanceId], map: "request_tenant_id_process_instance_id_key")
+  @@map("request")
+  @@schema("process")
+}
+
+/// The core's task inbox: one row per engine user task, ever. Who may act is decided here.
+model Task {
+  id             String    @id @db.Uuid
+  tenantId       String    @map("tenant_id") @db.VarChar(32)
+  requestId      String    @map("request_id") @db.Uuid
+  engineTaskId   String    @map("engine_task_id") @db.VarChar(64)
+  taskKey        String    @map("task_key") @db.VarChar(64)
+  formKey        String    @map("form_key") @db.VarChar(64)
+  assigneeId     String    @map("assignee_id") @db.Uuid
+  /// open | completing | completed | superseded | escalated | cancelled
+  status         String    @db.VarChar(16)
+  /// approve | reject, once the assignee decided.
+  decision       String?   @db.VarChar(16)
+  /// The outbox event id of the completion: the idempotency key sent to the engine.
+  completionKey  String?   @map("completion_key") @db.Uuid
+  openedAt       DateTime  @map("opened_at") @db.Timestamptz(3)
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz(3)
+  version        Int
+
+  @@unique([tenantId, engineTaskId], map: "task_tenant_id_engine_task_id_key")
+  @@map("task")
+  @@schema("process")
+}
+
+/// Core -> engine commands (ADR-0005, ADR-0006). Written in the use case's transaction; the
+/// relay claims a row with a lease, calls the engine outside any transaction, then acks.
+model Outbox {
+  eventId          String    @id @map("event_id") @db.Uuid
+  tenantId         String    @map("tenant_id") @db.VarChar(32)
+  type             String    @db.VarChar(96)
+  aggregateType    String    @map("aggregate_type") @db.VarChar(32)
+  aggregateId      String    @map("aggregate_id") @db.Uuid
+  aggregateVersion Int       @map("aggregate_version")
+  occurredAt       DateTime  @map("occurred_at") @db.Timestamptz(3)
+  correlationId    String    @map("correlation_id") @db.VarChar(128)
+  payload          Json
+  attempts         Int
+  leaseUntil       DateTime? @map("lease_until") @db.Timestamptz(3)
+  lastError        String?   @map("last_error") @db.VarChar(64)
+  publishedAt      DateTime? @map("published_at") @db.Timestamptz(3)
+
+  @@map("outbox")
+  @@schema("process")
+}
+
+/// Engine -> core observations, deduplicated per handler (ADR-0006 decision 5).
+model Inbox {
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  eventId     String   @map("event_id") @db.Uuid
+  handler     String   @db.VarChar(64)
+  processedAt DateTime @map("processed_at") @db.Timestamptz(3)
+
+  @@id([tenantId, eventId, handler], map: "inbox_pkey")
+  @@map("inbox")
+  @@schema("process")
+}
+
+/// V4 append-only: what the bridge found that should not happen (an orphan engine instance, a
+/// completion the engine refused, a task finished outside the core). For operators.
+model Incident {
+  id         String   @id @db.Uuid
+  tenantId   String   @map("tenant_id") @db.VarChar(32)
+  kind       String   @db.VarChar(48)
+  /// The engine object concerned (instance or task id).
+  engineRef  String   @map("engine_ref") @db.VarChar(64)
+  requestId  String?  @map("request_id") @db.Uuid
+  detectedAt DateTime @map("detected_at") @db.Timestamptz(3)
+
+  @@map("incident")
+  @@schema("process")
+}
