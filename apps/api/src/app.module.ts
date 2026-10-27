@@ -18,6 +18,7 @@ import { TenantConfigModule } from './platform/tenant-config/tenant-config.modul
 import { TenantContextGuard } from './platform/tenant-context/tenant-context.guard';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
 import { WorkerModule } from './platform/worker/worker.module';
+import { TenancyModule, TenancySiteAncestryModule } from './modules/tenancy';
 
 /**
  * Every global guard of the application, in the order they run. TenantContextGuard is first,
@@ -54,11 +55,12 @@ export class AppModule {
         SchedulerModule,
         PersistenceModule,
         AuditModule,
-        // No identity or tenancy module yet: the authorisation check and the site-ancestry
-        // reader are fail-closed placeholders (ADR-0010), so a production start is refused.
-        AuthzModule.register(),
+        // No identity module yet: the authorisation check is a fail-closed placeholder
+        // (ADR-0010), so a production start is refused. Tenancy answers subtree questions.
+        AuthzModule.register({ siteAncestry: TenancySiteAncestryModule }),
         WorkerModule,
         HealthModule,
+        TenancyModule,
       ],
       providers: [
         ...GLOBAL_GUARDS.map((guard) => ({ provide: APP_GUARD, useClass: guard })),
