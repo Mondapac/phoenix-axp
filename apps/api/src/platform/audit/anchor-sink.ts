@@ -60,7 +60,8 @@ export const ANCHOR_SOURCE = Symbol('ANCHOR_SOURCE');
  * The Phase 2 anchor (PA 8, Hassan Q8): one structured log line per checkpoint
  * (`audit.checkpoint`) and per heartbeat (`audit.heartbeat`), with tenant, epoch, `chain_seq`,
  * the chain hash as `sha256:` and the instant. It can be written but not read back. Accepted
- * only while no environment of the hardening trigger exists and all data is synthetic.
+ * only while no environment of the hardening trigger exists and all data is synthetic; that
+ * trigger is tracked in docs/platform-deferred.md (external audit anchor, security review S5-2).
  */
 export class LogAnchorSink implements AnchorSink {
   private readonly logger = new Logger('AuditAnchor');
