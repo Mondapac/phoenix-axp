@@ -362,7 +362,7 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
         compoundSelectors: [
           { name: 'tenantId_id', fields: ['tenantId', 'id'] },
           { name: 'byCode', fields: ['tenantId', 'code'] },
-          { name: 'kind_tenantId', fields: ['kind', 'tenantId'] },
+          { name: 'tenantId_kind', fields: ['tenantId', 'kind'] },
         ],
         foreignKeys: [],
       });
