@@ -89,7 +89,7 @@ export class ListFormSubmissions extends UseCase<
     const { form, current, records, revisions } = read.value;
 
     // The reader's access, from committed grants, before the answers are read.
-    const formWide = await this.access.of(context, form, []);
+    const formWide = await this.access.forRead(context, form, []);
     if (!formWide.canRead) return err(FORM_NOT_FOUND);
     const access = await accessByRevision(this.access, context, form, revisions, current);
     const readable = records.filter((record) => access.get(record.revisionId)?.canRead === true);
@@ -117,6 +117,8 @@ export class ListFormSubmissions extends UseCase<
       async () => ok(await this.subjectKeys.wrappedKeys(tenant, live)),
       { readOnly: true },
     );
-    return read.ok ? read.value : new Map();
+    // A failed read is an error, never "erased" (security review L3).
+    if (!read.ok) throw new Error('forms: the subject keys could not be read');
+    return read.value;
   }
 }

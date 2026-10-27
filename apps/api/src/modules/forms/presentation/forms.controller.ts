@@ -245,6 +245,7 @@ export class FormsController {
 function cursorOf(text: string): InboxCursor {
   const [millis, id] = text.split('.');
   const parsed = parseId<'FormSubmission'>(id ?? '');
-  if (!parsed.ok) return parseRequest(z.never(), text);
+  // At most 15 digits: inside Temporal's range, so a crafted cursor is a 400, never a 500.
+  if (!parsed.ok || !/^\d{1,15}$/.test(millis ?? '')) return parseRequest(z.never(), text);
   return { submittedAt: Temporal.Instant.fromEpochMilliseconds(Number(millis)), id: parsed.value };
 }

@@ -709,6 +709,41 @@ describe.each(TEST_TENANTS)('form submissions in tenant %s (database integration
     );
   });
 
+  it('never shows a field that only a submit-on-behalf grant opens (security review H1)', async () => {
+    const form = await published({ audience: 'anyone', roleIds: [], allowOnBehalf: true });
+    const done = await submitAnonymously(form);
+    const { fullName, nationalId, note } = form.fieldId;
+    // One staff member, two roles: reading the inbox, and typing the national id in for people.
+    const both = staffWith([FORMS_SUBMISSION_READ.key]);
+    grantsByAccount.get(accountOf(both)!)!.push({
+      scope: { level: 'tenant' },
+      keys: new Set([FORMS_SUBMISSION_SUBMIT_ON_BEHALF.key]),
+      qualifiers: new Map([[FORMS_SUBMISSION_SUBMIT_ON_BEHALF.key, ALL_DEFINITIONS]]),
+      fieldRules: new Map([[nationalId, 'edit']]),
+    });
+    const listed = await useCases.inbox.execute(both, {
+      formId: form.formId,
+      after: null,
+      limit: 10,
+    });
+    expect(listed.ok && listed.value.items.map((item) => item.answers)).toEqual([
+      { [fullName]: answers.fullName, [note]: answers.note },
+    ]);
+    expect(listed.ok && listed.value.fields.map((field) => field.id)).not.toContain(nationalId);
+    const viewed = await useCases.view.execute(both, { submissionId: done.submissionId });
+    expect(viewed.ok && Object.keys(viewed.value.submission.answers)).not.toContain(nationalId);
+    // The on-behalf grant still lets them write it.
+    expect(
+      (
+        await useCases.submitOnBehalf.execute(both, {
+          formKey: form.key,
+          answers,
+          clientAddress: address(),
+        })
+      ).ok,
+    ).toBe(true);
+  });
+
   it('pages the inbox newest first with a cursor', async () => {
     const form = await published();
     const made = [];
@@ -820,6 +855,14 @@ describe.each(TEST_TENANTS)('form submissions in tenant %s (database integration
       [done.submissionId],
     );
     expect(key).toEqual({ wrapped: false, destroyed: true });
+    // Erasure is final: not even the application role can bring the key back.
+    await expect(
+      asApplication(
+        `UPDATE platform.subject_key SET destroyed_at = NULL, wrapped_key = decode(repeat('00', 61), 'hex')
+          WHERE subject_id = $1`,
+        [done.submissionId],
+      ),
+    ).rejects.toMatchObject({ code: '23001' });
     expect(audit.of(done.submissionId).at(-1)).toMatchObject({
       action: 'forms.submission.erased',
       after: { formId: form.formId, reason: 'request' },

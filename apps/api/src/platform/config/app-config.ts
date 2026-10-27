@@ -351,6 +351,8 @@ function sessionIssues(env: Record<string, string | undefined>, nodeEnv: string)
   }
   if (production && !env.SUBJECT_KEY_KEK) {
     issues.push('SUBJECT_KEY_KEK: required in production (personal data, ADR-0003)');
+  } else if (production && env.SUBJECT_KEY_KEK === DEVELOPMENT_SUBJECT_KEY_KEK) {
+    issues.push('SUBJECT_KEY_KEK: the local development key is refused in production');
   }
   for (const origin of originsOf(env.PANEL_ORIGINS)) {
     if (!ORIGIN.test(origin) || (production && !origin.startsWith('https://'))) {
@@ -401,6 +403,8 @@ function storageIssues(env: Record<string, string | undefined>, nodeEnv: string)
 
 /** The local development key of infra/seaweedfs/s3.json: never a production credential. */
 const DEVELOPMENT_SECRET = 'phoenix-dev-secret';
+/** The KEK of `.env.example`: public, so never a production key. */
+const DEVELOPMENT_SUBJECT_KEY_KEK = 'ZGV2LW9ubHktc3ViamVjdC1rZXkta2VrLTMyYnl0ZXM';
 
 /** Production serves signed URLs over https only, and never with the development key. */
 function productionStorageIssues(env: Record<string, string | undefined>): string[] {

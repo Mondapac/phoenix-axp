@@ -61,6 +61,24 @@ ALTER TABLE "platform"."captcha_spent"
   ADD CONSTRAINT "captcha_spent_tenant_id_check" CHECK ("tenant_id" ~ '^[a-z][a-z0-9-]{1,31}$'),
   ADD CONSTRAINT "captcha_spent_challenge_hash_check" CHECK ("challenge_hash" ~ '^[0-9a-f]{64}$');
 
+-- Hand-written: a destroyed subject key stays destroyed, for every role, the owner included
+-- (erasure is final; security review of slice 2.5, L2).
+CREATE FUNCTION "platform"."subject_key_reject_revival"() RETURNS trigger
+  LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF OLD."destroyed_at" IS NOT NULL THEN
+    RAISE EXCEPTION 'platform.subject_key: a destroyed key cannot change'
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER "subject_key_stays_destroyed"
+  BEFORE UPDATE ON "platform"."subject_key"
+  FOR EACH ROW EXECUTE FUNCTION "platform"."subject_key_reject_revival"();
+
 -- Grants. A subject key is inserted once and then only destroyed: UPDATE of the two columns
 -- that destroying sets, and the CHECK above refuses any other change of state. Rate-limit
 -- windows and spent challenges are counters, pruned by the platform job.

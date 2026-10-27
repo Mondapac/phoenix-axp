@@ -236,7 +236,7 @@ describe('the submission validator', () => {
     }
   });
 
-  it('ends a worker that runs past its time limit, refuses that request, and serves the next', async () => {
+  it('ends a worker that runs past its time limit, refuses only that request, and serves the ones queued behind it', async () => {
     // `uniqueItems` over objects compares every pair: 30 000 items take far longer than the
     // limit. The API process only waits for the timeout; the worker is replaced.
     const slow = revision(2, {
@@ -245,15 +245,17 @@ describe('the submission validator', () => {
     });
     const list = Array.from({ length: 30_000 }, (_, i) => ({ n: i, pad: 'x' }));
     const started = process.hrtime.bigint();
-    await expect(checker.validate(slow, { list })).resolves.toEqual({
+    // A request queued behind the slow one is not refused with it (security review M1).
+    const [slowResult, queued] = await Promise.all([
+      checker.validate(slow, { list }),
+      checker.validate(revision(1, schema), { fullName: 'Ali' }),
+    ]);
+    expect(slowResult).toEqual({
       ok: false,
       error: { code: 'forms.submission.invalid', problems: [{ pointer: '', keyword: 'limit' }] },
     });
+    expect(queued).toEqual({ ok: true, value: undefined });
     const seconds = Number(process.hrtime.bigint() - started) / 1e9;
-    expect(seconds).toBeLessThan(SCHEMA_WORKER_LIMITS.validateTimeoutMs / 1000 + 2);
-    await expect(checker.validate(revision(1, schema), { fullName: 'Ali' })).resolves.toEqual({
-      ok: true,
-      value: undefined,
-    });
+    expect(seconds).toBeLessThan(SCHEMA_WORKER_LIMITS.validateTimeoutMs / 1000 + 3);
   }, 30_000);
 });

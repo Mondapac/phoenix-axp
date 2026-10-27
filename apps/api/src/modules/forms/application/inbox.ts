@@ -45,7 +45,7 @@ export async function accessByRevision(
   for (const [id, revision] of revisions) {
     byRevision.set(
       id,
-      await access.of(context, form, descriptorsOf(revision.fields ?? [], current)),
+      await access.forRead(context, form, descriptorsOf(revision.fields ?? [], current)),
     );
   }
   return byRevision;

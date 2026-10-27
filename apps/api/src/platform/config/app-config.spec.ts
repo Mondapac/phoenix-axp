@@ -64,6 +64,17 @@ describe('loadAppConfig', () => {
     expect(Object.isFrozen(config.hostedTenants)).toBe(true);
   });
 
+  it('refuses the development subject-key KEK in production', () => {
+    expect(
+      issuesOf({
+        HOSTED_TENANTS: 'demo-fa',
+        NODE_ENV: 'production',
+        ...PRODUCTION_SESSION,
+        SUBJECT_KEY_KEK: 'ZGV2LW9ubHktc3ViamVjdC1rZXkta2VrLTMyYnl0ZXM',
+      }).filter((issue) => issue.startsWith('SUBJECT_KEY_KEK')),
+    ).toEqual(['SUBJECT_KEY_KEK: the local development key is refused in production']);
+  });
+
   it('takes the subject-key KEK as exactly 32 bytes of base64url (ADR-0003)', () => {
     const kek = Buffer.alloc(32, 7);
     expect(

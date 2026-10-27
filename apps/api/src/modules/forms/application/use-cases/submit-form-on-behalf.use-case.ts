@@ -63,7 +63,7 @@ export class SubmitFormOnBehalf extends UseCase<
     if (served === null || !served.form.policy.allowOnBehalf) return err(FORM_NOT_FOUND);
     const { form, fields } = served;
     // Tenant, site, definition, then field modes, from the actor's grants (ADR-0024).
-    const access = await this.access.of(context, form, descriptorsOf(fields, fields));
+    const access = await this.access.forOnBehalf(context, form, descriptorsOf(fields, fields));
     if (!access.canWrite) return err(FORM_NOT_FOUND);
     const answers = readAnswers(input.answers, fields);
     if (!answers.ok) return answers;

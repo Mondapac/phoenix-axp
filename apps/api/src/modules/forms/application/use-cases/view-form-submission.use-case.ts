@@ -78,11 +78,16 @@ export class ViewFormSubmission extends UseCase<
       context,
       this.subjectKeys,
       [record],
-      keys.ok ? keys.value : new Map(),
+      // A failed read is an error, never "erased" (security review L3).
+      keys.ok ? keys.value : unreadable(),
       revisions,
       access,
     );
     const [submission] = views;
     return submission === undefined ? err(SUBMISSION_NOT_FOUND) : ok({ submission, fields });
   }
+}
+
+function unreadable(): never {
+  throw new Error('forms: the subject keys could not be read');
 }
