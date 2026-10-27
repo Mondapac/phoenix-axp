@@ -358,6 +358,59 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
     });
   });
 
+  describe('module bindings (scripts/check-module-bindings.mjs, security review S5-1)', () => {
+    /** Runs the real script, as `pnpm boundaries` does; answers its exit code and problems. */
+    function checkBindings(srcDir: string): { status: number; problems: string[] } {
+      try {
+        execFileSync(
+          process.execPath,
+          [path.join(REPO_ROOT, 'scripts/check-module-bindings.mjs'), '--src', srcDir],
+          { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        return { status: 0, problems: [] };
+      } catch (error) {
+        const { status, stderr } = error as { status: number; stderr: string };
+        const problems = stderr
+          .split('\n')
+          .filter((line) => line.startsWith('  - '))
+          .map((line) => line.slice(4));
+        return { status, problems };
+      }
+    }
+
+    it('accepts the real sources', () => {
+      expect(checkBindings(path.join(API_ROOT, 'src'))).toEqual({ status: 0, problems: [] });
+    });
+
+    it('rejects every binding that does not name its own module, and nothing else', () => {
+      const { status, problems } = checkBindings(path.join(FIXTURES, 'bindings/src'));
+      const own = "a module binds only its own name ('content')";
+      const platform = "the platform binds only 'platform' or 'platform.<component>'";
+      const literal = 'needs a string literal module name as its first argument';
+
+      expect(status).toBe(1);
+      expect(problems.sort()).toEqual(
+        [
+          'app.module.ts:6: registerPermissions(...) outside a module and outside platform/; a module binds itself',
+          'modules/content/content.module.ts:7: registerPermissions is imported or exported under another name',
+          `modules/content/content.module.ts:25: auditWriterFor('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:26: outboxWriterFor('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:27: registerSubscriptionsFrom('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:28: registerAuditActions('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:29: registerJobsFrom('identity') in module "content"; ${own}`,
+          `modules/content/content.module.ts:30: auditWriterFor('platform.authz') in module "content"; ${own}`,
+          `modules/content/content.module.ts:31: outboxWriterFor(...) ${literal}`,
+          `modules/content/content.module.ts:32: registerAuditActions(...) ${literal}`,
+          `modules/content/content.module.ts:33: auditWriterFor('identity') in module "content"; ${own}`,
+          'modules/content/content.module.ts:37: auditWriterFor is used without being called; call it directly',
+          'modules/content/content.module.ts:38: outboxWriterFor is used without being called; call it directly',
+          `platform/audit/audit.module.ts:13: auditWriterFor('identity') in platform/; ${platform}`,
+          `platform/audit/audit.module.ts:14: registerPermissions('content') in platform/; ${platform}`,
+        ].sort(),
+      );
+    });
+  });
+
   describe('the model map generator (scripts/generate-model-map.mjs)', () => {
     const GENERATOR = path.join(REPO_ROOT, 'scripts/generate-model-map.mjs');
 

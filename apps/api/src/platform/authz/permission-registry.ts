@@ -195,7 +195,8 @@ export class PermissionRegistry
 /**
  * The one line of a module's Nest module that pushes its catalogue at bootstrap (guarantee 1):
  * `providers: [registerPermissions('identity', IDENTITY_PERMISSIONS)]`. The name is the module's
- * folder; the use-case CI check reads every catalogue exported from a `contracts/` folder.
+ * folder, a string literal (scripts/check-module-bindings.mjs); the use-case CI check reads
+ * every catalogue exported from a `contracts/` folder.
  */
 export function registerPermissions(module: string, catalogue: PermissionCatalogue): Provider {
   return {
