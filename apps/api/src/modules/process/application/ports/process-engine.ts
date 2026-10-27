@@ -98,10 +98,13 @@ export class EngineUnavailableError extends Error {
   }
 }
 
-/** The engine refused the command for good (an invalid model, a missing definition, a 4xx). */
+/**
+ * The command is refused for good: an invalid model, a missing definition, a 4xx, or a stored
+ * model the current intake check refuses (`model-refused`; it never reaches the engine).
+ */
 export class EngineRefusedError extends Error {
   override readonly name = 'EngineRefusedError';
-  constructor(readonly reason: 'not-deployed' | 'client-error') {
+  constructor(readonly reason: 'not-deployed' | 'client-error' | 'model-refused') {
     super(`The process engine refused the command: ${reason}`);
   }
 }

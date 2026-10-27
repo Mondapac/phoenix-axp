@@ -16,6 +16,7 @@ import {
   retryAfter,
   type EngineVariables,
 } from '../../domain/engine-command';
+import { checkBpmn } from '../../domain/bpmn-guard';
 import type { IncidentKind } from '../../domain/incident';
 import { adoptionOf } from '../../domain/instance';
 import { statusOnEngineEnd, type EngineTaskEnd } from '../../domain/task';
@@ -24,10 +25,11 @@ import {
   EngineRefusedError,
   EngineTenantMismatchError,
   EngineUnavailableError,
+  type EngineDeployment,
   type EngineInstance,
   type ProcessEngine,
 } from '../ports/process-engine';
-import type { CommandRecord, ProcessRepository } from '../process.repository';
+import type { CommandRecord, ProcessRepository, RevisionRecord } from '../process.repository';
 
 export interface RelayPass {
   readonly claimed: number;
@@ -134,11 +136,7 @@ export class CommandRelay {
       this.repository.findRevision(tenant, command.subjectId),
     );
     if (revision === null) throw new EngineRefusedError('not-deployed');
-    await this.engine.deployRevision(tenant, {
-      processKey: revision.processKey,
-      revisionId: revision.id,
-      bpmnXml: revision.bpmnXml,
-    });
+    await this.engine.deployRevision(tenant, deploymentOf(revision));
     await this.ack(tenant, command);
   }
 
@@ -160,11 +158,7 @@ export class CommandRelay {
 
     let engineInstances: EngineInstance[] = [];
     if (instance.status === 'starting') {
-      await this.engine.deployRevision(tenant, {
-        processKey: revision.processKey,
-        revisionId: revision.id,
-        bpmnXml: revision.bpmnXml,
-      });
+      await this.engine.deployRevision(tenant, deploymentOf(revision));
       engineInstances = await this.engine.findInstancesByBusinessKey(tenant, instance.id);
       if (engineInstances.length === 0) {
         engineInstances = [
@@ -322,4 +316,15 @@ function variablesOf(payload: JsonObject): EngineVariables {
     throw new EngineRefusedError('client-error');
   }
   return variables as EngineVariables;
+}
+
+/**
+ * What the engine deploys, checked again: a revision stored under an earlier, weaker intake
+ * check never reaches the shared engine (security review of slice 2.2).
+ */
+function deploymentOf(revision: RevisionRecord): EngineDeployment {
+  if (!checkBpmn(revision.bpmnXml, revision.processKey).ok) {
+    throw new EngineRefusedError('model-refused');
+  }
+  return { processKey: revision.processKey, revisionId: revision.id, bpmnXml: revision.bpmnXml };
 }

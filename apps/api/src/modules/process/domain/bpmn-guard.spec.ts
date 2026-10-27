@@ -106,6 +106,107 @@ describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engi
     });
   });
 
+  // Security review of slice 2.2, C1: the engine reads an element's text with text and CDATA
+  // joined and comments dropped, so the check judges that joined text, never one run.
+  it.each([
+    ['split by CDATA', '$<![CDATA[{execution.getEngineServices()}]]>'],
+    ['split by a comment', '$<!-- -->{execution.getEngineServices()}'],
+    ['split across two CDATA sections', '<![CDATA[$]]><![CDATA[{bean.run()}]]>'],
+    ['split by a character reference and CDATA', '&#36;<![CDATA[{bean.run()}]]>'],
+    ['a safe expression with a call appended in CDATA', '${a}<![CDATA[${b.c()}]]>'],
+  ])('refuses an expression %s', (_label, text) => {
+    const body = `<startEvent id="start"/><sequenceFlow id="f" sourceRef="start" targetRef="end"><conditionExpression xsi:type="tFormalExpression">${text}</conditionExpression></sequenceFlow><endEvent id="end"/>`;
+    expect(refusal(model(body))).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'expression',
+    });
+  });
+
+  it.each([
+    ['an engine object', '${execution}'],
+    ['the host environment', '${systemEnvironment}'],
+    ['the engine configuration', '${processEngineConfiguration == null}'],
+  ])('refuses %s in a condition (M2)', (_label, text) => {
+    const body = `<startEvent id="start"/><sequenceFlow id="f" sourceRef="start" targetRef="end"><conditionExpression xsi:type="tFormalExpression">${text}</conditionExpression></sequenceFlow><endEvent id="end"/>`;
+    expect(refusal(model(body))).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'expression',
+    });
+  });
+
+  it.each([
+    ['a task name', '<userTask id="u" name="${requester}"/>'],
+    ['a form key', '<userTask id="u" flowable:formKey="${formOf}"/>'],
+    ['documentation', '<documentation>${x}</documentation>'],
+  ])('refuses any expression in %s, where the engine would store its text (M2)', (_l, body) => {
+    expect(refusal(model(body))).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'expression',
+    });
+  });
+
+  it.each([
+    ['an id too long for the core', `<userTask id="${'u'.repeat(65)}"/>`, 'id'],
+    ['an id with other characters', '<userTask id="a b"/>', 'id'],
+    ['a form key too long', `<userTask id="u" flowable:formKey="${'f'.repeat(129)}"/>`, 'formKey'],
+    [
+      'a repeating timer',
+      '<timerEventDefinition><timeCycle>R/PT1S</timeCycle></timerEventDefinition>',
+      'timeCycle',
+    ],
+  ])('refuses %s (L2, M1)', (_label, body, field) => {
+    expect(refusal(model(body))).toEqual({ code: 'process.bpmn.forbidden-construct', field });
+  });
+
+  it.each([
+    ['UTF-7', '<?xml version="1.0" encoding="UTF-7"?>'],
+    ['IBM037', '<?xml version="1.0" encoding="IBM037"?>'],
+    ['XML 1.1', '<?xml version="1.1"?>'],
+  ])('refuses an XML declaration naming %s (L1)', (_label, declaration) => {
+    const xml = model(APPROVAL).replace('<?xml version="1.0" encoding="UTF-8"?>', declaration);
+    expect(refusal(xml)).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'declaration',
+    });
+  });
+
+  it('accepts a declaration without an encoding, and none at all', () => {
+    const declared = model(APPROVAL);
+    expect(refusal(declared.replace(' encoding="UTF-8"', ''))).toBeNull();
+    expect(refusal(declared.replace('<?xml version="1.0" encoding="UTF-8"?>\n', ''))).toBeNull();
+  });
+
+  describe('a flow the shared engine cannot spin in (M1)', () => {
+    it('refuses a loop through a gateway alone', () => {
+      const body = `<startEvent id="start"/><sequenceFlow id="f1" sourceRef="start" targetRef="g"/>
+        <exclusiveGateway id="g" default="back"/><sequenceFlow id="back" sourceRef="g" targetRef="g"/>`;
+      expect(refusal(model(body))).toEqual({ code: 'process.bpmn.unbounded-flow' });
+    });
+
+    it('refuses a loop through a timer and a manual task, without a person', () => {
+      const body = `<startEvent id="start"/><sequenceFlow id="f1" sourceRef="start" targetRef="wait"/>
+        <intermediateCatchEvent id="wait"><timerEventDefinition><timeDuration>PT1S</timeDuration></timerEventDefinition></intermediateCatchEvent>
+        <sequenceFlow id="f2" sourceRef="wait" targetRef="m"/><manualTask id="m"/>
+        <sequenceFlow id="f3" sourceRef="m" targetRef="wait"/>`;
+      expect(refusal(model(body))).toEqual({ code: 'process.bpmn.unbounded-flow' });
+    });
+
+    it('accepts a loop back to a user task (a rework step)', () => {
+      const body = `${APPROVAL}<sequenceFlow id="rework" sourceRef="decide" targetRef="approve"/>`;
+      expect(refusal(model(body))).toBeNull();
+    });
+
+    it('refuses a flow that names a node the model does not hold', () => {
+      const body = `<startEvent id="start"/><sequenceFlow id="f1" sourceRef="start" targetRef="nowhere"/>`;
+      expect(refusal(model(body))).toEqual({ code: 'process.bpmn.unbounded-flow' });
+    });
+
+    it('refuses more flow nodes than the engine is offered', () => {
+      const body = Array.from({ length: 501 }, (_, i) => `<manualTask id="m${i}"/>`).join('');
+      expect(refusal(model(body))).toEqual({ code: 'process.bpmn.unbounded-flow' });
+    });
+  });
+
   it.each([
     ['a DOCTYPE', '<!DOCTYPE definitions [<!ENTITY x SYSTEM "file:///etc/passwd">]>'],
     ['a processing instruction', '<?evil run?>'],

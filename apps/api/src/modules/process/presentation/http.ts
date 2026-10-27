@@ -12,6 +12,7 @@ const FAILURE_STATUS: Readonly<Record<string, number>> = Object.freeze({
   'process.bpmn.too-large': 413,
   'process.bpmn.process-key-mismatch': 422,
   'process.bpmn.forbidden-construct': 422,
+  'process.bpmn.unbounded-flow': 422,
   ...ACCESS_DENIED_STATUS,
 });
 

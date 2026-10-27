@@ -497,6 +497,43 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
         { kind: 'command-refused', instance_id: null },
       ]);
     });
+
+    it('never deploys a stored model the current intake check refuses (security review C1)', async () => {
+      // A revision stored before a stricter check: the relay checks it again before the engine.
+      const key = `leave-${code.replace('-', '_')}-${++keys}`;
+      const unsafe = bpmn(key).replace(
+        '<sequenceFlow id="f2" sourceRef="approve" targetRef="end"/>',
+        '<sequenceFlow id="f2" sourceRef="approve" targetRef="end"><conditionExpression>$<![CDATA[{execution.getEngineServices()}]]></conditionExpression></sequenceFlow>',
+      );
+      const revisionId = ids.next<'ProcessRevision'>();
+      await persistence.unitOfWork.run(tenant, async () => {
+        await bridge.repository.insertRevision(
+          tenant,
+          {
+            id: revisionId,
+            processKey: key,
+            revision: 1,
+            bpmnXml: unsafe,
+            contentHash: new NodeBridgeHashing().contentHash(unsafe),
+          },
+          clock.now(),
+        );
+        await bridge.commands.deployRevision(system, { id: revisionId });
+        return { ok: true as const, value: undefined };
+      });
+      engine.calls.length = 0;
+      await drain();
+      expect(engine.calls).not.toContain('deployRevision');
+      const [command] = await rowsOf<{ id: string; last_error: string }>(
+        tenant,
+        "SELECT id, last_error FROM process.engine_command WHERE subject_id = $1 AND kind = 'deploy-revision'",
+        [revisionId],
+      );
+      expect(command!.last_error).toBe('engine.model-refused');
+      expect(await incidentsAbout(command!.id)).toEqual([
+        { kind: 'command-refused', instance_id: null },
+      ]);
+    });
   });
 
   describe('completion keys (R4, R7, R10)', () => {
