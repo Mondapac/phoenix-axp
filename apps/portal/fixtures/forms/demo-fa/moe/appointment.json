@@ -1,0 +1,89 @@
+{
+  "_revision": { "form": "appointment", "revision": 1, "publishedAt": "2026-10-20T09:00:00Z" },
+  "schema": {
+    "type": "object",
+    "properties": {
+      "fullName": { "type": "string", "minLength": 3, "maxLength": 80 },
+      "nationalCode": { "type": "string", "pattern": "^[0-9]{10}$" },
+      "mobile": { "type": "string", "pattern": "^09[0-9]{9}$" },
+      "birthDate": { "type": "string", "format": "date" },
+      "requestType": { "type": "string", "enum": ["certificate", "complaint", "information"] },
+      "description": { "type": "string", "maxLength": 500 }
+    },
+    "required": ["fullName", "nationalCode", "mobile", "birthDate", "requestType"],
+    "additionalProperties": false
+  },
+  "uischema": {
+    "type": "VerticalLayout",
+    "elements": [
+      {
+        "type": "Group",
+        "label": "applicant",
+        "elements": [
+          {
+            "type": "Control",
+            "scope": "#/properties/fullName",
+            "options": { "autoComplete": "name" }
+          },
+          {
+            "type": "Control",
+            "scope": "#/properties/nationalCode",
+            "options": { "normalise": "identifier", "inputMode": "numeric" }
+          },
+          {
+            "type": "Control",
+            "scope": "#/properties/mobile",
+            "options": { "normalise": "identifier", "inputMode": "numeric", "autoComplete": "tel" }
+          },
+          { "type": "Control", "scope": "#/properties/birthDate" }
+        ]
+      },
+      {
+        "type": "Group",
+        "label": "request",
+        "elements": [
+          { "type": "Control", "scope": "#/properties/requestType" },
+          { "type": "Control", "scope": "#/properties/description", "options": { "multi": true } }
+        ]
+      }
+    ]
+  },
+  "messages": {
+    "fa-IR": {
+      "title": "درخواست نوبت حضوری",
+      "intro": "فیلدهای ستاره‌دار الزامی است. می‌توانید ارقام را فارسی یا انگلیسی وارد کنید.",
+      "applicant": "اطلاعات متقاضی",
+      "request": "درخواست",
+      "fullName.label": "نام و نام خانوادگی",
+      "nationalCode.label": "کد ملی",
+      "nationalCode.description": "ده رقم، بدون خط تیره.",
+      "nationalCode.error.pattern": "کد ملی باید ۱۰ رقم باشد.",
+      "mobile.label": "شمارهٔ همراه",
+      "mobile.error.pattern": "شمارهٔ همراه باید ۱۱ رقم باشد و با ۰۹ شروع شود.",
+      "birthDate.label": "تاریخ تولد",
+      "birthDate.error.format": "تاریخ تولد معتبر نیست؛ آن را به شکل سال/ماه/روز وارد کنید.",
+      "requestType.label": "نوع درخواست",
+      "requestType.certificate": "گواهی",
+      "requestType.complaint": "شکایت",
+      "requestType.information": "دریافت اطلاعات",
+      "description.label": "توضیحات"
+    },
+    "en-US": {
+      "title": "Book an in-person appointment",
+      "intro": "Fields marked with an asterisk are required.",
+      "applicant": "Applicant",
+      "request": "Request",
+      "fullName.label": "Full name",
+      "nationalCode.label": "National ID number",
+      "nationalCode.error.pattern": "The national ID number has 10 digits.",
+      "mobile.label": "Mobile number",
+      "mobile.error.pattern": "Enter an 11-digit mobile number starting with 09.",
+      "birthDate.label": "Date of birth",
+      "requestType.label": "Request type",
+      "requestType.certificate": "Certificate",
+      "requestType.complaint": "Complaint",
+      "requestType.information": "Information",
+      "description.label": "Details"
+    }
+  }
+}

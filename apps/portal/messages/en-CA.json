@@ -1,0 +1,66 @@
+{
+  "layout": {
+    "skipToContent": "Skip to main content"
+  },
+  "blocks": {
+    "mainNav": "Main",
+    "footerNav": "Footer",
+    "openService": "Start"
+  },
+  "form": {
+    "submit": "Send request",
+    "submitting": "Sending…",
+    "errorSummaryTitle": "Fix the following to send your request:",
+    "success": "Your request was received.",
+    "serverError": "We could not send your request. Try again.",
+    "requiredMark": "required",
+    "dateFormatHint": "Year/month/day, for example {example}.",
+    "calendar": {
+      "open": "Choose a date from the calendar",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "hint": "Use the arrow keys to change the day and Page Up or Page Down to change the month. Enter chooses, Escape closes."
+    },
+    "errors": {
+      "required": "Enter {label}.",
+      "minLength": "{label} must be at least {limit} characters.",
+      "maxLength": "{label} must be at most {limit} characters.",
+      "pattern": "{label} is not in the right format.",
+      "format": "{label} is not valid.",
+      "enum": "Choose one of the options for {label}.",
+      "additionalProperties": "An unknown field was sent.",
+      "default": "{label} is not valid."
+    }
+  },
+  "editor": {
+    "dictionary": {},
+    "blocks": {
+      "SiteHeader": "Header and menu",
+      "Hero": "Hero",
+      "NewsList": "News list",
+      "CardGrid": "Service cards",
+      "SiteFooter": "Footer"
+    },
+    "fields": {
+      "siteName": "Site name",
+      "tagline": "Tagline",
+      "nav": "Menu links",
+      "label": "Link text",
+      "href": "URL",
+      "title": "Title",
+      "subtitle": "Subtitle",
+      "ctaLabel": "Button text",
+      "ctaHref": "Button URL",
+      "anchor": "In-page anchor",
+      "items": "News items",
+      "date": "Date (ISO, e.g. 2026-10-27)",
+      "summary": "Summary",
+      "cards": "Cards",
+      "body": "Body",
+      "text": "Text",
+      "links": "Links",
+      "pageTitle": "Page title"
+    },
+    "title": "Edit home page"
+  }
+}

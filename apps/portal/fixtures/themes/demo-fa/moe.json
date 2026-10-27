@@ -1,0 +1,12 @@
+{
+  "siteId": "moe",
+  "tokens": {
+    "color.brand": "#0b4f43",
+    "color.on-brand": "#ffffff",
+    "color.accent": "#0b5c4a",
+    "color.accent-hover": "#08473a",
+    "color.link": "#0b5c4a",
+    "radius.card": "6px"
+  },
+  "locked": ["color.brand"]
+}

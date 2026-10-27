@@ -1,0 +1,51 @@
+{
+  "_version": { "page": "home", "version": 1, "publishedAt": "2026-10-26T06:00:00Z" },
+  "root": { "props": { "title": "خانه" } },
+  "content": [
+    {
+      "type": "SiteHeader",
+      "props": {
+        "id": "SiteHeader-1",
+        "siteName": "ادارهٔ کل آموزش استان فارس (نمونه)",
+        "tagline": "زیرمجموعهٔ وزارت آموزش",
+        "nav": [
+          { "label": "خانه", "href": "/" },
+          { "label": "درخواست نوبت", "href": "/forms/appointment" }
+        ]
+      }
+    },
+    {
+      "type": "Hero",
+      "props": {
+        "id": "Hero-1",
+        "title": "ادارهٔ کل آموزش فارس",
+        "subtitle": "خدمات استانی با همان حساب کاربری وزارتخانه.",
+        "ctaLabel": "ثبت درخواست نوبت",
+        "ctaHref": "/forms/appointment"
+      }
+    },
+    {
+      "type": "NewsList",
+      "props": {
+        "id": "NewsList-1",
+        "title": "خبرهای استان",
+        "items": [
+          {
+            "title": "افتتاح ۱۲ مدرسهٔ جدید در شیراز",
+            "date": "2026-10-24",
+            "summary": "با حضور مدیرکل آموزش استان.",
+            "href": "/news/fars-1"
+          }
+        ]
+      }
+    },
+    {
+      "type": "SiteFooter",
+      "props": {
+        "id": "SiteFooter-1",
+        "text": "ادارهٔ کل آموزش استان فارس",
+        "links": [{ "label": "تماس", "href": "/contact" }]
+      }
+    }
+  ]
+}

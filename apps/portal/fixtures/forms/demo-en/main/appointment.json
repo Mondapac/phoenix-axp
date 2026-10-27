@@ -1,0 +1,63 @@
+{
+  "_revision": { "form": "appointment", "revision": 1, "publishedAt": "2026-10-20T09:00:00Z" },
+  "schema": {
+    "type": "object",
+    "properties": {
+      "fullName": { "type": "string", "minLength": 3, "maxLength": 80 },
+      "postalCode": { "type": "string", "pattern": "^[A-Z][0-9][A-Z] ?[0-9][A-Z][0-9]$" },
+      "visitDate": { "type": "string", "format": "date" },
+      "requestType": { "type": "string", "enum": ["permit", "complaint", "information"] },
+      "description": { "type": "string", "maxLength": 500 }
+    },
+    "required": ["fullName", "postalCode", "visitDate", "requestType"],
+    "additionalProperties": false
+  },
+  "uischema": {
+    "type": "VerticalLayout",
+    "elements": [
+      {
+        "type": "Group",
+        "label": "applicant",
+        "elements": [
+          {
+            "type": "Control",
+            "scope": "#/properties/fullName",
+            "options": { "autoComplete": "name" }
+          },
+          {
+            "type": "Control",
+            "scope": "#/properties/postalCode",
+            "options": { "normalise": "identifier", "autoComplete": "postal-code" }
+          },
+          { "type": "Control", "scope": "#/properties/visitDate" }
+        ]
+      },
+      {
+        "type": "Group",
+        "label": "request",
+        "elements": [
+          { "type": "Control", "scope": "#/properties/requestType" },
+          { "type": "Control", "scope": "#/properties/description", "options": { "multi": true } }
+        ]
+      }
+    ]
+  },
+  "messages": {
+    "en-CA": {
+      "title": "Book an in-person appointment",
+      "intro": "Fields marked with an asterisk are required.",
+      "applicant": "Applicant",
+      "request": "Request",
+      "fullName.label": "Full name",
+      "postalCode.label": "Postal code",
+      "postalCode.description": "For example K1A 0B1.",
+      "postalCode.error.pattern": "Enter a Canadian postal code, for example K1A 0B1.",
+      "visitDate.label": "Visit date",
+      "requestType.label": "Request type",
+      "requestType.permit": "Permit",
+      "requestType.complaint": "Complaint",
+      "requestType.information": "Information",
+      "description.label": "Details"
+    }
+  }
+}

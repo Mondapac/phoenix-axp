@@ -1,0 +1,8 @@
+{
+  "_comment": "Host -> tenant and site (design doc 4.1 step 2). Locale, calendar and zone come from config/tenants unless a site overrides them. A site's parent is in the same tenant (ADR-0018).",
+  "sites": [
+    { "host": "demo-fa.localhost", "tenant": "demo-fa", "site": "moe", "parent": null },
+    { "host": "fars.demo-fa.localhost", "tenant": "demo-fa", "site": "fars", "parent": "moe" },
+    { "host": "demo-en.localhost", "tenant": "demo-en", "site": "main", "parent": null }
+  ]
+}

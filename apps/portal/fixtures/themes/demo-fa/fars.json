@@ -1,0 +1,9 @@
+{
+  "siteId": "fars",
+  "tokens": {
+    "color.accent": "#8a3b12",
+    "color.accent-hover": "#6e2f0e",
+    "color.link": "#8a3b12",
+    "color.brand": "#d4145a"
+  }
+}

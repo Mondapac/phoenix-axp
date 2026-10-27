@@ -1,0 +1,106 @@
+{
+  "layout": {
+    "skipToContent": "رفتن به محتوای اصلی"
+  },
+  "blocks": {
+    "mainNav": "منوی اصلی",
+    "footerNav": "پیوندهای پایین صفحه",
+    "openService": "ورود به خدمت"
+  },
+  "form": {
+    "submit": "ثبت درخواست",
+    "submitting": "در حال ارسال…",
+    "errorSummaryTitle": "برای ثبت درخواست، این موارد را اصلاح کنید:",
+    "success": "درخواست شما ثبت شد.",
+    "serverError": "ارسال انجام نشد. لطفاً دوباره تلاش کنید.",
+    "requiredMark": "الزامی",
+    "dateFormatHint": "به شکل سال/ماه/روز، مثلاً {example}.",
+    "calendar": {
+      "open": "انتخاب تاریخ از تقویم",
+      "prevMonth": "ماه قبل",
+      "nextMonth": "ماه بعد",
+      "hint": "با کلیدهای جهت‌نما روز را عوض کنید، با Page Up و Page Down ماه را. Enter انتخاب می‌کند و Escape می‌بندد."
+    },
+    "errors": {
+      "required": "«{label}» را وارد کنید.",
+      "minLength": "«{label}» باید دست‌کم {limit} نویسه باشد.",
+      "maxLength": "«{label}» نباید بیش از {limit} نویسه باشد.",
+      "pattern": "«{label}» درست وارد نشده است.",
+      "format": "«{label}» معتبر نیست.",
+      "enum": "یکی از گزینه‌های «{label}» را انتخاب کنید.",
+      "additionalProperties": "فیلد ناشناخته‌ای فرستاده شد.",
+      "default": "«{label}» درست نیست."
+    }
+  },
+  "editor": {
+    "dictionary": {
+      "header-publish": "انتشار",
+      "header-undo": "واگرد",
+      "header-redo": "ازنو",
+      "header-toggle-leftsidebar": "نمایش یا پنهان کردن ستون اجزا",
+      "header-toggle-rightsidebar": "نمایش یا پنهان کردن ستون ویژگی‌ها",
+      "header-toggle-menubar": "نمایش یا پنهان کردن منو",
+      "action-selectparent": "انتخاب والد",
+      "action-duplicate": "تکثیر",
+      "action-delete": "حذف",
+      "label-page": "صفحه",
+      "label-component": "جزء",
+      "outline-empty": "موردی نیست",
+      "outline-header-title": "ساختار صفحه",
+      "plugin-blocks": "بلوک‌ها",
+      "plugin-outline": "ساختار",
+      "plugin-fields": "ویژگی‌ها",
+      "plugin-components": "اجزا",
+      "drawer-category-other": "سایر",
+      "field-arrayitem-summary": "مورد {index}",
+      "field-arrayitem-duplicate": "تکثیر",
+      "field-arrayitem-delete": "حذف",
+      "loader-loading": "در حال بارگذاری",
+      "outline-item-collapse": "بستن",
+      "outline-item-expand": "باز کردن",
+      "outline-header-collapseall": "بستن همه",
+      "outline-item-duplicate": "تکثیر",
+      "outline-item-delete": "حذف",
+      "drawer-category-collapse": "بستن {title}",
+      "drawer-category-expand": "باز کردن {title}",
+      "canvas-noconfig": "پیکربندی برای {type} نیست",
+      "field-readonly": "فقط‌خواندنی",
+      "viewport-zoom-in": "بزرگ‌نمایی",
+      "viewport-zoom-out": "کوچک‌نمایی",
+      "viewport-zoom-auto": "{zoom}٪ (خودکار)",
+      "viewport-toggle-menu": "منوی اندازهٔ نمایش",
+      "viewport-switch": "نمایش در اندازهٔ {label}",
+      "viewport-switch-default": "تغییر اندازهٔ نمایش",
+      "layout-maximize": "بیشینه",
+      "layout-minimize": "کمینه"
+    },
+    "blocks": {
+      "SiteHeader": "سرصفحه و منو",
+      "Hero": "بنر اصلی",
+      "NewsList": "فهرست خبر",
+      "CardGrid": "کارت‌های خدمت",
+      "SiteFooter": "پاصفحه"
+    },
+    "fields": {
+      "siteName": "نام سایت",
+      "tagline": "شعار",
+      "nav": "پیوندهای منو",
+      "label": "عنوان پیوند",
+      "href": "نشانی (URL)",
+      "title": "عنوان",
+      "subtitle": "زیرعنوان",
+      "ctaLabel": "متن دکمه",
+      "ctaHref": "نشانی دکمه",
+      "anchor": "لنگر درون‌صفحه",
+      "items": "خبرها",
+      "date": "تاریخ (ISO، مثلاً 2026-10-27)",
+      "summary": "خلاصه",
+      "cards": "کارت‌ها",
+      "body": "متن",
+      "text": "متن",
+      "links": "پیوندها",
+      "pageTitle": "عنوان صفحه"
+    },
+    "title": "ویرایش صفحهٔ خانه"
+  }
+}

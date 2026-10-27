@@ -1,0 +1,131 @@
+{
+  "_version": {
+    "page": "home",
+    "version": 3,
+    "publishedAt": "2026-10-25T08:30:00Z"
+  },
+  "root": {
+    "props": {
+      "title": "خانه"
+    }
+  },
+  "content": [
+    {
+      "type": "SiteHeader",
+      "props": {
+        "id": "SiteHeader-1",
+        "siteName": "وزارت آموزش (نمونه)",
+        "tagline": "درگاه خدمات الکترونیکی",
+        "nav": [
+          {
+            "label": "خانه",
+            "href": "/"
+          },
+          {
+            "label": "خبرها",
+            "href": "#news"
+          },
+          {
+            "label": "خدمات",
+            "href": "#services"
+          },
+          {
+            "label": "درخواست نوبت",
+            "href": "/forms/appointment"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Hero",
+      "props": {
+        "id": "Hero-1",
+        "title": "خدمات وزارتخانه، یک‌جا و بدون مراجعهٔ حضوری",
+        "subtitle": "بیش از ۴۰ خدمت در ۳۱ استان. درخواست خود را ثبت کنید و نتیجه را در پیشخوان پیگیری کنید.",
+        "ctaLabel": "ثبت درخواست نوبت",
+        "ctaHref": "/forms/appointment"
+      }
+    },
+    {
+      "type": "NewsList",
+      "props": {
+        "id": "NewsList-1",
+        "title": "تازه‌ترین خبرها",
+        "items": [
+          {
+            "title": "آغاز ثبت‌نام مدارس برای سال تحصیلی جدید",
+            "date": "2026-10-25",
+            "summary": "ثبت‌نام از ۱ آبان آغاز شده و تا ۳۰ آبان ادامه دارد. کد ملی و شمارهٔ همراه ولی لازم است.",
+            "href": "/news/1"
+          },
+          {
+            "title": "بخشنامهٔ ستاد: ساعت کاری ادارات در پاییز",
+            "date": "2026-10-20",
+            "summary": "این بخشنامه برای همهٔ ادارات کل استانی لازم‌الاجراست.",
+            "href": "/news/2"
+          },
+          {
+            "title": "<img src=x onerror=\"alert(1)\"> متن آزمایشی امنیتی (باید به‌صورت متن دیده شود)",
+            "date": "2026-10-18",
+            "summary": "<script>alert('xss')</script> این خبر برای آزمودن رندر امن است؛ پیوند آن javascript: است و نباید پیوند شود.",
+            "href": "javascript:alert(1)"
+          }
+        ],
+        "anchor": "news"
+      }
+    },
+    {
+      "type": "RawHtml",
+      "props": {
+        "id": "RawHtml-1",
+        "html": "<script>alert('unknown block')</script>"
+      }
+    },
+    {
+      "type": "CardGrid",
+      "props": {
+        "id": "CardGrid-1",
+        "title": "خدمات پرکاربرد",
+        "cards": [
+          {
+            "title": "گواهی اشتغال به تحصیل",
+            "body": "صدور گواهی برای دانش‌آموزان، با کد رهگیری.",
+            "href": "/services/certificate"
+          },
+          {
+            "title": "ثبت شکایت",
+            "body": "شکایت خود را ثبت کنید؛ پاسخ ظرف ۷ روز کاری.",
+            "href": "/services/complaint"
+          },
+          {
+            "title": "نوبت حضوری",
+            "body": "انتخاب روز و ساعت مراجعه به ادارهٔ آموزش و پرورش.",
+            "href": "/forms/appointment"
+          }
+        ],
+        "anchor": "services"
+      }
+    },
+    {
+      "type": "SiteFooter",
+      "props": {
+        "id": "SiteFooter-1",
+        "text": "© ۱۴۰۵ وزارت آموزش (نمونه). همهٔ حقوق محفوظ است.",
+        "links": [
+          {
+            "label": "دسترس‌پذیری",
+            "href": "/accessibility"
+          },
+          {
+            "label": "حریم خصوصی",
+            "href": "/privacy"
+          },
+          {
+            "label": "تماس با ما",
+            "href": "mailto:info@example.ir"
+          }
+        ]
+      }
+    }
+  ]
+}

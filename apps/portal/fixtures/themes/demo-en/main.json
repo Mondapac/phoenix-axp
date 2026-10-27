@@ -1,0 +1,12 @@
+{
+  "siteId": "main",
+  "tokens": {
+    "color.brand": "#26215c",
+    "color.accent": "#3b329b",
+    "color.accent-hover": "#2c2575",
+    "color.link": "#3b329b",
+    "radius.card": "16px",
+    "radius.control": "999px"
+  },
+  "locked": []
+}

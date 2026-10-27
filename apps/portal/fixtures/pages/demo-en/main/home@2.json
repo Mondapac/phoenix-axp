@@ -1,0 +1,110 @@
+{
+  "_version": {
+    "page": "home",
+    "version": 2,
+    "publishedAt": "2026-10-24T14:00:00Z"
+  },
+  "root": {
+    "props": {
+      "title": "Home"
+    }
+  },
+  "content": [
+    {
+      "type": "SiteHeader",
+      "props": {
+        "id": "SiteHeader-1",
+        "siteName": "City Services (demo)",
+        "tagline": "Online services for residents",
+        "nav": [
+          {
+            "label": "Home",
+            "href": "/"
+          },
+          {
+            "label": "News",
+            "href": "#news"
+          },
+          {
+            "label": "Book an appointment",
+            "href": "/forms/appointment"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Hero",
+      "props": {
+        "id": "Hero-1",
+        "title": "City services in one place",
+        "subtitle": "Apply online, track your request, and skip the counter.",
+        "ctaLabel": "Book an appointment",
+        "ctaHref": "/forms/appointment"
+      }
+    },
+    {
+      "type": "NewsList",
+      "props": {
+        "id": "NewsList-1",
+        "title": "Latest news",
+        "items": [
+          {
+            "title": "Winter parking rules start November 15",
+            "date": "2026-10-23",
+            "summary": "Overnight parking bans apply on snow-route streets.",
+            "href": "/news/1"
+          },
+          {
+            "title": "New library hours",
+            "date": "2026-10-19",
+            "summary": "Branches open until 9 pm on weekdays.",
+            "href": "/news/2"
+          }
+        ],
+        "anchor": "news"
+      }
+    },
+    {
+      "type": "CardGrid",
+      "props": {
+        "id": "CardGrid-1",
+        "title": "Popular services",
+        "cards": [
+          {
+            "title": "Pay a parking ticket",
+            "body": "Pay online with a card or bank transfer.",
+            "href": "/services/parking"
+          },
+          {
+            "title": "Report a pothole",
+            "body": "Tell us where; we fix most within 10 days.",
+            "href": "/services/pothole"
+          },
+          {
+            "title": "Book an appointment",
+            "body": "Choose a day and time at a service centre.",
+            "href": "/forms/appointment"
+          }
+        ],
+        "anchor": "services"
+      }
+    },
+    {
+      "type": "SiteFooter",
+      "props": {
+        "id": "SiteFooter-1",
+        "text": "© 2026 City Services (demo).",
+        "links": [
+          {
+            "label": "Accessibility",
+            "href": "/accessibility"
+          },
+          {
+            "label": "Privacy",
+            "href": "/privacy"
+          }
+        ]
+      }
+    }
+  ]
+}

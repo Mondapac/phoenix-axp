@@ -15,3 +15,7 @@ coverage/
 # Generated Prisma client and model map (pnpm db:generate)
 apps/api/src/generated/
 .local/
+
+# Next.js build output and generated types (PoC 4 spike)
+.next/
+next-env.d.ts
