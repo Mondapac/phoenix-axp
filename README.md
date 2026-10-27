@@ -40,7 +40,7 @@ English/Gregorian in America/Toronto).
 | `pnpm typecheck`          | TypeScript, every package                                       |
 | `pnpm lint`               | ESLint (boundary rules included) and Prettier                   |
 | `pnpm boundaries`         | dependency-cruiser and the Prisma schema and model-owner checks |
-| `pnpm licences`           | Licence gate on production dependencies                         |
+| `pnpm licences`           | Licence gate (ADR-0009) on the full dependency tree; reviewed exceptions in `config/licence-exceptions.json` |
 | `pnpm test`               | Unit and HTTP tests                                             |
 | `pnpm test:db`            | Database tests (needs PostgreSQL and `MIGRATION_DATABASE_URL`)  |
 | `pnpm db:check-reversible`| Every migration goes up, down and up again                      |
