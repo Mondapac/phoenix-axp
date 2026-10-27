@@ -305,6 +305,14 @@ module.exports = {
       to: { path: 'node_modules/(pg|pg-[^/]+|@types/pg)/' },
     },
     {
+      name: 'object-store-sdk-only-in-storage',
+      comment:
+        'The AWS SDK is used only by platform/storage/ (ADR-0012); modules use the ObjectStore port.',
+      severity: 'error',
+      from: { pathNot: '^src/platform/storage/' },
+      to: { path: 'node_modules/@aws-sdk/' },
+    },
+    {
       name: 'no-circular',
       comment: 'Circular dependencies hide coupling between files and modules.',
       severity: 'error',

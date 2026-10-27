@@ -72,6 +72,16 @@ jobs:
             docker exec -i "${{ job.services.postgres.id }}" psql -v ON_ERROR_STOP=1 -U postgres -d phoenix < scripts/db/bootstrap-dev.sql
           done
 
+      # SeaweedFS for the object storage tests (ADR-0012). A service container cannot take a
+      # command or mount a repository file, so it starts here, with the same image, flags and
+      # identities file as docker-compose.yml.
+      - name: Start SeaweedFS (object storage)
+        run: |
+          docker run -d --name seaweedfs -p 8333:8333 \
+            -v "$PWD/infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro" \
+            mirror.gcr.io/chrislusf/seaweedfs:3.80 \
+            server -s3 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=64 -dir=/data
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -90,6 +100,18 @@ jobs:
       - name: Validate docker-compose.yml
         run: docker compose config --quiet
 
+      # The S3 gateway answers once the filer is up; an unsigned request then gets 403.
+      - name: Wait for SeaweedFS
+        run: |
+          for attempt in $(seq 1 60); do
+            code=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:8333/ || true)
+            if [ "$code" = 403 ]; then exit 0; fi
+            sleep 2
+          done
+          docker logs seaweedfs >&2
+          echo "SeaweedFS did not become ready" >&2
+          exit 1
+
       # Typecheck, lint, boundaries, licences, tests, database tests and the up -> down -> up
       # migration check: the same command developers run locally.
       - name: Verify
@@ -98,6 +120,10 @@ jobs:
           MIGRATION_DATABASE_URL: postgresql://phoenix_migrator:phoenix_migrator@localhost:5432/phoenix
           # Fewer database spec files at once than Jest's default on the small CI runners.
           TEST_DB_MAX_WORKERS: '2'
+          # For pnpm test:storage only; the boot probes below run without object storage.
+          S3_ENDPOINT: http://localhost:8333
+          S3_ACCESS_KEY_ID: phoenix
+          S3_SECRET_ACCESS_KEY: phoenix-dev-secret
 
       - name: Build
         run: pnpm build

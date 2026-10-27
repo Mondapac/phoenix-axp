@@ -11,7 +11,6 @@ trigger that brings each one in. When a trigger fires, port the component from t
 | audit trail reader | Mondapac's `AuditTrailReader` (`platform/audit/audit-trail-reader.ts` and its Prisma reader): a paged, permission-checked read of a target's audit rows for an admin screen | The first screen or API that shows an audit trail |
 | first `AUDIT_WRITER` binding | `PersistenceModule.auditWriterFor('<module>')` in a module's providers, its actions registered with `AuditActionCatalogue`, and the checked-in `test/contracts/audit-action-catalogue.snapshot.json` | The first state-changing use case of a business module (identity's role seed and grants) |
 | identity integration (ADR-0004) | The `Authenticator` building `AuthenticatedActor` from a Keycloak session; `ActorGuard` accepts no session until then and answers 401 `session.invalid` to any `Authorization` header | The identity module, Phase 1 |
-| `storage` (ADR-0012) | The `ObjectStore` port and its SeaweedFS S3 adapter (SeaweedFS is already in `docker-compose.yml`) | The first feature that stores a file |
 | `subject-keys` | Per-subject encryption keys for personal data fields, the key wrapper and its port | The first personal data field that must be erasable (identity or forms) |
 | `ai` (ADR-0011) | `platform/ai/model-gateway`, the only caller of a model, with the provider SDK confined to that folder | Phase 5, the first AI feature |
 | `mail` | The mail port and its SMTP adapter (Mailpit locally) | The first message sent to a person (identity verification) |
@@ -31,6 +30,10 @@ trigger that brings each one in. When a trigger fires, port the component from t
 - **Market became Tenant.** `tenant_id` is mandatory in every scoped table, key and foreign
   key, with no default tenant and no fallback; the `x-tenant-id` header names it on every
   tenant-scoped request; `HOSTED_TENANTS` lists the tenants of a deployment.
+- **Storage arrived ahead of its consumer.** The Phase 1 review lists `platform/storage` as its
+  own slice (1.7), so it landed before the first module that stores a file. The first such
+  module declares its `IntakePolicy`, keeps the file metadata in its own schema and issues
+  signed URLs from a use case that checked permission and ownership (ADR-0012).
 - **Market and vertical literal bans** became one tenant-literal ban, built from
   `config/tenants/*.json` (ids, locales, time zones).
 - **`authz` (Phase 1, slice 1.1).** Ported from Mondapac `platform/authz` with these changes:

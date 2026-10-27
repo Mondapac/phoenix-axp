@@ -14,6 +14,7 @@ import { IdsModule } from './platform/ids/ids.module';
 import { LoggingModule } from './platform/logging/logging.module';
 import { PersistenceModule } from './platform/persistence/persistence.module';
 import { SchedulerModule } from './platform/scheduler/scheduler.module';
+import { StorageModule } from './platform/storage/storage.module';
 import { TenantConfigModule } from './platform/tenant-config/tenant-config.module';
 import { TenantContextGuard } from './platform/tenant-context/tenant-context.guard';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module';
@@ -58,6 +59,7 @@ export class AppModule {
         // No identity module yet: the authorisation check is a fail-closed placeholder
         // (ADR-0010), so a production start is refused. Tenancy answers subtree questions.
         AuthzModule.register({ siteAncestry: TenancySiteAncestryModule }),
+        StorageModule,
         WorkerModule,
         HealthModule,
         TenancyModule,

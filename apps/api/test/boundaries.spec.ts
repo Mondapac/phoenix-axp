@@ -135,6 +135,7 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
         'module-public-api-only',
         'modules-reach-authz-through-its-barrel',
         'no-circular',
+        'object-store-sdk-only-in-storage',
         'persistence-internals-are-private',
         'persistence-root-is-private',
         'platform-does-not-import-modules',
@@ -175,6 +176,8 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
         'module-public-api-only: src/modules/alpha/application/reaches-into-module.ts',
         'modules-reach-authz-through-its-barrel: src/modules/alpha/application/reaches-use-case-gate.ts',
         'no-circular: src/modules/alpha/domain/circular-a.ts',
+        'object-store-sdk-only-in-storage: src/modules/alpha/infrastructure/uses-s3-sdk.ts',
+        'object-store-sdk-only-in-storage: src/platform/uses-s3-sdk.ts',
         'persistence-internals-are-private: src/modules/alpha/application/reaches-audit-writer.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-service.ts',
         'persistence-internals-are-private: src/modules/alpha/application/uses-prisma-via-barrel.ts',
@@ -246,6 +249,8 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
       'src/modules/alpha/alpha.module.ts',
       'src/modules/alpha/application/use-cases/find-thing.use-case.ts',
       'src/modules/alpha/infrastructure/prisma-thing.repository.ts',
+      // The S3 adapter is the one user of the AWS SDK.
+      'src/platform/storage/s3-object-store.ts',
     ])('accepts the allowed file %s', (file) => {
       expect(cruise.modules.map((module) => module.source)).toContain(file);
       expect(found.filter((violation) => violation.endsWith(`: ${file}`))).toEqual([]);

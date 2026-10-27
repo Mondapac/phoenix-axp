@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "phoenix-api",
+      "credentials": [{ "accessKey": "phoenix", "secretKey": "phoenix-dev-secret" }],
+      "actions": ["Read", "Write", "List", "Tagging", "Admin"]
+    }
+  ]
+}

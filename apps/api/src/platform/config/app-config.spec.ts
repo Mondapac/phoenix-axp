@@ -32,6 +32,7 @@ describe('loadAppConfig', () => {
       tenantConfigDirs: [expect.stringMatching(/config[\\/]tenants$/)],
       databaseUrl: DATABASE_URL,
       databasePoolMax: 10,
+      storage: null,
     });
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.hostedTenants)).toBe(true);
@@ -97,5 +98,113 @@ describe('loadAppConfig', () => {
   it('never echoes the database URL in an issue', () => {
     const issues = issuesOf({ HOSTED_TENANTS: 'Bad', DATABASE_URL: 'postgresql://u:hunter2@h/d' });
     expect(issues.join('\n')).not.toContain('hunter2');
+  });
+
+  describe('object storage (ADR-0012)', () => {
+    const STORAGE = {
+      S3_ENDPOINT: 'http://localhost:8333',
+      S3_BUCKET: 'phoenix',
+      S3_ACCESS_KEY_ID: 'key',
+      S3_SECRET_ACCESS_KEY: 'secret',
+    };
+
+    it('reads the S3 variables, with the public endpoint and region defaulted', () => {
+      expect(loadAppConfig({ HOSTED_TENANTS: 'acme-gov', ...STORAGE }).storage).toEqual({
+        endpoint: 'http://localhost:8333',
+        publicEndpoint: 'http://localhost:8333',
+        region: 'us-east-1',
+        bucket: 'phoenix',
+        accessKeyId: 'key',
+        secretAccessKey: 'secret',
+      });
+    });
+
+    it('takes a separate public endpoint and region', () => {
+      const config = loadAppConfig({
+        HOSTED_TENANTS: 'acme-gov',
+        ...STORAGE,
+        S3_PUBLIC_ENDPOINT: 'https://files.example.test',
+        S3_REGION: 'ir-thr-1',
+      });
+
+      expect(config.storage).toMatchObject({
+        publicEndpoint: 'https://files.example.test',
+        region: 'ir-thr-1',
+      });
+      expect(Object.isFrozen(config.storage)).toBe(true);
+    });
+
+    it('needs the four variables together', () => {
+      expect(
+        issuesOf({ HOSTED_TENANTS: 'acme-gov', S3_ENDPOINT: 'http://localhost:8333' }),
+      ).toEqual([
+        expect.stringMatching(/^S3_BUCKET: .* are set together/),
+        expect.stringMatching(/^S3_ACCESS_KEY_ID: /),
+        expect.stringMatching(/^S3_SECRET_ACCESS_KEY: /),
+      ]);
+    });
+
+    it('requires object storage in production', () => {
+      expect(issuesOf({ HOSTED_TENANTS: 'acme-gov', NODE_ENV: 'production' })).toEqual([
+        'S3_ENDPOINT: required in production (object storage, ADR-0012)',
+        'S3_BUCKET: required in production (object storage, ADR-0012)',
+        'S3_ACCESS_KEY_ID: required in production (object storage, ADR-0012)',
+        'S3_SECRET_ACCESS_KEY: required in production (object storage, ADR-0012)',
+      ]);
+      expect(
+        loadAppConfig({
+          HOSTED_TENANTS: 'acme-gov',
+          NODE_ENV: 'production',
+          ...STORAGE,
+          S3_PUBLIC_ENDPOINT: 'https://files.example.test',
+          S3_SECRET_ACCESS_KEY: 'a-real-secret',
+        }).storage,
+      ).not.toBeNull();
+    });
+
+    it('needs https signed URLs and a real key in production', () => {
+      expect(
+        issuesOf({
+          HOSTED_TENANTS: 'acme-gov',
+          NODE_ENV: 'production',
+          ...STORAGE,
+          S3_SECRET_ACCESS_KEY: 'phoenix-dev-secret',
+        }),
+      ).toEqual([
+        expect.stringMatching(/^S3_ENDPOINT: signed URLs need https in production/),
+        'S3_SECRET_ACCESS_KEY: the local development key is refused in production',
+      ]);
+      expect(
+        issuesOf({
+          HOSTED_TENANTS: 'acme-gov',
+          NODE_ENV: 'production',
+          ...STORAGE,
+          S3_PUBLIC_ENDPOINT: 'http://files.example.test',
+          S3_SECRET_ACCESS_KEY: 'a-real-secret',
+        }),
+      ).toEqual([expect.stringMatching(/^S3_PUBLIC_ENDPOINT: signed URLs need https/)]);
+    });
+
+    it.each([
+      ['S3_ENDPOINT', 'localhost:8333'],
+      ['S3_PUBLIC_ENDPOINT', 'ftp://files'],
+      ['S3_BUCKET', 'Phoenix_Files'],
+      ['S3_BUCKET', 'ab'],
+    ])('refuses %s=%p', (name, value) => {
+      expect(issuesOf({ HOSTED_TENANTS: 'acme-gov', ...STORAGE, [name]: value })).toEqual([
+        expect.stringMatching(new RegExp(`^${name}: `)),
+      ]);
+    });
+
+    it('never puts the secret in an issue', () => {
+      const issues = issuesOf({
+        HOSTED_TENANTS: 'acme-gov',
+        ...STORAGE,
+        S3_SECRET_ACCESS_KEY: 'super-secret-value',
+        S3_BUCKET: 'BAD',
+      });
+
+      expect(issues.join('\n')).not.toContain('super-secret-value');
+    });
   });
 });
