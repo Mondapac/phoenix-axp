@@ -90,7 +90,8 @@ export function relayedHeaders(from: Headers): Headers {
 /**
  * Relays the browser's `request` to the API route `segments` (the panel's catch-all route
  * `/api/[...path]`). Answers 404 for a host the panel does not serve or a route it does not
- * relay, 405 for another method, 413 for a body over the cap, and 502 when the API cannot be
+ * relay, 405 for another method, 403 for a write whose Origin is not this host, 413 for a body
+ * over the cap, and 502 when the API cannot be
  * reached or answers a redirect, which the relay never follows or passes on.
  */
 export async function relayToApi(
@@ -105,6 +106,7 @@ export async function relayToApi(
   const url = apiUrlOf(config, segments, options.allowedPrefixes);
   if (url === null) return bffAnswer(404, 'not-found');
   url.search = new URL(request.url).search;
+  if (request.method !== 'GET' && !isOwnOrigin(request)) return bffAnswer(403, 'csrf.invalid');
 
   let body: Uint8Array<ArrayBuffer> | undefined;
   if (request.method !== 'GET') {
@@ -134,6 +136,22 @@ export async function relayToApi(
     status: answer.status,
     headers: relayedHeaders(answer.headers),
   });
+}
+
+/**
+ * Whether a state-changing request comes from a page of this very host. The API also checks
+ * Origin against PANEL_ORIGINS and the CSRF token; this ties the request to the panel host, so
+ * one tenant's studio page cannot write through another tenant's studio on a sibling host.
+ */
+function isOwnOrigin(request: Request): boolean {
+  const origin = request.headers.get('origin');
+  const host = request.headers.get('host');
+  if (origin === null || host === null) return false;
+  try {
+    return new URL(origin).host === host.trim().toLowerCase();
+  } catch {
+    return false;
+  }
 }
 
 /** The body of `request`, or null once it passes `max` bytes (read no further). */
@@ -170,7 +188,8 @@ export type ApiRead<T> =
 
 /**
  * A GET of the API from the panel's own server (a server component reading what a page
- * shows), in the tenant of `host`, with the browser's cookies. `path` is the panel's own
+ * shows), in the tenant of `host`, with the browser's cookies, or none (`cookie: null`) for an
+ * anonymous read, which a stale session cookie must not break. `path` is the panel's own
  * constant, never input. Throws when the API cannot be reached, so the page shows its error
  * state; a host the panel does not serve answers 404.
  */

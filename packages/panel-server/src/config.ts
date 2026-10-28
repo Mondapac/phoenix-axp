@@ -71,6 +71,11 @@ export function parseTenantHosts(
       throw new PanelConfigError(`${variable} has a malformed host=tenant pair`);
     }
     if (hosts.has(host)) throw new PanelConfigError(`${variable} names a host twice`);
+    // Cookies ignore the port: two tenants on one host name would overwrite each other's.
+    const name = host.split(':')[0];
+    if ([...hosts.keys()].some((known) => known.split(':')[0] === name)) {
+      throw new PanelConfigError(`${variable} names a host twice with different ports`);
+    }
     hosts.set(host, tenant);
   }
   if (hosts.size === 0) throw new PanelConfigError(`${variable} must name at least one host`);

@@ -35,12 +35,18 @@ export const STUDIO_API_PREFIXES: readonly (readonly string[])[] = [
 /** Where sign-in sends the browser. */
 export const SIGN_IN_PAGES = { signedIn: '/', signIn: '/sign-in' } as const;
 
-/** A GET of the API in the tenant of this request's host, with the browser's cookies. */
-export async function readApi<T>(path: string): Promise<ApiRead<T>> {
+/**
+ * A GET of the API in the tenant of this request's host, with the browser's cookies; an
+ * `anonymous` read sends none, so a stale session cookie cannot break the sign-in page.
+ */
+export async function readApi<T>(
+  path: string,
+  { anonymous = false }: { readonly anonymous?: boolean } = {},
+): Promise<ApiRead<T>> {
   const incoming = await headers();
   return readFromApi<T>(
     studioConfig(),
-    { host: incoming.get('host'), cookie: incoming.get('cookie') },
+    { host: incoming.get('host'), cookie: anonymous ? null : incoming.get('cookie') },
     path,
   );
 }
@@ -57,7 +63,7 @@ export interface TenantPresentation {
 
 /** The request's tenant presentation; throws when the API cannot answer it. */
 export async function tenantPresentation(): Promise<TenantPresentation> {
-  const read = await readApi<TenantPresentation>('tenancy/presentation');
+  const read = await readApi<TenantPresentation>('tenancy/presentation', { anonymous: true });
   if (!read.ok) throw new Error(`tenancy/presentation answered ${read.status}`);
   return read.body;
 }

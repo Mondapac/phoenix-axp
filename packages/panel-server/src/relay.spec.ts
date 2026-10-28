@@ -116,11 +116,32 @@ describe.each(TENANT_HOSTS)('the API relay on host %s (tenant %s)', (host, tenan
     const api = recordingFetch(ok());
     const response = await relayToApi(
       config,
-      browser(host, '/api/tenancy/sites', { method: 'POST', body: 'x'.repeat(65) }),
+      browser(host, '/api/tenancy/sites', {
+        method: 'POST',
+        body: 'x'.repeat(65),
+        headers: { origin: `http://${host}` },
+      }),
       ['tenancy', 'sites'],
       { allowedPrefixes: PREFIXES, maxBodyBytes: 64, fetch: api.fetch },
     );
     expect(response.status).toBe(413);
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it.each([
+    ['no Origin', {}],
+    ['another host', { origin: 'http://studio.other.test' }],
+    ['a malformed Origin', { origin: 'null' }],
+  ])('answers 403 to a write with %s, before the API', async (_, headers) => {
+    const api = recordingFetch(ok());
+    const response = await relayToApi(
+      config,
+      browser(host, '/api/tenancy/sites', { method: 'POST', body: '{}', headers }),
+      ['tenancy', 'sites'],
+      { allowedPrefixes: PREFIXES, fetch: api.fetch },
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ statusCode: 403, code: 'csrf.invalid' });
     expect(api.calls).toHaveLength(0);
   });
 

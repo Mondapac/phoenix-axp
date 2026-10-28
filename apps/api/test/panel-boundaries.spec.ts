@@ -35,6 +35,7 @@ describe('the panel boundary check', () => {
     expect(violations.map((v) => [v.rule, v.file, v.detail]).sort()).toEqual(
       [
         ['client-reads-no-env', widget('client-env.tsx'), 'process.env'],
+        ['client-reads-no-env', widget('client-env.jsx'), 'process.env'],
         [
           'browser-calls-own-origin',
           widget('client-fetch.tsx'),

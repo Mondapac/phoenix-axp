@@ -23,6 +23,7 @@ describe('the panel server configuration', () => {
     ['https://studio.test=demo-fa', 'malformed'],
     ['studio.test/x=demo-fa', 'malformed'],
     ['studio.test=demo-fa,STUDIO.test=demo-en', 'twice'],
+    ['localhost:3001=demo-fa,localhost:3002=demo-en', 'different ports'],
   ])('refuses the host map %p (%s): there is no default tenant', (text, message) => {
     expect(() => parseTenantHosts(text, 'STUDIO_TENANT_HOSTS')).toThrow(PanelConfigError);
     expect(() => parseTenantHosts(text, 'STUDIO_TENANT_HOSTS')).toThrow(message);

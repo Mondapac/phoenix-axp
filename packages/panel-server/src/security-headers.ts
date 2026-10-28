@@ -37,3 +37,6 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = Object.freeze(
   'cross-origin-opener-policy': 'same-origin',
   'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=()',
 });
+
+/** HSTS for production answers (the panels are served over https only there). */
+export const STRICT_TRANSPORT_SECURITY = 'max-age=31536000; includeSubDomains';

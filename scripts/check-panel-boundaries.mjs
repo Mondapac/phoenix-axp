@@ -24,9 +24,9 @@ import ts from 'typescript';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PANELS = ['admin', 'studio', 'portal'];
 const PANEL_PACKAGES = ['ui', 'panel-server'];
-const SOURCE = /\.(ts|tsx|mts|mjs)$/;
+const SOURCE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 // Specs and their fixtures (`test-*.ts` beside them) may name the tenant fixtures.
-const SPEC = /(\.spec|[\\/]test-[\w-]+)\.(ts|tsx|mts|mjs)$/;
+const SPEC = /(\.spec|[\\/]test-[\w-]+)\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 const SKIPPED_DIRECTORIES = new Set([
   'node_modules',
   '.next',

@@ -23,5 +23,10 @@ export {
   type ApiRead,
   type RelayOptions,
 } from './relay';
-export { contentSecurityPolicy, newNonce, SECURITY_HEADERS } from './security-headers';
+export {
+  contentSecurityPolicy,
+  newNonce,
+  SECURITY_HEADERS,
+  STRICT_TRANSPORT_SECURITY,
+} from './security-headers';
 export { beginSignIn, completeSignIn, isIdentityProviderUrl, type SignInOptions } from './sign-in';

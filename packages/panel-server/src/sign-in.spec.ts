@@ -60,7 +60,7 @@ describe.each(TENANT_HOSTS)(
       expect(response.headers.get('location')).toBe('/sign-in?error=unavailable');
     });
 
-    it('forwards code and state only, with the flow cookie, and relays the session cookie', async () => {
+    it('forwards code, state and the flow cookie only, relays the session cookie, and lands same-site', async () => {
       const api = recordingFetch(
         () =>
           new Response(JSON.stringify({ accountId: 'a', csrfToken: 'c' }), {
@@ -77,25 +77,42 @@ describe.each(TENANT_HOSTS)(
         browser(
           host,
           '/auth/callback?code=c0de&state=st&session_state=x&iss=y',
-          '__Host-phoenix-flow=f',
+          '__Host-phoenix-studio=stale; __Host-phoenix-flow=f; other=1',
         ),
         { ...PAGES, fetch: api.fetch },
       );
-      expect(response.status).toBe(303);
-      expect(response.headers.get('location')).toBe('/');
+      // A same-origin page moves on to the dashboard: after Keycloak's cross-site redirect, a
+      // redirect would not carry the new SameSite=Strict session cookie.
+      expect(response.status).toBe(200);
+      expect(response.headers.get('location')).toBeNull();
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
       expect(response.headers.getSetCookie()).toEqual([
         '__Host-phoenix-flow=; Max-Age=0; Path=/',
         SESSION,
       ]);
+      const page = await response.text();
+      expect(page).toContain('<meta http-equiv="refresh" content="0;url=/">');
       // The body (the CSRF token) stays on the server: the page reads it from "me".
-      expect(await response.text()).toBe('');
+      expect(page).not.toContain('csrfToken');
       const call = api.calls[0]!;
       expect(call.url).toBe(
         'http://api.internal:3000/identity/staff/sign-in/callback?code=c0de&state=st',
       );
       const sent = headersOf(call.init);
+      // A stale session cookie would make the API refuse the callback: only the flow cookie goes.
       expect(sent.get('cookie')).toBe('__Host-phoenix-flow=f');
       expect(sent.get('x-tenant-id')).toBe(tenant);
+    });
+
+    it('starts a sign-in without forwarding any cookie', async () => {
+      const api = recordingFetch(
+        () => new Response(null, { status: 302, headers: { location: KEYCLOAK } }),
+      );
+      await beginSignIn(config, browser(host, '/auth/start', '__Host-phoenix-studio=stale'), {
+        ...PAGES,
+        fetch: api.fetch,
+      });
+      expect(headersOf(api.calls[0]!.init).get('cookie')).toBeNull();
     });
 
     it.each([
