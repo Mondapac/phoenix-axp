@@ -462,16 +462,20 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     const id = await sentCode('email', address);
     const right = mail.codeTo(address);
     const wrong = right === '000000' ? '000001' : '000000';
-    await Promise.all(
-      Array.from({ length: 5 }, () =>
+    // Each answer from its own network, so only the code's row is contended.
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, index) =>
         portal.verify.execute(anonymous(), {
-          clientAddress: client(),
+          clientAddress: `192.0.2${index}.${Math.floor(Math.random() * 250) + 1}`,
           challengeId: id,
           method: 'email',
           address,
           code: wrong,
         }),
       ),
+    );
+    expect(results).toEqual(
+      Array.from({ length: 5 }, () => ({ ok: false, error: { code: 'portal.code-invalid' } })),
     );
     const [row] = await sql<{ failures: number; spent_at: Date | null }>(
       tenant,
