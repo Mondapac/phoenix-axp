@@ -29,10 +29,10 @@ export default async function AccountPage() {
           <dl className="divide-y divide-line">
             {contacts.map((contact) => (
               <div
-                key={contact.kind}
+                key={contact.method}
                 className="flex flex-wrap items-center justify-between gap-2 py-3"
               >
-                <dt className="text-sm text-fg-muted">{t[`account.contact.${contact.kind}`]}</dt>
+                <dt className="text-sm text-fg-muted">{t[`account.contact.${contact.method}`]}</dt>
                 <dd className="text-sm font-medium text-fg">
                   {contact.masked === null ? (
                     t['account.contact.unreadable']

@@ -9,17 +9,19 @@ interface CodeText {
   readonly body: (site: string, code: string, minutes: number) => string;
 }
 
+const ENGLISH: CodeText = {
+  subject: (site) => `Your ${site} sign-in code`,
+  body: (site, code, minutes) =>
+    `Your ${site} sign-in code: ${code}\nIt is valid for ${minutes} minutes. Do not share it.`,
+};
+
 const TEXTS: Readonly<Record<string, CodeText>> = {
   fa: {
     subject: (site) => `کد ورود به ${site}`,
     body: (site, code, minutes) =>
       `کد ورود شما به ${site}: ${code}\nاین کد تا ${minutes} دقیقه معتبر است. آن را به کسی ندهید.`,
   },
-  en: {
-    subject: (site) => `Your ${site} sign-in code`,
-    body: (site, code, minutes) =>
-      `Your ${site} sign-in code: ${code}\nIt is valid for ${minutes} minutes. Do not share it.`,
-  },
+  en: ENGLISH,
 };
 
 /** The subject and text of a code message for a tenant's default locale. */
@@ -29,7 +31,7 @@ export function codeMessage(
   code: string,
 ): { readonly subject: string; readonly text: string } {
   const language = locale.split('-')[0] ?? '';
-  const texts = TEXTS[language] ?? TEXTS.en;
+  const texts = TEXTS[language] ?? ENGLISH;
   const minutes = CODE_TTL_SECONDS / 60;
   return { subject: texts.subject(site), text: texts.body(site, code, minutes) };
 }

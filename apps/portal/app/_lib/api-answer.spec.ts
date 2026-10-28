@@ -6,9 +6,7 @@ describe('failureMessage', () => {
       'error.invalidAddress',
     );
     expect(failureMessage({ status: 400, code: 'portal.code-invalid' })).toBe('error.invalidCode');
-    expect(failureMessage({ status: 403, code: 'portal.account-disabled' })).toBe(
-      'error.disabled',
-    );
+    expect(failureMessage({ status: 403, code: 'portal.account-disabled' })).toBe('error.disabled');
     expect(failureMessage({ status: 503, code: 'portal.delivery-failed' })).toBe(
       'error.unavailable',
     );

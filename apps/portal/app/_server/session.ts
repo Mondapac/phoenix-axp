@@ -6,7 +6,7 @@ import { readApi, tenantPresentation, type TenantPresentation } from './panel';
 // cache, ADR-0004 decision 2). No live session goes to sign-in.
 
 export interface PortalContact {
-  readonly kind: 'email' | 'mobile';
+  readonly method: 'email' | 'mobile';
   /** Enough of the address to recognise it; null when it cannot be opened (erased key). */
   readonly masked: string | null;
 }

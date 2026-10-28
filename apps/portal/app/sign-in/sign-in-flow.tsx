@@ -103,7 +103,7 @@ export function SignInFlow({
 
   if (sent !== null) {
     return (
-      <form className="space-y-5" onSubmit={signIn} noValidate>
+      <form className="space-y-5" onSubmit={(event) => void signIn(event)} noValidate>
         <p className="text-sm text-fg-muted">
           {t['code.sentTo']} <Ltr className="font-medium text-fg">{sent.address}</Ltr>
         </p>
@@ -190,7 +190,7 @@ export function SignInFlow({
     );
 
   return (
-    <form className="space-y-5" onSubmit={requestCode} noValidate>
+    <form className="space-y-5" onSubmit={(event) => void requestCode(event)} noValidate>
       {methods.length > 1 ? (
         <Tabs
           value={method}
