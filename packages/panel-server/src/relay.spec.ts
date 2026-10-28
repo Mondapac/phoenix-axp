@@ -1,4 +1,4 @@
-import { apiUrlOf, readFromApi, relayToApi, type RelayOptions } from './relay';
+import { apiUrlOf, clientAddressOf, readFromApi, relayToApi, type RelayOptions } from './relay';
 import { config, headersOf, recordingFetch, TENANT_HOSTS } from './test-support';
 
 const PREFIXES: RelayOptions['allowedPrefixes'] = [['identity'], ['tenancy']];
@@ -224,5 +224,40 @@ describe('the API relay on a host it does not serve', () => {
     );
     expect(apiUrlOf(config, ['identity', '..'], [['identity']])).toBeNull();
     expect(apiUrlOf(config, ['identity'], [[]])).toBeNull();
+  });
+});
+
+describe.each(TENANT_HOSTS)('the client address on host %s (tenant %s)', (host, tenant) => {
+  const behindOneProxy = { ...config, proxyHops: 1 };
+  const forwarded = (value: string | null) =>
+    new Headers(value === null ? {} : { 'x-forwarded-for': value });
+
+  it('reads the entry the nearest trusted proxy wrote, never one the client wrote', () => {
+    expect(clientAddressOf(forwarded('6.6.6.6, 203.0.113.7'), 1)).toBe('203.0.113.7');
+    expect(clientAddressOf(forwarded('6.6.6.6, 203.0.113.7, 10.0.0.2'), 2)).toBe('203.0.113.7');
+    expect(clientAddressOf(forwarded('2001:db8::1'), 1)).toBe('2001:db8::1');
+  });
+
+  it('forwards none without a trusted proxy, with too few entries or a non-address', () => {
+    expect(clientAddressOf(forwarded('203.0.113.7'), 0)).toBeNull();
+    expect(clientAddressOf(forwarded('203.0.113.7'), 2)).toBeNull();
+    expect(clientAddressOf(forwarded(null), 1)).toBeNull();
+    for (const bad of ['unknown', '999.1.1.1', 'evil.test', '1.2.3.4:80']) {
+      expect(clientAddressOf(forwarded(bad), 1)).toBeNull();
+    }
+  });
+
+  it('sends the API the client address as the only X-Forwarded-For entry', async () => {
+    const api = recordingFetch(ok());
+    const request = browser(host, '/api/tenancy/sites', {
+      headers: { 'x-forwarded-for': '6.6.6.6, 203.0.113.7' },
+    });
+    await relayToApi(behindOneProxy, request, ['tenancy', 'sites'], {
+      allowedPrefixes: PREFIXES,
+      fetch: api.fetch,
+    });
+    const sent = headersOf(api.calls[0]!.init);
+    expect(sent.get('x-forwarded-for')).toBe('203.0.113.7');
+    expect(sent.get('x-tenant-id')).toBe(tenant);
   });
 });

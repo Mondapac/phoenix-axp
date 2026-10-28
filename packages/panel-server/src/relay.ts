@@ -63,6 +63,23 @@ export function apiUrlOf(
     : null;
 }
 
+const IPV4 = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+const IPV6 = /^[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}$/i;
+
+/**
+ * The browser's address, for the API's rate limits: the `X-Forwarded-For` entry the nearest of
+ * the `proxyHops` trusted proxies wrote (counted from the right), or null when the panel is
+ * reached directly, too few entries arrived or the entry is not an IP address. Entries left of
+ * it come from the client and are never read.
+ */
+export function clientAddressOf(headers: Headers, proxyHops: number): string | null {
+  if (proxyHops === 0) return null;
+  const entries = (headers.get('x-forwarded-for') ?? '').split(',').map((entry) => entry.trim());
+  if (entries.length < proxyHops) return null;
+  const address = entries[entries.length - proxyHops] ?? '';
+  return IPV4.test(address) || (address.includes(':') && IPV6.test(address)) ? address : null;
+}
+
 /** The headers of a call to the API in `tenant`, from the allow-listed request headers. */
 export function apiHeaders(tenant: string, from?: Headers): Headers {
   const headers = new Headers();
@@ -119,7 +136,7 @@ export async function relayToApi(
   try {
     answer = await (options.fetch ?? fetch)(url, {
       method: request.method,
-      headers: apiHeaders(tenant, request.headers),
+      headers: relayHeaders(config, tenant, request.headers),
       body,
       redirect: 'manual',
       cache: 'no-store',
@@ -136,6 +153,17 @@ export async function relayToApi(
     status: answer.status,
     headers: relayedHeaders(answer.headers),
   });
+}
+
+/**
+ * The headers of a relayed call: the allow-listed ones, and the browser's address as the only
+ * `X-Forwarded-For` entry (the API trusts it from the panels only, `TRUSTED_PROXIES`).
+ */
+function relayHeaders(config: PanelServerConfig, tenant: string, from: Headers): Headers {
+  const headers = apiHeaders(tenant, from);
+  const client = clientAddressOf(from, config.proxyHops);
+  if (client !== null) headers.set('x-forwarded-for', client);
+  return headers;
 }
 
 /**
