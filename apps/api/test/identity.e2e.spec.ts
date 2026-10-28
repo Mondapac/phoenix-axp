@@ -104,6 +104,7 @@ describe('the identity API (HTTP)', () => {
 
     it.each([
       ['get', '/identity/staff/me'],
+      ['get', '/identity/staff/me/permissions'],
       ['post', '/identity/staff/sign-out'],
       ['get', '/identity/staff-accounts'],
       ['post', '/identity/staff-accounts'],

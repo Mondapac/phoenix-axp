@@ -13,6 +13,7 @@ import { BeginStaffSignIn } from '../application/use-cases/begin-staff-sign-in.u
 import { CompleteStaffSignIn } from '../application/use-cases/complete-staff-sign-in.use-case';
 import { SignOut } from '../application/use-cases/sign-out.use-case';
 import { ViewOwnAccount } from '../application/use-cases/view-own-account.use-case';
+import { ViewOwnPermissions } from '../application/use-cases/view-own-permissions.use-case';
 import { answer, parseRequest } from './http';
 
 /**
@@ -41,6 +42,7 @@ export class StaffSignInController {
     private readonly complete: CompleteStaffSignIn,
     private readonly signOut: SignOut,
     private readonly viewOwnAccount: ViewOwnAccount,
+    private readonly viewOwnPermissions: ViewOwnPermissions,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -123,5 +125,11 @@ export class StaffSignInController {
     const account = answer(await this.viewOwnAccount.execute(context, undefined));
     const token = cookieValue(request.headers.cookie, STUDIO_SESSION_COOKIE) ?? '';
     return { ...account, csrfToken: csrfTokenOf(this.config.session.secret, token) };
+  }
+
+  /** The permission keys of the caller's grants, for the panel's menu (a display aid only). */
+  @Get('me/permissions')
+  async permissions(@Call() context: CallContext) {
+    return answer(await this.viewOwnPermissions.execute(context, undefined));
   }
 }

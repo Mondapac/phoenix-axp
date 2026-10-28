@@ -61,6 +61,7 @@ import { SyncDirectoryAccounts } from './application/use-cases/sync-directory-ac
 import { UpdateDirectorySyncInterval } from './application/use-cases/update-directory-sync-interval.use-case';
 import { ViewDirectorySync } from './application/use-cases/view-directory-sync.use-case';
 import { ViewOwnAccount } from './application/use-cases/view-own-account.use-case';
+import { ViewOwnPermissions } from './application/use-cases/view-own-permissions.use-case';
 import { ViewRoleFieldRules } from './application/use-cases/view-role-field-rules.use-case';
 import { IDENTITY_PERMISSIONS } from './contracts/permissions';
 import { IDENTITY_AUDIT_ACTIONS } from './domain/audit-actions';
@@ -262,6 +263,7 @@ const CATALOGUE = PermissionRegistry;
     ]),
     useCase(SignOut, [UNIT_OF_WORK, SESSION_REPOSITORY, AUDIT_WRITER]),
     useCase(ViewOwnAccount, [UNIT_OF_WORK, ACCOUNTS]),
+    useCase(ViewOwnPermissions, [ACTOR_GRANT_READER]),
     useCase(ListStaffAccounts, [UNIT_OF_WORK, ACCOUNTS]),
     useCase(CreateLocalStaffAccount, [UNIT_OF_WORK, ACCOUNTS, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
     useCase(DisableStaffAccount, [
