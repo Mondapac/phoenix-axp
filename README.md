@@ -75,6 +75,13 @@ The API must list the studio origins in `PANEL_ORIGINS`, and staff sign-in needs
 the member's session, permissions and the tenant's language from the API on each request; the
 menu shows the entries of the keys the member holds, and the API still checks every call.
 
+Screens: `/people/accounts` (staff accounts: add a local account, disable one, and per account
+grant and revoke roles), `/people/roles` (roles; create a custom role and edit its keys). A
+screen offers a change only when the member holds its key; a refusal of the API is shown in
+place. `pnpm --filter @phoenix/studio test` runs the studio's specs (texts, the screens' rules,
+dates and the session reads); the screens themselves are checked in a browser at 375, 768 and
+1280 px, light and dark, on both tenant fixtures.
+
 ## Commands
 
 | Command                   | What it does                                                    |
