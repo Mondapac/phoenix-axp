@@ -39,7 +39,9 @@ export default async function StudioLayout({ children }: { readonly children: Re
     tenantPresentation(),
     readApi<OwnPermissions>('identity/staff/me/permissions'),
   ]);
-  if (!permissions.ok) redirect('/sign-in');
+  if (permissions.status === 401 || permissions.status === 403) redirect('/sign-in');
+  if (!permissions.ok)
+    throw new Error(`identity/staff/me/permissions answered ${permissions.status}`);
   const held = heldKeys(permissions.body);
   const t = messagesFor(tenant.defaultLocale);
   const label = (key: string) => (isMessageKey(key) ? t[key] : key);
