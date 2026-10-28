@@ -38,13 +38,22 @@ both REST and GraphQL are served in Phase 2 (D6). The studio screens are slice 2
    id: non-sensitive values in `values` (jsonb); sensitive values sealed under the record's own
    subject key (`SubjectKeyService`, subject = the record id). Deleting a record destroys its key
    and removes the row; the audit keeps ids only. An update writes under the current published
-   revision: values of fields that revision no longer has are dropped.
+   revision: values of fields that revision no longer has are dropped. An update names the
+   version it read and must name at least one field. Each record also keeps the revision whose
+   `sensitive` marks split its values (`sealed_under_id`). When a published revision marks a
+   field sensitive, the `objects.seal-records` job (every 15 minutes, per tenant) seals that
+   field's existing plain values under each record's key, without changing the values, the
+   version or the revision written under. Until it runs, reads already hide the field.
 5. **Record-level access.** A record is owned by one site: the definition's site or a site
    below it, chosen at creation and checked against the creator's grants (never trusted from
    input alone). Check order (ADR-0024 decision 2): tenant, then the record's site against the
    grants conferring the operation key (ADR-0018 subtree), then the definition qualifier, then
-   field modes. A record the actor's grants do not reach answers "not found". Lists filter in
-   the query by the sites the actor's read grants cover, so pages are never short.
+   field modes. A record the actor's grants do not reach answers "not found". A definition the
+   actor's grants for the operation reach nowhere answers exactly as an unknown key. Lists
+   filter in the query by the sites the actor's read grants cover, so pages are never short.
+   A required field is checked on update only when the writer may edit it, so no refusal tells
+   whether a field the writer cannot edit is empty. A required field the writer may edit but not
+   read is still named when empty; this is accepted, since the writer may overwrite it.
 6. **Permissions.** `objects.definitions.view | design | publish` (site scope),
    `objects.definitions.lower-sensitivity` (tenant, protected), and
    `objects.record.read | create | update | delete` (site scope, definition qualifier).

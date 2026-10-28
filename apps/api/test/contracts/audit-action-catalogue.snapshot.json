@@ -375,6 +375,18 @@
     "after": null
   },
   {
+    "action": "objects.record.resealed",
+    "targetType": "objects.record",
+    "targetId": "id",
+    "actors": ["system"],
+    "before": {
+      "revisionId": "id"
+    },
+    "after": {
+      "revisionId": "id"
+    }
+  },
+  {
     "action": "objects.record.updated",
     "targetType": "objects.record",
     "targetId": "id",

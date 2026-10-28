@@ -13,6 +13,8 @@ export interface StoredRecord {
   readonly values: RecordValues;
   /** The sensitive values, sealed under the record's subject key. */
   readonly sealed: Buffer;
+  /** The revision whose `sensitive` marks split `values` from `sealed`. */
+  readonly sealedUnderId: Id<'ObjectRevision'>;
   readonly version: number;
   readonly createdAt: Temporal.Instant;
   readonly updatedAt: Temporal.Instant;
@@ -33,6 +35,13 @@ export interface RecordWrite {
   readonly revisionHash: ContentHash;
   readonly values: RecordValues;
   readonly sealed: Buffer;
+}
+
+/** A record's values split again under another revision's `sensitive` marks. */
+export interface RecordSplit {
+  readonly values: RecordValues;
+  readonly sealed: Buffer;
+  readonly sealedUnderId: Id<'ObjectRevision'>;
 }
 
 /** The records of one tenant's definitions. Every method runs in the caller's open unit. */
@@ -61,6 +70,26 @@ export interface RecordRepository {
     write: RecordWrite,
     at: Temporal.Instant,
   ): Promise<void>;
+  /**
+   * Up to `limit` records of the definition split under another revision than `revisionId`,
+   * oldest first.
+   */
+  splitElsewhere(
+    tenant: TenantContext,
+    definitionId: Id<'ObjectDefinition'>,
+    revisionId: Id<'ObjectRevision'>,
+    limit: number,
+  ): Promise<StoredRecord[]>;
+  /**
+   * Stores a new split of the same values: neither the version nor the time of the last change
+   * moves. False when the record is at another version or gone (a writer moved it first).
+   */
+  resplit(
+    tenant: TenantContext,
+    id: Id<'ObjectRecord'>,
+    expectedVersion: number,
+    split: RecordSplit,
+  ): Promise<boolean>;
   /** Throws StaleAggregateError on another version or a removed record. */
   delete(tenant: TenantContext, id: Id<'ObjectRecord'>, expectedVersion: number): Promise<void>;
 }

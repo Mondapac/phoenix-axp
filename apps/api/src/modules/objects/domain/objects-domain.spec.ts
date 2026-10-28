@@ -211,7 +211,7 @@ describe('record values', () => {
       [field('signed').id, true],
       [id(999), 'from a removed field'],
     ]);
-    const next = applyChanges(fields, current, changes.value, () => true);
+    const next = applyChanges(fields, current, changes.value, () => true, false);
     expect(next.ok && valuesToJson(next.value)).toEqual({
       [field('name').id]: 'Sara',
       [field('count').id]: 3,
@@ -222,15 +222,17 @@ describe('record values', () => {
     });
     const missing = parseChanges(fields, { count: 1 });
     if (!missing.ok) throw new Error('setup');
-    expect(applyChanges(fields, new Map(), missing.value, () => true)).toEqual({
+    expect(applyChanges(fields, new Map(), missing.value, () => true, false)).toEqual({
       ok: false,
       error: { code: 'objects.record.invalid', field: 'name' },
     });
-    // A required field the writer cannot edit is never named.
-    expect(applyChanges(fields, new Map(), missing.value, () => false)).toEqual({
+    // On create a required field the writer cannot edit is refused but never named.
+    expect(applyChanges(fields, new Map(), missing.value, () => false, true)).toEqual({
       ok: false,
       error: { code: 'objects.record.invalid' },
     });
+    // On update it is not checked, so no refusal tells whether it is empty.
+    expect(applyChanges(fields, new Map(), missing.value, () => false, false).ok).toBe(true);
   });
 
   it('round-trips stored JSON and drops anything that is not a stored value', () => {

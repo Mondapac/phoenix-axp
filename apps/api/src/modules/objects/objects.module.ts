@@ -14,6 +14,7 @@ import {
 import { CLOCK } from '../../platform/clock/clock.module';
 import { ID_GENERATOR } from '../../platform/ids/ids.module';
 import { PersistenceModule } from '../../platform/persistence/persistence.module';
+import { registerJobsFrom } from '../../platform/scheduler/job-registry';
 import { SUBJECT_KEY_SERVICE } from '../../platform/subject-keys';
 import { UNIT_OF_WORK, type UnitOfWork } from '../../platform/unit-of-work/unit-of-work';
 import { DEFINITION_REACH, DefinitionReach } from './application/definition-reach';
@@ -33,6 +34,7 @@ import { PublishDefinition } from './application/use-cases/publish-definition.us
 import { RenameDefinition } from './application/use-cases/rename-definition.use-case';
 import { RetireDefinition } from './application/use-cases/retire-definition.use-case';
 import { SaveRevision } from './application/use-cases/save-revision.use-case';
+import { SealRecords } from './application/use-cases/seal-records.use-case';
 import { UpdateRecord } from './application/use-cases/update-record.use-case';
 import { ViewDefinition } from './application/use-cases/view-definition.use-case';
 import { ViewRecord } from './application/use-cases/view-record.use-case';
@@ -41,6 +43,7 @@ import { OBJECTS_PERMISSIONS } from './contracts/permissions';
 import { OBJECTS_AUDIT_ACTIONS } from './domain/audit-actions';
 import { PrismaDefinitionRepository } from './infrastructure/prisma-definition.repository';
 import { PrismaRecordRepository } from './infrastructure/prisma-record.repository';
+import { sealRecordsJob } from './presentation/jobs/seal-records.job';
 import { ObjectRecordsController } from './presentation/object-records.controller';
 import { ObjectDefinitionsController } from './presentation/objects.controller';
 
@@ -111,6 +114,8 @@ const KEYS = SUBJECT_KEY_SERVICE;
     useCase(CreateRecord, [DEFINITIONS, RECORDS, ACCESS, KEYS, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
     useCase(UpdateRecord, [DEFINITIONS, RECORDS, ACCESS, KEYS, AUDIT_WRITER, CLOCK]),
     useCase(DeleteRecord, [DEFINITIONS, RECORDS, ACCESS, KEYS, AUDIT_WRITER, CLOCK]),
+    useCase(SealRecords, [DEFINITIONS, RECORDS, KEYS, AUDIT_WRITER]),
+    registerJobsFrom('objects', [SealRecords], (seal: SealRecords) => [sealRecordsJob(seal)]),
   ],
 })
 export class ObjectsModule {}

@@ -13,6 +13,7 @@
   { "name": "identity.sync-directory-accounts", "rule": "system" },
   { "name": "identity.view-own-account", "rule": "own-resources" },
   { "name": "identity.view-own-permissions", "rule": "own-resources" },
+  { "name": "objects.seal-records", "rule": "system" },
   { "name": "process.escalate-overdue-tasks", "rule": "system" },
   { "name": "process.relay-engine-commands", "rule": "system" },
   { "name": "process.start-process-from-submission", "rule": "system" },

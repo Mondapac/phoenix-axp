@@ -56,6 +56,20 @@ export class RecordAccess {
     });
   }
 
+  /**
+   * True when the caller's grants conferring `key` reach some record of the definition. A
+   * record path answers an unreached definition as not found, exactly as an unknown key, so
+   * no caller learns which keys exist (security review of slice 2.8, L1).
+   */
+  async reaches(
+    context: CallContext,
+    definition: { readonly id: Id<'ObjectDefinition'>; readonly siteId: Id<'Site'> },
+    key: PermissionKey,
+  ): Promise<boolean> {
+    const sites = await this.sitesFor(context, definition, key);
+    return sites === 'all' || sites.length > 0;
+  }
+
   /** True when `siteId` is the definition's site or a site below it: where its records live. */
   async inDefinitionTree(
     context: CallContext,

@@ -77,6 +77,18 @@ export const RECORD_UPDATED = defineAuditAction({
   after: { revisionId: auditField.id(), fieldIds },
 });
 
+/**
+ * The record's values split again under the published revision's `sensitive` marks by the
+ * `objects.seal-records` job: a field marked sensitive since the record was written is sealed.
+ */
+export const RECORD_RESEALED = defineAuditAction({
+  action: 'objects.record.resealed',
+  targetType: 'objects.record',
+  actors: ['system'],
+  before: { revisionId: auditField.id() },
+  after: { revisionId: auditField.id() },
+});
+
 /** The record removed and its subject key destroyed: its sealed values cannot be opened. */
 export const RECORD_DELETED = defineAuditAction({
   action: 'objects.record.deleted',
@@ -94,5 +106,6 @@ export const OBJECTS_AUDIT_ACTIONS = [
   DEFINITION_RETIRED,
   RECORD_CREATED,
   RECORD_UPDATED,
+  RECORD_RESEALED,
   RECORD_DELETED,
 ] as const;

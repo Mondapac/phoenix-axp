@@ -44,6 +44,7 @@ CREATE TABLE "objects"."object_record" (
     "created_by" UUID NOT NULL,
     "values" JSONB NOT NULL,
     "sealed" BYTEA NOT NULL,
+    "sealed_under_id" UUID NOT NULL,
     "version" INTEGER NOT NULL,
     "created_at" TIMESTAMPTZ(3) NOT NULL,
     "updated_at" TIMESTAMPTZ(3) NOT NULL,
@@ -79,6 +80,9 @@ CREATE INDEX "object_record_tenant_id_definition_id_id_idx" ON "objects"."object
 CREATE INDEX "object_record_tenant_id_definition_id_site_id_id_idx" ON "objects"."object_record"("tenant_id", "definition_id", "site_id", "id");
 
 -- CreateIndex
+CREATE INDEX "object_record_tenant_id_definition_id_sealed_under_id_id_idx" ON "objects"."object_record"("tenant_id", "definition_id", "sealed_under_id", "id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "object_record_tenant_id_id_key" ON "objects"."object_record"("tenant_id", "id");
 
 -- AddForeignKey
@@ -92,6 +96,9 @@ ALTER TABLE "objects"."object_record" ADD CONSTRAINT "object_record_definition_f
 
 -- AddForeignKey
 ALTER TABLE "objects"."object_record" ADD CONSTRAINT "object_record_revision_fkey" FOREIGN KEY ("tenant_id", "definition_id", "revision_id") REFERENCES "objects"."object_revision"("tenant_id", "definition_id", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
+
+-- AddForeignKey
+ALTER TABLE "objects"."object_record" ADD CONSTRAINT "object_record_sealed_under_fkey" FOREIGN KEY ("tenant_id", "definition_id", "sealed_under_id") REFERENCES "objects"."object_revision"("tenant_id", "definition_id", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 
 -- Hand-written: integrity backstops Prisma cannot express. The tenant pattern repeats the
@@ -129,7 +136,7 @@ ALTER TABLE "objects"."object_record"
 GRANT USAGE ON SCHEMA "objects" TO "phoenix_app";
 GRANT SELECT, INSERT, UPDATE ("name", "status", "published_revision_id", "revision_count", "version", "updated_at") ON TABLE "objects"."object_definition" TO "phoenix_app";
 GRANT SELECT, INSERT ON TABLE "objects"."object_revision" TO "phoenix_app";
-GRANT SELECT, INSERT, DELETE, UPDATE ("revision_id", "revision_hash", "values", "sealed", "version", "updated_at") ON TABLE "objects"."object_record" TO "phoenix_app";
+GRANT SELECT, INSERT, DELETE, UPDATE ("revision_id", "revision_hash", "values", "sealed", "sealed_under_id", "version", "updated_at") ON TABLE "objects"."object_record" TO "phoenix_app";
 
 -- Row-level security (ADR-0002), enabled and forced, with the reference policy of
 -- platform.isolation_probe on every table.

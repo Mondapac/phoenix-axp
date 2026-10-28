@@ -64,21 +64,28 @@ export function parseChanges(
 
 /**
  * The record's values after `changes`, under `fields` (the revision it is written under):
- * values of fields the revision does not have are dropped, a cleared field is removed, and
- * every required field must hold a value. `editable` names the fields a failure may name.
+ * values of fields the revision does not have are dropped, a cleared field is removed, and a
+ * required field must hold a value. `editable` names the fields a failure may name. On create
+ * (`requireAll`) every required field is checked: all start empty, so a refusal tells nothing.
+ * On update only the editable ones are, so a refusal never tells whether a field the writer
+ * cannot edit is empty (security review of slice 2.8, L2).
  */
 export function applyChanges(
   fields: readonly ObjectField[],
   current: RecordValues,
   changes: ReadonlyMap<Id<'Field'>, StoredValue | null>,
   editable: (id: Id<'Field'>) => boolean,
+  requireAll: boolean,
 ): Result<RecordValues, InvalidRecord> {
   const next = new Map<Id<'Field'>, StoredValue>();
   for (const field of fields) {
     const change = changes.get(field.id);
     const value = changes.has(field.id) ? change : current.get(field.id);
     if (value === null || value === undefined) {
-      if (field.required) return invalidRecord(editable(field.id) ? field.key : undefined);
+      const named = editable(field.id);
+      if (field.required && (requireAll || named)) {
+        return invalidRecord(named ? field.key : undefined);
+      }
       continue;
     }
     next.set(field.id, value);

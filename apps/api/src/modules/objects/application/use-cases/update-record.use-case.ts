@@ -9,6 +9,7 @@ import {
 } from '../../../../platform/authz';
 import type { AuditWriter } from '../../../../platform/audit/audit-writer';
 import type { SubjectKeyService } from '../../../../platform/subject-keys';
+import { StaleAggregateError } from '../../../../platform/unit-of-work/errors';
 import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work';
 import { OBJECTS_RECORD_UPDATE } from '../../contracts/permissions';
 import { RECORD_UPDATED } from '../../domain/audit-actions';
@@ -79,6 +80,9 @@ export class UpdateRecord extends UseCase<UpdateRecordInput, WrittenRecord, Upda
     );
     if (served === null) return err(DEFINITION_NOT_FOUND);
     const { definition, current } = served;
+    if (!(await this.access.reaches(context, definition, OBJECTS_RECORD_UPDATE.key))) {
+      return err(DEFINITION_NOT_FOUND);
+    }
     const read = await this.unitOfWork.run(
       tenant,
       async () => {
@@ -101,6 +105,12 @@ export class UpdateRecord extends UseCase<UpdateRecordInput, WrittenRecord, Upda
     );
     if (!writer.canWrite) return err(RECORD_NOT_FOUND);
     if (definition.status !== 'published') return err(NOT_ACCEPTING);
+    // The write is built from this read: a record changed since (another version) is refused
+    // here, so no write reverts a field the caller cannot edit (security review, M1).
+    if (record.version !== input.version)
+      throw new StaleAggregateError('objects.record', record.id);
+    // An empty change would still move the record to the published revision (review, L3).
+    if (Object.keys(input.values).length === 0) return err({ code: 'objects.record.invalid' });
     const allowed = FieldPolicy.checkWrite(
       payloadFieldIds(current.fields, input.values),
       writer.writeModes,
@@ -114,6 +124,7 @@ export class UpdateRecord extends UseCase<UpdateRecordInput, WrittenRecord, Upda
       existing,
       changes.value,
       (id) => writer.writeModes.get(id) === 'edit',
+      false,
     );
     if (!values.ok) return values;
     const { plain, sensitive } = splitValues(current.fields, values.value);

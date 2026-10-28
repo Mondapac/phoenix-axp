@@ -46,11 +46,32 @@ export const sealedText = (sensitive: RecordValues): Buffer =>
   Buffer.from(JSON.stringify(valuesToJson(sensitive)), 'utf8');
 
 /**
- * Every value of a stored record: the plain ones and the opened sealed ones. A key that cannot
- * be read throws (never answered as empty); a destroyed key cannot happen for a stored record,
- * whose key is destroyed only with its row.
+ * The values of `plain` and `sealed` split again under `fields` (a published revision): a field
+ * of the revision goes where its `sensitive` mark says; a value of a field the revision does
+ * not have stays where it is, so nothing sealed is ever moved to plain by a dropped field.
  */
-export function openValues(
+export function resplitValues(
+  fields: readonly ObjectField[],
+  plain: RecordValues,
+  sealed: RecordValues,
+): { readonly plain: RecordValues; readonly sensitive: RecordValues } {
+  const marks = new Map(fields.map((field) => [field.id as string, field.sensitive]));
+  const nextPlain = new Map<Id<'Field'>, StoredValue>();
+  const nextSensitive = new Map<Id<'Field'>, StoredValue>();
+  for (const [id, value] of plain)
+    (marks.get(id) === true ? nextSensitive : nextPlain).set(id, value);
+  for (const [id, value] of sealed) {
+    (marks.get(id) === false ? nextPlain : nextSensitive).set(id, value);
+  }
+  return { plain: nextPlain, sensitive: nextSensitive };
+}
+
+/**
+ * The opened sealed values of a stored record. A key that cannot be read throws (never
+ * answered as empty); a destroyed key cannot happen for a stored record, whose key is
+ * destroyed only with its row.
+ */
+export function openSealed(
   subjectKeys: SubjectKeyService,
   tenant: TenantContext,
   record: StoredRecord,
@@ -58,8 +79,18 @@ export function openValues(
 ): Map<Id<'Field'>, StoredValue> {
   const plaintext = subjectKeys.open(tenant, record.id, wrappedKey, record.sealed);
   if (plaintext === null) throw new Error(`objects: the subject key of ${record.id} is missing`);
+  return valuesFromJson(JSON.parse(plaintext.toString('utf8')));
+}
+
+/** Every value of a stored record: the plain ones and the opened sealed ones. */
+export function openValues(
+  subjectKeys: SubjectKeyService,
+  tenant: TenantContext,
+  record: StoredRecord,
+  wrappedKey: Uint8Array | null | undefined,
+): Map<Id<'Field'>, StoredValue> {
   const values = new Map(record.values);
-  for (const [id, value] of valuesFromJson(JSON.parse(plaintext.toString('utf8')))) {
+  for (const [id, value] of openSealed(subjectKeys, tenant, record, wrappedKey)) {
     values.set(id, value);
   }
   return values;

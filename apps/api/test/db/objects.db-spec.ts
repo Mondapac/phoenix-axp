@@ -36,6 +36,7 @@ import { PublishDefinition } from '../../src/modules/objects/application/use-cas
 import { RenameDefinition } from '../../src/modules/objects/application/use-cases/rename-definition.use-case';
 import { RetireDefinition } from '../../src/modules/objects/application/use-cases/retire-definition.use-case';
 import { SaveRevision } from '../../src/modules/objects/application/use-cases/save-revision.use-case';
+import { SealRecords } from '../../src/modules/objects/application/use-cases/seal-records.use-case';
 import { UpdateRecord } from '../../src/modules/objects/application/use-cases/update-record.use-case';
 import { ViewDefinition } from '../../src/modules/objects/application/use-cases/view-definition.use-case';
 import { ViewRecord } from '../../src/modules/objects/application/use-cases/view-record.use-case';
@@ -250,6 +251,7 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
       add: new CreateRecord(gate, uow, definitions, records, access, keys, audit, clock, ids),
       change: new UpdateRecord(gate, uow, definitions, records, access, keys, audit, clock),
       remove: new DeleteRecord(gate, uow, definitions, records, access, keys, audit, clock),
+      seal: new SealRecords(gate, uow, definitions, records, keys, audit),
     };
   }
 
@@ -487,11 +489,12 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
       }),
     ).toEqual({ ok: true, value: { id: recordId, version: 2 } });
 
-    // An update-only member writes but cannot read back (review M1 of slice 2.0).
+    // An update-only member writes but cannot read back (review M1 of slice 2.0): with no read
+    // grant at all, the definition is not found for reading (review L1 of slice 2.8).
     const writer = staffWith({ keys: [OBJECTS_RECORD_UPDATE.key] });
     expect(await useCases.record.execute(writer, { definitionKey: object.key, recordId })).toEqual({
       ok: false,
-      error: { code: 'objects.record.not-found' },
+      error: { code: 'objects.definition.not-found' },
     });
     expect(
       await useCases.change.execute(writer, {
@@ -541,6 +544,114 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
       'objects.record.updated',
       'objects.record.updated',
     ]);
+  });
+
+  it('seals a field marked sensitive after records were written (security review M2)', async () => {
+    const siteId = await newSite();
+    const object = await published(siteId);
+    const recordId = await addRecord(object.clerk, object.key);
+    const note = object.field('note').id;
+    const plainNote = async () => {
+      const [row] = await asApplication<{ values: Record<string, unknown>; sealed: Buffer }>(
+        'SELECT "values", sealed FROM objects.object_record WHERE id = $1',
+        [recordId],
+      );
+      return row!.values[note];
+    };
+    expect(await plainNote()).toBe('محرمانه نیست');
+
+    // Revision 2 marks the note sensitive; the record keeps revision 1 and its plain value
+    // until the job runs, but reads already hide it (ADR-0024 decision 5).
+    const raised = FIELDS.map((f) => (f.key === 'note' ? { ...f, sensitive: true } : f));
+    const saved = await useCases.save.execute(admin, { definitionId: object.id, fields: raised });
+    if (!saved.ok) throw new Error('setup');
+    await useCases.publish.execute(admin, {
+      definitionId: object.id,
+      version: 2,
+      revisionId: saved.value.id,
+    });
+    const hidden = await useCases.record.execute(admin, { definitionKey: object.key, recordId });
+    expect(hidden.ok && hidden.value.values).not.toHaveProperty('note');
+
+    const system = testCallContext(tenant, 'system');
+    const run = await useCases.seal.execute(system, undefined);
+    expect(run.ok && run.value.resealed).toBeGreaterThanOrEqual(1);
+    expect(await plainNote()).toBeUndefined();
+    // Same values, version and revision: only where they are stored changed.
+    const opened = staffWith({
+      keys: [OBJECTS_RECORD_READ.key],
+      rules: { [note]: 'read', [object.field('national-id').id]: 'read' },
+    });
+    const after = await useCases.record.execute(opened, { definitionKey: object.key, recordId });
+    expect(after.ok && after.value).toMatchObject({
+      version: 1,
+      revisionNumber: 1,
+      values: { note: 'محرمانه نیست', 'national-id': '0012345678', title: 'قرارداد ۱' },
+    });
+    expect(audit.of(recordId)).toEqual(['objects.record.created', 'objects.record.resealed']);
+    // A second run finds nothing more to do for this record.
+    await useCases.seal.execute(system, undefined);
+    expect(audit.of(recordId)).toEqual(['objects.record.created', 'objects.record.resealed']);
+  });
+
+  it('refuses a write built on a stale read and an empty change (security review M1, L3)', async () => {
+    const siteId = await newSite();
+    const object = await published(siteId);
+    const recordId = await addRecord(object.clerk, object.key);
+    await useCases.change.execute(admin, {
+      definitionKey: object.key,
+      recordId,
+      version: 1,
+      values: { amount: 7 },
+    });
+    // Version 1 names an older state than the stored one: refused before anything is built.
+    await expect(
+      useCases.change.execute(admin, {
+        definitionKey: object.key,
+        recordId,
+        version: 1,
+        values: { title: 'x' },
+      }),
+    ).rejects.toThrow(StaleAggregateError);
+    expect(
+      await useCases.change.execute(admin, {
+        definitionKey: object.key,
+        recordId,
+        version: 2,
+        values: {},
+      }),
+    ).toEqual({ ok: false, error: { code: 'objects.record.invalid' } });
+  });
+
+  it('answers an unreached definition as an unknown one on every record path (review L1)', async () => {
+    const root = await newSite();
+    const elsewhere = await newSite();
+    const object = await published(root);
+    const recordId = await addRecord(object.clerk, object.key);
+    const stranger = staffWith({
+      keys: ALL_KEYS,
+      scope: { level: 'site', siteId: elsewhere, includeDescendants: true },
+    });
+    const notFound = { ok: false, error: { code: 'objects.definition.not-found' } };
+    for (const definitionKey of [object.key, unique('missing')]) {
+      expect(await useCases.record.execute(stranger, { definitionKey, recordId })).toEqual(
+        notFound,
+      );
+      expect(
+        await useCases.change.execute(stranger, {
+          definitionKey,
+          recordId,
+          version: 1,
+          values: { title: 'x' },
+        }),
+      ).toEqual(notFound);
+      expect(
+        await useCases.remove.execute(stranger, { definitionKey, recordId, version: 1 }),
+      ).toEqual(notFound);
+      expect(
+        await useCases.add.execute(stranger, { definitionKey, siteId: root, values: VALUES }),
+      ).toEqual(notFound);
+    }
   });
 
   it('owns records by site: a grant reaches its subtree only, in lists too (ADR-0017)', async () => {
@@ -630,7 +741,8 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
     ]) {
       expect(result).toEqual({ ok: false, error: { code: 'objects.definition.not-found' } });
     }
-    // A qualifier for another definition covers none of this one's records.
+    // A qualifier for another definition covers none of this one's records: not found, as an
+    // unknown key (review L1).
     const otherDefinition = staffWith({
       keys: [OBJECTS_RECORD_READ.key],
       definitions: { all: false, definitionIds: new Set([ids.next<'Definition'>()]) },
@@ -640,7 +752,7 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
         definitionKey: object.key,
         recordId: atRoot,
       }),
-    ).toEqual({ ok: false, error: { code: 'objects.record.not-found' } });
+    ).toEqual({ ok: false, error: { code: 'objects.definition.not-found' } });
   });
 
   it('writes under the published revision, stops at retirement, deletes with the key', async () => {

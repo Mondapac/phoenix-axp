@@ -6,6 +6,7 @@ import { StaleAggregateError } from '../../../platform/unit-of-work/errors';
 import type {
   RecordPage,
   RecordRepository,
+  RecordSplit,
   RecordWrite,
   StoredRecord,
 } from '../application/record.repository';
@@ -24,6 +25,7 @@ const RECORD_COLUMNS = {
   createdBy: true,
   values: true,
   sealed: true,
+  sealedUnderId: true,
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -82,6 +84,7 @@ export class PrismaRecordRepository implements RecordRepository {
         createdBy: record.createdBy,
         values: valuesToJson(record.values),
         sealed: new Uint8Array(record.sealed),
+        sealedUnderId: record.sealedUnderId,
         version: 1,
         createdAt: dateOf(at),
         updatedAt: dateOf(at),
@@ -103,11 +106,44 @@ export class PrismaRecordRepository implements RecordRepository {
         revisionHash: write.revisionHash,
         values: valuesToJson(write.values),
         sealed: new Uint8Array(write.sealed),
+        sealedUnderId: write.revisionId,
         version: { increment: 1 },
         updatedAt: dateOf(at),
       },
     });
     if (count === 0) throw new StaleAggregateError('objects.record', id);
+  }
+
+  async splitElsewhere(
+    tenant: TenantContext,
+    definitionId: Id<'ObjectDefinition'>,
+    revisionId: Id<'ObjectRevision'>,
+    limit: number,
+  ): Promise<StoredRecord[]> {
+    const rows = await this.prisma.tx(tenant).objectRecord.findMany({
+      where: { tenantId: tenant.tenantId, definitionId, sealedUnderId: { not: revisionId } },
+      select: RECORD_COLUMNS,
+      orderBy: { id: 'asc' },
+      take: limit,
+    });
+    return rows.map(recordOf);
+  }
+
+  async resplit(
+    tenant: TenantContext,
+    id: Id<'ObjectRecord'>,
+    expectedVersion: number,
+    split: RecordSplit,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.tx(tenant).objectRecord.updateMany({
+      where: { tenantId: tenant.tenantId, id, version: expectedVersion },
+      data: {
+        values: valuesToJson(split.values),
+        sealed: new Uint8Array(split.sealed),
+        sealedUnderId: split.sealedUnderId,
+      },
+    });
+    return count === 1;
   }
 
   async delete(
@@ -131,6 +167,7 @@ function recordOf(row: {
   createdBy: string;
   values: unknown;
   sealed: Uint8Array;
+  sealedUnderId: string;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -144,6 +181,7 @@ function recordOf(row: {
     createdBy: row.createdBy as Id<'Account'>,
     values: valuesFromJson(row.values),
     sealed: Buffer.from(row.sealed),
+    sealedUnderId: row.sealedUnderId as Id<'ObjectRevision'>,
     version: row.version,
     createdAt: instantOf(row.createdAt),
     updatedAt: instantOf(row.updatedAt),

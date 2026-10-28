@@ -8,26 +8,26 @@
 /// it (ADR-0017 decision 5). Pattern V1: it points at the revision it publishes.
 model ObjectDefinition {
   /// UUIDv7 from the IdGenerator.
-  id                  String          @id @db.Uuid
-  tenantId            String          @map("tenant_id") @db.VarChar(32)
+  id                  String           @id @db.Uuid
+  tenantId            String           @map("tenant_id") @db.VarChar(32)
   /// The tenancy site that owns the definition. Checked at creation.
-  siteId              String          @map("site_id") @db.Uuid
+  siteId              String           @map("site_id") @db.Uuid
   /// Unique in the tenant; the path segment of the generated API.
-  key                 String          @db.VarChar(64)
-  name                String          @db.VarChar(200)
+  key                 String           @db.VarChar(64)
+  name                String           @db.VarChar(200)
   /// draft (never published) | published | retired.
-  status              String          @db.VarChar(16)
+  status              String           @db.VarChar(16)
   /// The revision new records are written under; null only while a draft.
-  publishedRevisionId String?         @map("published_revision_id") @db.Uuid
+  publishedRevisionId String?          @map("published_revision_id") @db.Uuid
   /// The number of the newest revision; 0 before the first. Taken under the row lock.
-  revisionCount       Int             @map("revision_count")
+  revisionCount       Int              @map("revision_count")
   version             Int
-  createdAt           DateTime        @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime        @map("updated_at") @db.Timestamptz(3)
+  createdAt           DateTime         @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime         @map("updated_at") @db.Timestamptz(3)
   revisions           ObjectRevision[] @relation("DefinitionRevisions")
   records             ObjectRecord[]
   /// The published revision is one of the definition's own: the key includes the definition.
-  publishedRevision   ObjectRevision? @relation("DefinitionPublishedRevision", fields: [tenantId, id, publishedRevisionId], references: [tenantId, definitionId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_definition_published_revision_fkey")
+  publishedRevision   ObjectRevision?  @relation("DefinitionPublishedRevision", fields: [tenantId, id, publishedRevisionId], references: [tenantId, definitionId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_definition_published_revision_fkey")
 
   @@unique([tenantId, id], map: "object_definition_tenant_id_id_key")
   @@unique([tenantId, key], map: "object_definition_tenant_id_key_key")
@@ -41,20 +41,21 @@ model ObjectDefinition {
 /// One revision of a definition: its fields, inserted once and never changed (ADR-0007 V1; the
 /// application role has no UPDATE on the table).
 model ObjectRevision {
-  id           String             @id @db.Uuid
-  tenantId     String             @map("tenant_id") @db.VarChar(32)
-  definitionId String             @map("definition_id") @db.Uuid
+  id            String             @id @db.Uuid
+  tenantId      String             @map("tenant_id") @db.VarChar(32)
+  definitionId  String             @map("definition_id") @db.Uuid
   /// 1, 2, 3 ... in the definition, without gaps.
-  number       Int
+  number        Int
   /// `[{ id, key, label, type, required, sensitive, portal?, options?, maxLength? }]`; `id` is a
   /// UUIDv7 kept across revisions and renames (ADR-0024: field rules key on it).
-  fields       Json               @db.JsonB
+  fields        Json               @db.JsonB
   /// `sha256:` over the canonical JSON of the fields.
-  contentHash  String             @map("content_hash") @db.VarChar(80)
-  createdAt    DateTime           @map("created_at") @db.Timestamptz(3)
-  definition   ObjectDefinition   @relation("DefinitionRevisions", fields: [tenantId, definitionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_revision_definition_fkey")
-  publishedBy  ObjectDefinition[] @relation("DefinitionPublishedRevision")
-  records      ObjectRecord[]
+  contentHash   String             @map("content_hash") @db.VarChar(80)
+  createdAt     DateTime           @map("created_at") @db.Timestamptz(3)
+  definition    ObjectDefinition   @relation("DefinitionRevisions", fields: [tenantId, definitionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_revision_definition_fkey")
+  publishedBy   ObjectDefinition[] @relation("DefinitionPublishedRevision")
+  records       ObjectRecord[]     @relation("RecordRevision")
+  sealedRecords ObjectRecord[]     @relation("RecordSealedUnder")
 
   @@unique([tenantId, id], map: "object_revision_tenant_id_id_key")
   @@unique([tenantId, definitionId, number], map: "object_revision_tenant_id_definition_id_number_key")
@@ -69,33 +70,40 @@ model ObjectRevision {
 /// Deleting a record destroys its key and removes the row.
 model ObjectRecord {
   /// UUIDv7 from the IdGenerator; also the subject id of its key and the list order.
-  id           String           @id @db.Uuid
-  tenantId     String           @map("tenant_id") @db.VarChar(32)
-  definitionId String           @map("definition_id") @db.Uuid
+  id            String           @id @db.Uuid
+  tenantId      String           @map("tenant_id") @db.VarChar(32)
+  definitionId  String           @map("definition_id") @db.Uuid
   /// The revision the record was last written under, and its content hash (V3).
-  revisionId   String           @map("revision_id") @db.Uuid
-  revisionHash String           @map("revision_hash") @db.VarChar(80)
+  revisionId    String           @map("revision_id") @db.Uuid
+  revisionHash  String           @map("revision_hash") @db.VarChar(80)
   /// The owning site: the definition's site or one below it, chosen at creation.
-  siteId       String           @map("site_id") @db.Uuid
+  siteId        String           @map("site_id") @db.Uuid
   /// The staff account that created the record (identity's id; no foreign key across schemas).
-  createdBy    String           @map("created_by") @db.Uuid
+  createdBy     String           @map("created_by") @db.Uuid
   /// The non-sensitive values by field id.
-  values       Json             @db.JsonB
+  values        Json             @db.JsonB
   /// AES-256-GCM under the subject key: canonical JSON of the sensitive values by field id;
   /// a key is made for every record, so the part is present even when empty.
-  sealed       Bytes
-  version      Int
-  createdAt    DateTime         @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime         @map("updated_at") @db.Timestamptz(3)
-  definition   ObjectDefinition @relation(fields: [tenantId, definitionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_record_definition_fkey")
+  sealed        Bytes
+  /// The revision whose `sensitive` marks split `values` from `sealed`: the published revision
+  /// when the record was last written or resealed. A record whose split lags the published
+  /// revision is resealed by the `objects.seal-records` job (ADR-0017 decision 4).
+  sealedUnderId String           @map("sealed_under_id") @db.Uuid
+  version       Int
+  createdAt     DateTime         @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime         @map("updated_at") @db.Timestamptz(3)
+  definition    ObjectDefinition @relation(fields: [tenantId, definitionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_record_definition_fkey")
   /// The revision is one of the definition's own.
-  revision     ObjectRevision   @relation(fields: [tenantId, definitionId, revisionId], references: [tenantId, definitionId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_record_revision_fkey")
+  revision      ObjectRevision   @relation("RecordRevision", fields: [tenantId, definitionId, revisionId], references: [tenantId, definitionId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_record_revision_fkey")
+  sealedUnder   ObjectRevision   @relation("RecordSealedUnder", fields: [tenantId, definitionId, sealedUnderId], references: [tenantId, definitionId, id], onDelete: Restrict, onUpdate: Restrict, map: "object_record_sealed_under_fkey")
 
   @@unique([tenantId, id], map: "object_record_tenant_id_id_key")
   /// A definition's records, newest first (ids are UUIDv7).
   @@index([tenantId, definitionId, id], map: "object_record_tenant_id_definition_id_id_idx")
   /// The same, in the sites a reader's grants cover.
   @@index([tenantId, definitionId, siteId, id], map: "object_record_tenant_id_definition_id_site_id_id_idx")
+  /// The records whose split lags the published revision, for the seal job.
+  @@index([tenantId, definitionId, sealedUnderId, id], map: "object_record_tenant_id_definition_id_sealed_under_id_id_idx")
   @@map("object_record")
   @@schema("objects")
 }

@@ -64,6 +64,9 @@ export class DeleteRecord extends UseCase<
     );
     if (served === null) return err(DEFINITION_NOT_FOUND);
     const { definition } = served;
+    if (!(await this.access.reaches(context, definition, OBJECTS_RECORD_DELETE.key))) {
+      return err(DEFINITION_NOT_FOUND);
+    }
     const read = await this.unitOfWork.run(
       tenant,
       async () => ok(await this.records.find(tenant, definition.id, input.recordId)),

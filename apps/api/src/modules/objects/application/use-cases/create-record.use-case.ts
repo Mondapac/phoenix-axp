@@ -84,6 +84,9 @@ export class CreateRecord extends UseCase<CreateRecordInput, WrittenRecord, Crea
     );
     if (served === null) return err(DEFINITION_NOT_FOUND);
     const { definition, current } = served;
+    if (!(await this.access.reaches(context, definition, OBJECTS_RECORD_CREATE.key))) {
+      return err(DEFINITION_NOT_FOUND);
+    }
     const siteId = input.siteId ?? definition.siteId;
     if (!(await this.access.inDefinitionTree(context, definition, siteId))) {
       return err(SITE_NOT_FOUND);
@@ -109,6 +112,7 @@ export class CreateRecord extends UseCase<CreateRecordInput, WrittenRecord, Crea
       new Map(),
       changes.value,
       (id) => writer.writeModes.get(id) === 'edit',
+      true,
     );
     if (!values.ok) return values;
     // Sealing is CPU work: before the unit.
@@ -130,6 +134,7 @@ export class CreateRecord extends UseCase<CreateRecordInput, WrittenRecord, Crea
           createdBy: actor.accountId,
           values: plain,
           sealed: sealed.ciphertext,
+          sealedUnderId: current.id,
         },
         at,
       );
