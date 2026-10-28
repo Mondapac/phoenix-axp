@@ -146,6 +146,8 @@ export function verdictOf(expression) {
 }
 
 const EXCEPTION_FIELDS = ['package', 'licence', 'reason', 'approver', 'date'];
+/** Who may approve an exception: `cto`, or the owner on a decision card (ADR-0009, amended). */
+const APPROVERS = ['cto', 'owner'];
 
 /** The problems of the exceptions file itself; an invalid entry never excuses anything. */
 export function validateExceptions(exceptions) {
@@ -165,8 +167,10 @@ export function validateExceptions(exceptions) {
     }
     const extra = Object.keys(entry).filter((key) => !EXCEPTION_FIELDS.includes(key));
     if (extra.length > 0) problems.push(`${at}: unknown field(s) ${extra.join(', ')}`);
-    if (typeof entry.approver === 'string' && entry.approver !== 'cto') {
-      problems.push(`${at}: the approver must be "cto" (ADR-0009), not "${entry.approver}"`);
+    if (typeof entry.approver === 'string' && !APPROVERS.includes(entry.approver)) {
+      problems.push(
+        `${at}: the approver must be "cto" or "owner" (ADR-0009), not "${entry.approver}"`,
+      );
     }
     if (
       typeof entry.date === 'string' &&

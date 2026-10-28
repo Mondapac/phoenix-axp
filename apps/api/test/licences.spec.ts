@@ -213,6 +213,16 @@ describe('the licence gate (scripts/check-licences.mjs, ADR-0009)', () => {
     ).toMatchObject({ status: 0, problems: [] });
   });
 
+  it('passes an exception the owner approved on a decision card (ADR-0009, amended)', () => {
+    expect(
+      gate(
+        { MIT: [pkg('app')], 'MPL-2.0': [pkg('lightningcss')] },
+        [{ ...approved('lightningcss', 'MPL-2.0', 'dev-only, not shipped'), approver: 'owner' }],
+        { MIT: [pkg('app')] },
+      ),
+    ).toMatchObject({ status: 0, problems: [] });
+  });
+
   it('fails a "dev-only, not shipped" exception whose package ships', () => {
     expect(
       gate({ 'MPL-2.0': [pkg('axe-core')] }, [
@@ -235,7 +245,7 @@ describe('the licence gate (scripts/check-licences.mjs, ADR-0009)', () => {
     expect(gate({ 'OFL-1.1 AND MIT': [pkg('@fontsource/x')] }, []).status).toBe(1);
   });
 
-  it('refuses an exception without the cto approval, a date, a reason or with an extra field', () => {
+  it('refuses an exception without the cto or owner approval, a date, a reason or with an extra field', () => {
     const entries = [
       { ...approved('a', 'MPL-2.0'), approver: 'backend' },
       { ...approved('b', 'MPL-2.0'), date: 'yesterday' },
@@ -249,7 +259,7 @@ describe('the licence gate (scripts/check-licences.mjs, ADR-0009)', () => {
     expect(result.status).toBe(1);
     expect(result.problems).toEqual(
       expect.arrayContaining([
-        'exception #1 (a): the approver must be "cto" (ADR-0009), not "backend"',
+        'exception #1 (a): the approver must be "cto" or "owner" (ADR-0009), not "backend"',
         'exception #2 (b): "date" must be a date (YYYY-MM-DD)',
         'exception #3 (c): "reason" is required',
         'exception #4 (d): unknown field(s) scope',

@@ -1,6 +1,6 @@
 # ADR-0009: Licence Policy and Proprietary Product
 
-**Status:** Accepted — 2026-10-26 (owner decision: proprietary product; no GPL or AGPL). Amended by ADR-0022 (allow-list)
+**Status:** Accepted — 2026-10-26 (owner decision: proprietary product; no GPL or AGPL). Amended by ADR-0022 (allow-list); amended 2026-10-28 (an exception may also be approved by the owner)
 **Relates to:** ADR-0005, ADR-0012, ADR-0014
 
 ## Context
@@ -30,3 +30,10 @@ licences in the product would force disclosure or restrict SaaS use.
 
 ## Alternatives considered
 - Allowing LGPL with dynamic linking: legal ambiguity in JavaScript bundles; rejected.
+
+## Amendment (2026-10-28)
+An exception the owner approves on a decision card is recorded in
+`config/licence-exceptions.json` with approver `owner`; the licence gate accepts `cto` or
+`owner`. The first such entry is lightningcss (MPL-2.0) for Tailwind 4, approved by the owner on
+2026-10-28 for build-time, unmodified use.
+

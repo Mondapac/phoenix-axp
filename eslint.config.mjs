@@ -326,6 +326,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/node_modules/**',
       '**/generated/**',
+      '**/.next/**',
+      '**/next-env.d.ts',
       // Deliberate violations used by apps/api/test/boundaries.spec.ts.
       '**/test/boundary-fixtures/**',
     ],
