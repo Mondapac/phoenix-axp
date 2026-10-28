@@ -1002,8 +1002,12 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         });
         // Anonymous callers are refused by the gate.
         expect(
-          (await identity.viewOwnPermissions.execute(testCallContext(tenant, 'anonymous'), undefined))
-            .ok,
+          (
+            await identity.viewOwnPermissions.execute(
+              testCallContext(tenant, 'anonymous'),
+              undefined,
+            )
+          ).ok,
         ).toBe(false);
       });
 

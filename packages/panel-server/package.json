@@ -1,0 +1,25 @@
+{
+  "name": "@phoenix/panel-server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Server-side helpers of the panels' BFFs (ADR-0001): tenant from host, the API relay, sign-in, the menu and the security headers. Consumed as source by the Next.js panels, on the server only.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"
+  },
+  "dependencies": {
+    "@phoenix/shared-kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.19.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
+    "typescript": "~6.0.3"
+  }
+}
