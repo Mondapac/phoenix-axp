@@ -1389,6 +1389,46 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         expect(await modes(member.context, DEF_A)).toMatchObject({ canWrite: false });
       });
 
+      it('keeps read and write apart across two roles of one member (PR #34)', async () => {
+        const readerRole = await customRole([READ]);
+        const writerRole = await customRole([UPDATE]);
+        const member = await staffMember('split');
+        await assigned(member.id, readerRole);
+        await assigned(member.id, writerRole);
+        for (const [roleId, permissionKey] of [
+          [readerRole, READ],
+          [writerRole, UPDATE],
+        ] as const) {
+          expect(
+            await identity.changeScope.execute(admin, {
+              roleId,
+              version: 1,
+              permissionKey,
+              definitions: 'all',
+            }),
+          ).toEqual({ ok: true, value: undefined });
+        }
+        // The reader hides NOTE; the writer opens NATIONAL_ID for writing only.
+        await identity.changeFieldRules.execute(admin, {
+          roleId: readerRole,
+          version: 2,
+          definitionId: DEF_A,
+          rules: [{ fieldId: NOTE, mode: 'hidden' }],
+        });
+        await identity.changeFieldRules.execute(admin, {
+          roleId: writerRole,
+          version: 2,
+          definitionId: DEF_A,
+          rules: [{ fieldId: NATIONAL_ID, mode: 'edit' }],
+        });
+        expect(await modes(member.context, DEF_A)).toEqual({
+          canRead: true,
+          canWrite: true,
+          read: { [NAME]: 'read', [NOTE]: 'hidden', [NATIONAL_ID]: 'hidden' },
+          write: { [NAME]: 'edit', [NOTE]: 'edit', [NATIONAL_ID]: 'edit' },
+        });
+      });
+
       it('drops the qualifier of a key the role no longer confers (review L3)', async () => {
         const roleId = await customRole([READ, UPDATE]);
         await identity.changeScope.execute(admin, {
