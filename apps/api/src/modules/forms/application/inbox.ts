@@ -76,7 +76,7 @@ export function viewsOf(
         : null;
     const answers = plain === null ? {} : FieldPolicy.project(answersFromBytes(plain), reader);
     for (const field of revision.fields ?? []) {
-      if (isVisible(reader.modes.get(field.id)) && !fields.has(field.id)) {
+      if (isVisible(reader.readModes.get(field.id)) && !fields.has(field.id)) {
         fields.set(field.id, { id: field.id, name: field.name });
       }
     }
