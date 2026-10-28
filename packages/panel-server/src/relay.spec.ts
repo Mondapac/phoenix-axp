@@ -158,7 +158,7 @@ describe.each(TENANT_HOSTS)('the API relay on host %s (tenant %s)', (host, tenan
   it('reads for a server component with the browser cookie, in its tenant', async () => {
     const api = recordingFetch(ok({ accountId: 'a' }));
     const read = await readFromApi(config, { host, cookie: 'c=1' }, 'identity/staff/me', api.fetch);
-    expect(read).toEqual({ status: 200, body: { accountId: 'a' } });
+    expect(read).toEqual({ ok: true, status: 200, body: { accountId: 'a' } });
     const sent = headersOf(api.calls[0]!.init);
     expect(sent.get('x-tenant-id')).toBe(tenant);
     expect(sent.get('cookie')).toBe('c=1');
@@ -171,7 +171,7 @@ describe.each(TENANT_HOSTS)('the API relay on host %s (tenant %s)', (host, tenan
     );
     expect(
       await readFromApi(config, { host, cookie: null }, 'identity/staff/me', api.fetch),
-    ).toEqual({ status: 401, body: null });
+    ).toEqual({ ok: false, status: 401, body: null });
     expect(headersOf(api.calls[0]!.init).get('cookie')).toBeNull();
   });
 });
@@ -193,7 +193,7 @@ describe('the API relay on a host it does not serve', () => {
         'identity/staff/me',
         api.fetch,
       ),
-    ).toEqual({ status: 404, body: null });
+    ).toEqual({ ok: false, status: 404, body: null });
     expect(api.calls).toHaveLength(0);
   });
 

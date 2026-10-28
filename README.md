@@ -56,6 +56,25 @@ tenant: the tenants a deployment serves are `HOSTED_TENANTS`, each with a file i
 `config/tenants/` (two fixtures: `demo-fa`, Persian/Jalali in Asia/Tehran, and `demo-en`,
 English/Gregorian in America/Toronto).
 
+### Studio (the tenant-staff panel)
+
+`apps/studio` is a Next.js panel whose server is its BFF (`packages/panel-server`): the browser
+talks to the studio's origin only, and the studio relays an allow-listed set of API routes with
+`x-tenant-id` set from its own Host. Each studio host serves one tenant, named in
+`STUDIO_TENANT_HOSTS` (no default; another host answers 404). For both fixtures locally:
+
+```sh
+pnpm --filter @phoenix/shared-kernel build
+PHOENIX_API_URL=http://localhost:3000 \
+STUDIO_TENANT_HOSTS="localhost:3001=demo-fa,demo-en.localhost:3001=demo-en" \
+  pnpm --filter @phoenix/studio dev     # http://localhost:3001 and http://demo-en.localhost:3001
+```
+
+The API must list the studio origins in `PANEL_ORIGINS`, and staff sign-in needs Keycloak
+(`KEYCLOAK_*`, `STUDIO_SIGN_IN_CALLBACK_URL` = the studio's `/auth/callback`). Every page reads
+the member's session, permissions and the tenant's language from the API on each request; the
+menu shows the entries of the keys the member holds, and the API still checks every call.
+
 ## Commands
 
 | Command                   | What it does                                                    |

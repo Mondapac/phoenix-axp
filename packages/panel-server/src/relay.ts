@@ -165,7 +165,8 @@ async function readCapped(request: Request, max: number): Promise<Uint8Array<Arr
 
 /** The answer of {@link readFromApi}: the status, and the JSON body of a 2xx answer. */
 export type ApiRead<T> =
-  { readonly status: 200; readonly body: T } | { readonly status: number; readonly body: null };
+  | { readonly ok: true; readonly status: 200; readonly body: T }
+  | { readonly ok: false; readonly status: number; readonly body: null };
 
 /**
  * A GET of the API from the panel's own server (a server component reading what a page
@@ -180,7 +181,7 @@ export async function readFromApi<T>(
   fetchImpl: typeof fetch = fetch,
 ): Promise<ApiRead<T>> {
   const tenant = tenantOfHost(config, incoming.host);
-  if (tenant === null) return { status: 404, body: null };
+  if (tenant === null) return { ok: false, status: 404, body: null };
   const [route, query] = path.split('?', 2);
   const url = apiUrlOf(config, (route ?? '').split('/'), [[(route ?? '').split('/')[0] ?? '']]);
   if (url === null) throw new Error(`Not an API path: ${path}`);
@@ -196,7 +197,7 @@ export async function readFromApi<T>(
   });
   if (answer.status !== 200) {
     await answer.body?.cancel();
-    return { status: answer.status, body: null };
+    return { ok: false, status: answer.status, body: null };
   }
-  return { status: 200, body: (await answer.json()) as T };
+  return { ok: true, status: 200, body: (await answer.json()) as T };
 }

@@ -87,19 +87,19 @@ describe('the tenancy studio API (HTTP)', () => {
   });
 
   it.each([
-    ['demo-fa', 'دموی فارسی', 'fa-IR', 'rtl', 'persian', 'Asia/Tehran'],
-    ['demo-en', 'Synthetic English demo', 'en-CA', 'ltr', 'gregory', 'America/Toronto'],
+    ['demo-fa', 'دموی فارسی', ['fa-IR', 'en-US'], 'rtl', 'persian', 'Asia/Tehran'],
+    ['demo-en', 'Synthetic English demo', ['en-CA', 'fr-CA'], 'ltr', 'gregory', 'America/Toronto'],
   ] as const)(
     "answers an anonymous caller its tenant's presentation (%s), for the panels",
-    async (tenant, displayName, defaultLocale, direction, calendar, timeZone) => {
+    async (tenant, displayName, supportedLocales, direction, calendar, timeZone) => {
       const response = await request(app.getHttpServer())
         .get('/tenancy/presentation')
         .set('x-tenant-id', tenant);
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
         displayName,
-        defaultLocale,
-        supportedLocales: expect.arrayContaining([defaultLocale]),
+        defaultLocale: supportedLocales[0],
+        supportedLocales,
         direction,
         calendar,
         timeZone,

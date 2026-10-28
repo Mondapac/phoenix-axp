@@ -1,0 +1,9 @@
+{
+  "code": "fixture-fa",
+  "displayName": "Fixture",
+  "defaultLocale": "fa-IR",
+  "supportedLocales": ["fa-IR"],
+  "timeZone": "Asia/Tehran",
+  "calendar": "persian",
+  "direction": "rtl"
+}

@@ -5,13 +5,15 @@
   "description": "Studio: the tenant-staff panel (Next.js), built from packages/ui on Base UI (ADR-0016, ADR-0023).",
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "next dev --port 3200",
+    "dev": "next dev --port 3001",
     "build": "next build",
-    "start": "next start --port 3200",
+    "start": "next start --port 3001",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@phoenix/panel-server": "workspace:*",
     "@phoenix/ui": "workspace:*",
+    "lucide-react": "1.62.0",
     "next": "16.4.2",
     "react": "19.3.1",
     "react-dom": "19.3.1"
