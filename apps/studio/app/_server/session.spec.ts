@@ -70,14 +70,30 @@ describe.each(TENANTS)('studio session for $displayName', (fixture) => {
         ],
       }),
     );
-    answers.set('tenancy/sites', ok({ items: [{ id: 's1', name: 'Root', depth: 0, extra: 1 }] }));
+    // The API lists by depth; the switcher shows the tree: each site under its parent.
+    answers.set(
+      'tenancy/sites',
+      ok({
+        items: [
+          { id: 's1', parentSiteId: null, name: 'Root A', depth: 0, extra: 1 },
+          { id: 's2', parentSiteId: null, name: 'Root B', depth: 0 },
+          { id: 's3', parentSiteId: 's2', name: 'Child of B', depth: 1 },
+          { id: 's4', parentSiteId: 's1', name: 'Child of A', depth: 1 },
+        ],
+      }),
+    );
     const session = await studioSession();
     expect(session.accountId).toBe('a1');
     expect([...session.held].sort()).toEqual([
       'identity.role-assignments.manage',
       'tenancy.sites.view',
     ]);
-    expect(session.sites).toEqual([{ id: 's1', name: 'Root', depth: 0 }]);
+    expect(session.sites).toEqual([
+      { id: 's1', name: 'Root A', depth: 0 },
+      { id: 's4', name: 'Child of A', depth: 1 },
+      { id: 's2', name: 'Root B', depth: 0 },
+      { id: 's3', name: 'Child of B', depth: 1 },
+    ]);
     expect(session.t['menu.home']).toBe(
       fixture.defaultLocale === 'fa-IR' ? 'پیشخوان' : 'Dashboard',
     );

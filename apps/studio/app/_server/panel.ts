@@ -29,7 +29,9 @@ export const STUDIO_API_PREFIXES: readonly (readonly string[])[] = [
   ['identity', 'permissions'],
   ['identity', 'role-assignments'],
   ['identity', 'directory-sync'],
-  ['tenancy'],
+  ['tenancy', 'sites'],
+  ['tenancy', 'site-domains'],
+  ['tenancy', 'organizations'],
 ];
 
 /** Where sign-in sends the browser. */
