@@ -183,6 +183,7 @@ const fa = {
   'menu.sites.description': 'درخت سایت‌های سازمان و دامنه‌های آن‌ها.',
   'menu.organizations.description': 'واحدهای سازمانی و جایگاه آن‌ها.',
   'common.required': 'یک گزینه انتخاب کنید.',
+  'role.undeclared': 'این دسترسی‌ها دیگر تعریف نشده‌اند، کاری نمی‌کنند و با ذخیره حذف می‌شوند:',
 } as const;
 
 export type MessageKey = keyof typeof fa;
@@ -373,6 +374,8 @@ const en: Messages = {
   'menu.sites.description': 'The organisation’s site tree and its domains.',
   'menu.organizations.description': 'Organisational units and where they sit.',
   'common.required': 'Choose an option.',
+  'role.undeclared':
+    'These permissions are no longer declared, grant nothing, and are removed on save:',
 };
 
 const BY_LANGUAGE: Readonly<Record<string, Messages>> = { fa, en };

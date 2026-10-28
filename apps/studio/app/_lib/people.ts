@@ -1,4 +1,5 @@
-import type { MessageKey, Messages } from '../_i18n/messages';
+import type { Tone } from '@phoenix/ui';
+import { fill, type MessageKey, type Messages } from '../_i18n/messages';
 
 // The view of the identity API on the users and roles screens: the shapes the API answers and
 // the pure rules that pick what a screen offers. The API decides every action; these only keep
@@ -114,6 +115,60 @@ export function canOfferGrant(account: StaffAccount): boolean {
 export function grantableRoles(roles: readonly Role[]): Role[] {
   return roles.filter((role) => role.scope === 'tenant' || role.scope === 'site');
 }
+
+/** Where a grant applies, as `POST identity/role-assignments` takes it. */
+export type Placement =
+  | { readonly level: 'tenant' }
+  | { readonly level: 'site'; readonly siteId: string; readonly includeDescendants: boolean };
+
+/**
+ * The placement of a grant of a role of `scope`: a grant's level is its role's scope (the
+ * role_assignment foreign key), so a site role needs a site and a tenant role takes none.
+ * `null` when a site role has no site chosen yet.
+ */
+export function placementFor(
+  scope: RoleScope,
+  siteId: string | null,
+  includeDescendants: boolean,
+): Placement | null {
+  if (scope !== 'site') return { level: 'tenant' };
+  return siteId === null ? null : { level: 'site', siteId, includeDescendants };
+}
+
+export interface SiteName {
+  readonly id: string;
+  readonly name: string;
+  readonly depth: number;
+}
+
+/** Where a grant applies, for reading. A site the member cannot see is not named. */
+export function whereOf(
+  t: Messages,
+  assignment: Pick<RoleAssignment, 'level' | 'siteId' | 'includeDescendants'>,
+  sites: readonly SiteName[],
+): string {
+  if (assignment.level === 'platform') return scopeLabel(t, 'platform');
+  if (assignment.level === 'tenant') return t['where.tenant'];
+  const site = sites.find((s) => s.id === assignment.siteId);
+  if (site === undefined) return t['where.hiddenSite'];
+  return fill(t[assignment.includeDescendants ? 'where.siteTree' : 'where.site'], {
+    name: site.name,
+  });
+}
+
+const NBSP = String.fromCharCode(0xa0);
+
+/** A site's name indented by its depth for a list of options (not collapsed like spaces). */
+export function indentedSiteName(site: SiteName): string {
+  return `${NBSP.repeat(3 * Math.max(0, site.depth))}${site.name}`;
+}
+
+/** The badge tone of a role's kind, the same in every screen. */
+export const KIND_TONE: Readonly<Record<RoleKind, Tone>> = {
+  system: 'accent',
+  default: 'info',
+  custom: 'neutral',
+};
 
 /** A text looked up by a key built from data, or `fallback` when the studio has none. */
 export function textOr(t: Messages, key: string, fallback: string): string {

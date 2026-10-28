@@ -3,6 +3,9 @@ import {
   canOfferDisable,
   canOfferGrant,
   grantableRoles,
+  indentedSiteName,
+  placementFor,
+  whereOf,
   isRoleKey,
   isUsername,
   kindLabel,
@@ -132,5 +135,68 @@ describe.each(TENANTS)('labels for $name', ({ locale }) => {
   it('never reads a key built from data outside the studio texts', () => {
     expect(permissionLabel(t, '__proto__')).toBe('__proto__');
     expect(roleName(t, 'constructor')).toBe('constructor');
+  });
+});
+
+describe('placementFor', () => {
+  it('grants a tenant role tenant-wide, whatever site is chosen', () => {
+    expect(placementFor('tenant', 's1', true)).toEqual({ level: 'tenant' });
+    expect(placementFor('tenant', null, false)).toEqual({ level: 'tenant' });
+  });
+
+  it('grants a site role at the chosen site, with or without its descendants', () => {
+    expect(placementFor('site', 's1', true)).toEqual({
+      level: 'site',
+      siteId: 's1',
+      includeDescendants: true,
+    });
+    expect(placementFor('site', 's1', false)).toEqual({
+      level: 'site',
+      siteId: 's1',
+      includeDescendants: false,
+    });
+  });
+
+  it('has no placement for a site role without a site', () => {
+    expect(placementFor('site', null, true)).toBeNull();
+  });
+});
+
+describe.each(TENANTS)('whereOf for $name', ({ locale }) => {
+  const t = messagesFor(locale);
+  const sites = [{ id: 's1', name: 'Root', depth: 0 }];
+
+  it('reads a tenant grant as the whole organisation and a platform grant as the platform', () => {
+    const tenant = whereOf(t, { level: 'tenant', siteId: null, includeDescendants: false }, sites);
+    expect(tenant).toBe(t['where.tenant']);
+    const platform = whereOf(
+      t,
+      { level: 'platform', siteId: null, includeDescendants: false },
+      sites,
+    );
+    expect(platform).toBe(t['scope.platform']);
+  });
+
+  it('names the site, and says when its descendants are included', () => {
+    const one = whereOf(t, { level: 'site', siteId: 's1', includeDescendants: false }, sites);
+    const tree = whereOf(t, { level: 'site', siteId: 's1', includeDescendants: true }, sites);
+    expect(one).toContain('Root');
+    expect(tree).toContain('Root');
+    expect(tree).not.toBe(one);
+  });
+
+  it('does not name a site the member cannot see', () => {
+    const hidden = whereOf(t, { level: 'site', siteId: 's9', includeDescendants: false }, sites);
+    expect(hidden).toBe(t['where.hiddenSite']);
+  });
+});
+
+describe('indentedSiteName', () => {
+  it('indents by depth with spaces a browser does not collapse', () => {
+    expect(indentedSiteName({ id: 'a', name: 'Root', depth: 0 })).toBe('Root');
+    expect(indentedSiteName({ id: 'b', name: 'Child', depth: 2 })).toBe(
+      `${'\u00a0'.repeat(6)}Child`,
+    );
+    expect(indentedSiteName({ id: 'c', name: 'Odd', depth: -1 })).toBe('Odd');
   });
 });

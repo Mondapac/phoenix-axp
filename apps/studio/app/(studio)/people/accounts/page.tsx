@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   Badge,
   Card,
@@ -63,12 +64,12 @@ export default async function AccountsPage() {
                 >
                   <div className="flex min-w-0 items-center justify-between gap-3">
                     <span className="flex min-w-0 items-center gap-2">
-                      <a
+                      <Link
                         href={`/people/accounts/${account.id}`}
                         className="truncate font-medium text-fg hover:text-accent"
                       >
                         <Ltr>{account.username}</Ltr>
-                      </a>
+                      </Link>
                       {account.id === accountId ? (
                         <Badge tone="accent">{t['accounts.you']}</Badge>
                       ) : null}
@@ -114,12 +115,12 @@ export default async function AccountsPage() {
                     <TableRow key={account.id}>
                       <TableCell>
                         <span className="flex min-w-0 items-center gap-2">
-                          <a
+                          <Link
                             href={`/people/accounts/${account.id}`}
                             className="truncate font-medium text-fg hover:text-accent"
                           >
                             <Ltr>{account.username}</Ltr>
-                          </a>
+                          </Link>
                           {account.id === accountId ? (
                             <Badge tone="accent">{t['accounts.you']}</Badge>
                           ) : null}

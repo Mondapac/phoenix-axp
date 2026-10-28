@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { callApi } from '../../../../_client/api';
 import { failureMessage } from '../../../../_lib/api-answer';
-import type { RoleScope } from '../../../../_lib/people';
+import { indentedSiteName, placementFor, type RoleScope } from '../../../../_lib/people';
 import { fill, type Messages } from '../../../../_i18n/messages';
 import { ConfirmDialog } from '../../../_components/confirm-dialog';
 
@@ -53,15 +53,13 @@ export function GrantRoleDialog(props: {
     event.preventDefault();
     setProblem(null);
     if (role === undefined) return setMissing('role');
-    if (atSite && siteId === null) return setMissing('site');
+    const placement = placementFor(role.scope, siteId, descendants);
+    if (placement === null) return setMissing('site');
     setBusy(true);
     const answer = await callApi('POST', 'identity/role-assignments', csrfToken, {
       accountId,
       roleId: role.id,
-      placement:
-        atSite && siteId !== null
-          ? { level: 'site', siteId, includeDescendants: descendants }
-          : { level: 'tenant' },
+      placement,
     });
     setBusy(false);
     if (answer.ok) {
@@ -143,7 +141,7 @@ export function GrantRoleDialog(props: {
                   }}
                   options={sites.map((s) => ({
                     value: s.id,
-                    label: `${'  '.repeat(Math.max(0, s.depth))}${s.name}`,
+                    label: indentedSiteName(s),
                   }))}
                 />
               </Field>

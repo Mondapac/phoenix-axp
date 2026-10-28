@@ -19,14 +19,21 @@ export function RolePermissionsEditor(props: {
   readonly groups: readonly PermissionGroup[];
   readonly held: readonly string[];
   readonly initial: readonly string[];
+  /** Stored keys the catalogue no longer declares: they grant nothing and go on the next save. */
+  readonly undeclared: readonly string[];
 }) {
-  const { t, csrfToken, roleId, version, groups, held, initial } = props;
+  const { t, csrfToken, roleId, version, groups, held, initial, undeclared } = props;
   const router = useRouter();
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set(initial));
   const [invalid, setInvalid] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'critical'; text: string } | null>(null);
-  const changed = chosen.size !== initial.length || initial.some((key) => !chosen.has(key));
+  // The version a save was sent at: the button waits for the refresh that brings the next one.
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const changed =
+    undeclared.length > 0 ||
+    chosen.size !== initial.length ||
+    initial.some((key) => !chosen.has(key));
 
   async function save() {
     setNotice(null);
@@ -38,6 +45,7 @@ export function RolePermissionsEditor(props: {
     });
     setBusy(false);
     if (answer.ok) {
+      setSavedAt(version);
       setNotice({ tone: 'success', text: t['role.saved'] });
       router.refresh();
     } else {
@@ -64,9 +72,20 @@ export function RolePermissionsEditor(props: {
           setNotice(null);
         }}
       />
+      {undeclared.length === 0 ? null : (
+        <Alert tone="warning" title={t['role.undeclared']}>
+          <ul className="space-y-0.5">
+            {undeclared.map((key) => (
+              <li key={key} dir="ltr" className="text-start">
+                {key}
+              </li>
+            ))}
+          </ul>
+        </Alert>
+      )}
       {notice === null ? null : <Alert tone={notice.tone}>{notice.text}</Alert>}
       <div className="flex justify-end">
-        <Button disabled={busy || !changed} onClick={() => void save()}>
+        <Button disabled={busy || !changed || savedAt === version} onClick={() => void save()}>
           {busy ? t['common.saving'] : t['role.save']}
         </Button>
       </div>

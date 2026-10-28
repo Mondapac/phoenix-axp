@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   Badge,
   Card,
@@ -11,18 +12,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  type Tone,
 } from '@phoenix/ui';
 import { KeyRound } from 'lucide-react';
 import { fill } from '../../../_i18n/messages';
 import {
+  KIND_TONE,
   kindLabel,
   permissionGroups,
   scopeLabel,
   roleName,
   type PermissionDeclaration,
   type Role,
-  type RoleKind,
 } from '../../../_lib/people';
 import { readForPage, studioSession } from '../../../_server/session';
 import { NoAccess, PageCrumbs } from '../../_components/page-parts';
@@ -32,12 +32,6 @@ import { CreateRoleDialog } from './roles-client';
 // needs `identity.roles.manage`.
 
 const ROLE_COLUMNS = ['40%', '20%', '20%', '20%'];
-
-const KIND_TONE: Readonly<Record<RoleKind, Tone>> = {
-  system: 'accent',
-  default: 'info',
-  custom: 'neutral',
-};
 
 export default async function RolesPage() {
   const { t, tenant, held, csrfToken } = await studioSession();
@@ -90,12 +84,12 @@ export default async function RolesPage() {
                   className="space-y-2 border-b border-line px-4 py-3 last:border-b-0"
                 >
                   <div className="flex min-w-0 items-center justify-between gap-3">
-                    <a
+                    <Link
                       href={`/people/roles/${role.id}`}
                       className="truncate font-medium text-fg hover:text-accent"
                     >
                       {roleName(t, role.key)}
-                    </a>
+                    </Link>
                     <Badge tone={KIND_TONE[role.kind]}>{kindLabel(t, role.kind)}</Badge>
                   </div>
                   <p className="text-sm text-fg-muted">
@@ -125,12 +119,12 @@ export default async function RolesPage() {
                   {roles.items.map((role) => (
                     <TableRow key={role.id}>
                       <TableCell>
-                        <a
+                        <Link
                           href={`/people/roles/${role.id}`}
                           className="block truncate font-medium text-fg hover:text-accent"
                         >
                           {roleName(t, role.key)}
-                        </a>
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <Badge tone={KIND_TONE[role.kind]}>{kindLabel(t, role.kind)}</Badge>

@@ -10,6 +10,7 @@ import {
 } from '@phoenix/ui';
 import { notFound } from 'next/navigation';
 import {
+  KIND_TONE,
   kindLabel,
   moduleLabel,
   permissionGroups,
@@ -83,9 +84,7 @@ export default async function RolePage({ params }: Props) {
         title={roleName(t, role.key)}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            <Badge tone={role.kind === 'custom' ? 'neutral' : 'accent'}>
-              {kindLabel(t, role.kind)}
-            </Badge>
+            <Badge tone={KIND_TONE[role.kind]}>{kindLabel(t, role.kind)}</Badge>
             <Badge tone="neutral">{scopeLabel(t, role.scope)}</Badge>
           </span>
         }
@@ -105,7 +104,8 @@ export default async function RolePage({ params }: Props) {
               version={role.version}
               groups={groups}
               held={[...held]}
-              initial={role.permissionKeys}
+              initial={role.permissionKeys.filter((key) => declared.has(key))}
+              undeclared={undeclared}
             />
           ) : (
             <div className="space-y-5">

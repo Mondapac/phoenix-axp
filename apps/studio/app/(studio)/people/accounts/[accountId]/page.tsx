@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   Alert,
   Card,
@@ -19,7 +20,6 @@ import {
 } from '@phoenix/ui';
 import { KeyRound } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { fill, type Messages } from '../../../../_i18n/messages';
 import { formatInstantDate } from '../../../../_lib/format';
 import {
   canOfferDisable,
@@ -29,8 +29,9 @@ import {
   type Role,
   type RoleAssignment,
   type StaffAccount,
+  whereOf,
 } from '../../../../_lib/people';
-import { readForPage, studioSession, type Site } from '../../../../_server/session';
+import { readForPage, studioSession } from '../../../../_server/session';
 import { NoAccess, PageCrumbs } from '../../../_components/page-parts';
 import { AccountStatus } from '../account-status';
 import { DisableAccountButton } from '../accounts-client';
@@ -44,15 +45,6 @@ interface Props {
 }
 
 const ASSIGNMENT_COLUMNS = ['36%', '36%', '18%', '10%'];
-
-function whereOf(t: Messages, assignment: RoleAssignment, sites: readonly Site[]): string {
-  if (assignment.level !== 'site') return t['where.tenant'];
-  const site = sites.find((s) => s.id === assignment.siteId);
-  if (site === undefined) return t['where.hiddenSite'];
-  return fill(t[assignment.includeDescendants ? 'where.siteTree' : 'where.site'], {
-    name: site.name,
-  });
-}
 
 export default async function AccountPage({ params }: Props) {
   const { accountId: id } = await params;
@@ -184,12 +176,12 @@ export default async function AccountPage({ params }: Props) {
                     className="space-y-1 border-b border-line px-4 py-3 last:border-b-0"
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">
-                      <a
+                      <Link
                         href={`/people/roles/${assignment.roleId}`}
                         className="truncate font-medium text-fg hover:text-accent"
                       >
                         {roleName(t, assignment.roleKey)}
-                      </a>
+                      </Link>
                       {grants ? (
                         <RevokeAssignmentButton
                           t={t}
@@ -222,12 +214,12 @@ export default async function AccountPage({ params }: Props) {
                     {assignments.items.map((assignment) => (
                       <TableRow key={assignment.id}>
                         <TableCell>
-                          <a
+                          <Link
                             href={`/people/roles/${assignment.roleId}`}
                             className="font-medium text-fg hover:text-accent"
                           >
                             {roleName(t, assignment.roleKey)}
-                          </a>
+                          </Link>
                         </TableCell>
                         <TableCell className="text-fg-muted">
                           {whereOf(t, assignment, sites)}
