@@ -24,6 +24,7 @@ about one page. An accepted ADR changes only through a new ADR or an italic
 | [0014](0014-runtime-and-toolchain-baseline.md) | Runtime and toolchain baseline | Accepted 2026-10-26 |
 | [0015](0015-append-only-audit-log.md) | Append-only audit log with hash chain | Accepted 2026-10-26 |
 | [0016](0016-panel-ui-base-in-house-components-on-base-ui.md) | Panel UI base: in-house components on Base UI, Metronic as visual reference only | Accepted 2026-10-27 |
+| [0017](0017-objects-and-generated-apis.md) | Objects and generated APIs: definitions, records, record and field access, REST then GraphQL | Accepted 2026-10-28 |
 | [0018](0018-site-tree-content-sharing-and-subtree-roles.md) | Site tree, content sharing and subtree role scope | Accepted 2026-10-26 |
 | [0019](0019-operators-are-staff-with-roles.md) | Operators are staff with roles, one account per employee | Accepted 2026-10-27 |
 | [0020](0020-phase-0-poc-outcomes-and-review-amendments.md) | Phase 0 proof-of-concept outcomes and review amendments (amends 0002, 0004, 0005, 0006, 0010) | Accepted 2026-10-27 |
@@ -33,4 +34,4 @@ about one page. An accepted ADR changes only through a new ADR or an italic
 | [0024](0024-field-level-access.md) | Field-level access and per-definition operation permissions (amends 0004) | Accepted 2026-10-27 |
 | [0025](0025-task-inbox-deadlines-and-escalation.md) | Task Inbox: assignment, core-owned deadlines and escalation (amends 0005) | Accepted 2026-10-27 |
 
-Reserved (see the board): page builder (Phase 3 review, number to be reserved), 0017 Objects and generated APIs (Phase 2 review).
+Reserved (see the board): page builder (Phase 3 review, number to be reserved).
