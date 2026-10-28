@@ -11,6 +11,29 @@ describe('failureMessage', () => {
     expect(failureMessage({ status: 403, code: 'csrf.invalid' })).toBe('error.signedOut');
   });
 
+  it('maps the tenancy refusals to their texts', () => {
+    expect(failureMessage({ status: 409, code: 'tenancy.site.slug-taken' })).toBe(
+      'error.slugTaken',
+    );
+    expect(failureMessage({ status: 409, code: 'tenancy.site-domain.taken' })).toBe(
+      'error.domainTaken',
+    );
+    expect(failureMessage({ status: 422, code: 'tenancy.tree.depth-exceeded' })).toBe(
+      'error.depthExceeded',
+    );
+    expect(failureMessage({ status: 422, code: 'tenancy.tree.move-into-own-subtree' })).toBe(
+      'error.moveIntoSubtree',
+    );
+    for (const code of [
+      'tenancy.site.not-found',
+      'tenancy.organization.not-found',
+      'tenancy.site-domain.not-found',
+    ]) {
+      expect(failureMessage({ status: 404, code })).toBe('error.notFound');
+    }
+    expect(failureMessage({ status: 400, code: 'tenancy.value.invalid' })).toBe('error.invalid');
+  });
+
   it('never says why GrantPolicy refused: scope and rank read the same', () => {
     expect(failureMessage({ status: 403, code: 'role.not-grantable' })).toBe(
       failureMessage({ status: 403, code: 'member.outranks-actor' }),
@@ -26,7 +49,15 @@ describe('failureMessage', () => {
 
   it.each(['fa-IR', 'en-CA'])('has a text in %s for every answer', (locale) => {
     const t = messagesFor(locale);
-    for (const code of ['member.self', 'identity.role.key-taken', 'access.denied']) {
+    for (const code of [
+      'member.self',
+      'identity.role.key-taken',
+      'access.denied',
+      'tenancy.site.slug-taken',
+      'tenancy.site-domain.taken',
+      'tenancy.tree.depth-exceeded',
+      'tenancy.tree.move-into-own-subtree',
+    ]) {
       expect(t[failureMessage({ status: 409, code })]).toBeTruthy();
     }
   });

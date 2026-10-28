@@ -15,7 +15,7 @@ import { useState, type FormEvent } from 'react';
 import { callApi } from '../../../_client/api';
 import { failureMessage } from '../../../_lib/api-answer';
 import { indentedSiteName } from '../../../_lib/people';
-import { ROOT_OPTION } from '../../../_lib/structure';
+import { indentOf, ROOT_OPTION } from '../../../_lib/structure';
 import { fill, type Messages } from '../../../_i18n/messages';
 
 // Moving a node of a tree (a site or an organization unit) with its subtree under another
@@ -51,7 +51,10 @@ export function MoveDialog(props: {
   const [problem, setProblem] = useState<string | null>(null);
   const options = [
     { value: ROOT_OPTION, label: props.rootLabel },
-    ...targets.map((target) => ({ value: target.id, label: indentedSiteName(target) })),
+    ...targets.map((target) => ({
+      value: target.id,
+      label: indentedSiteName({ ...target, depth: indentOf(target.depth) }),
+    })),
   ];
   const nowhere = options.length === 1 && current === ROOT_OPTION;
 
@@ -95,7 +98,7 @@ export function MoveDialog(props: {
         }
       />
       <DialogContent
-        title={fill(t['move.title'], { name: props.name })}
+        title={fill(t['move.title'], { name: `\u2068${props.name}\u2069` })}
         description={props.description}
         closeLabel={t['common.close']}
         footer={

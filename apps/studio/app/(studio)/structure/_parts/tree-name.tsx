@@ -24,7 +24,7 @@ export function TreeName(props: {
         />
       ) : null}
       <Link href={props.href} className="truncate font-medium text-fg hover:text-accent">
-        {props.name}
+        <bdi>{props.name}</bdi>
       </Link>
     </span>
   );

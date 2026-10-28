@@ -35,10 +35,12 @@ const COLUMNS = ['56%', '30%', '14%'];
 
 export default async function SitesPage() {
   const { t, tenant, held, csrfToken } = await studioSession();
-  const listed = await readForPage<{ items: SiteNode[] }>('tenancy/sites');
-  const units = held.has('tenancy.organizations.view')
-    ? await readForPage<{ items: OrganizationNode[] }>('tenancy/organizations')
-    : null;
+  const [listed, units] = await Promise.all([
+    readForPage<{ items: SiteNode[] }>('tenancy/sites'),
+    held.has('tenancy.organizations.view')
+      ? readForPage<{ items: OrganizationNode[] }>('tenancy/organizations')
+      : null,
+  ]);
   const locale = tenant.defaultLocale;
   const sites = listed === null ? [] : treeOrder(listed.items, siteNode, locale);
   const organizations = units === null ? null : treeOrder(units.items, organizationNode, locale);
@@ -96,7 +98,9 @@ export default async function SitesPage() {
                   <p className="flex min-w-0 flex-wrap gap-x-2 text-sm text-fg-muted">
                     <Ltr className="truncate">{site.slug}</Ltr>
                     {unitName(site.organizationId) === '' ? null : (
-                      <span className="truncate">· {unitName(site.organizationId)}</span>
+                      <span className="truncate">
+                        · <bdi>{unitName(site.organizationId)}</bdi>
+                      </span>
                     )}
                   </p>
                 </li>

@@ -255,6 +255,8 @@ export function EditSiteDialog(props: {
       router.refresh();
     } else {
       setProblem(t[failureMessage(answer)]);
+      // A stale version: read the current one, so the next try carries it.
+      if (answer.code === 'conflict.stale') router.refresh();
     }
   }
 

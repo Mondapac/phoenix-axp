@@ -34,10 +34,10 @@ const COLUMNS = ['75%', '25%'];
 
 export default async function OrganizationsPage() {
   const { t, tenant, held, csrfToken } = await studioSession();
-  const listed = await readForPage<{ items: OrganizationNode[] }>('tenancy/organizations');
-  const siteList = held.has('tenancy.sites.view')
-    ? await readForPage<{ items: SiteNode[] }>('tenancy/sites')
-    : null;
+  const [listed, siteList] = await Promise.all([
+    readForPage<{ items: OrganizationNode[] }>('tenancy/organizations'),
+    held.has('tenancy.sites.view') ? readForPage<{ items: SiteNode[] }>('tenancy/sites') : null,
+  ]);
   const locale = tenant.defaultLocale;
   const units = listed === null ? [] : treeOrder(listed.items, organizationNode, locale);
   const sites = siteList?.items ?? null;
