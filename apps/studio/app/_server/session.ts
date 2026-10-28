@@ -2,6 +2,7 @@ import { heldKeys, type OwnPermissions } from '@phoenix/panel-server';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 import { messagesFor, type Messages } from '../_i18n/messages';
+import { siteNode, treeOrder, type SiteNode } from '../_lib/structure';
 import { readApi, tenantPresentation, type TenantPresentation } from './panel';
 
 // The signed-in member of this request: read from the API once per request (React's request
@@ -49,9 +50,9 @@ export const studioSession = cache(async (): Promise<StudioSession> => {
 
   let sites: Site[] = [];
   if (held.has('tenancy.sites.view')) {
-    const listed = await readApi<{ items: Site[] }>('tenancy/sites');
+    const listed = await readApi<{ items: SiteNode[] }>('tenancy/sites');
     if (listed.ok) {
-      sites = listed.body.items.map((site) => ({
+      sites = treeOrder(listed.body.items, siteNode, tenant.defaultLocale).map((site) => ({
         id: site.id,
         name: site.name,
         depth: site.depth,

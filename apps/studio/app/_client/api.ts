@@ -5,7 +5,7 @@ import type { ApiAnswer } from '../_lib/api-answer';
 // session's CSRF token. The browser reaches nothing else (check-panel-boundaries).
 
 export async function callApi<T = unknown>(
-  method: 'POST' | 'PUT' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   route: string,
   csrfToken: string,
   body?: unknown,
