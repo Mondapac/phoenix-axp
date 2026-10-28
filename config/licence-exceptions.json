@@ -9,8 +9,29 @@
   {
     "package": "caniuse-lite",
     "licence": "CC-BY-4.0",
+    "reason": "Browser support data (CC-BY-4.0: attribution only, no obligation on our code), a production dependency of Next.js for the panels; credited in THIRD-PARTY-NOTICES.md. Approved by the owner on a decision card.",
+    "approver": "owner",
+    "date": "2026-10-28"
+  },
+  {
+    "package": "lightningcss",
+    "licence": "MPL-2.0",
     "reason": "dev-only, not shipped",
-    "approver": "cto",
-    "date": "2026-10-27"
+    "approver": "owner",
+    "date": "2026-10-28"
+  },
+  {
+    "package": "lightningcss-linux-x64-gnu",
+    "licence": "MPL-2.0",
+    "reason": "dev-only, not shipped",
+    "approver": "owner",
+    "date": "2026-10-28"
+  },
+  {
+    "package": "lightningcss-linux-x64-musl",
+    "licence": "MPL-2.0",
+    "reason": "dev-only, not shipped",
+    "approver": "owner",
+    "date": "2026-10-28"
   }
 ]
