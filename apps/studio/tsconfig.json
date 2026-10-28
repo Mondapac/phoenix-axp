@@ -16,7 +16,7 @@
         "name": "next"
       }
     ],
-    "types": ["node"],
+    "types": ["node", "jest"],
     "paths": {
       "@phoenix/shared-kernel": ["../../packages/shared-kernel/src/index.ts"],
       "@phoenix/shared-kernel/persian-text": ["../../packages/shared-kernel/src/persian-text.ts"]

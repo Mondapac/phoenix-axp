@@ -16,6 +16,7 @@ import {
 import { Building2, House, LogOut, Network, Users } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
+import { indentedSiteName } from '../../_lib/people';
 import { SITE_COOKIE } from './site-cookie';
 
 // The studio shell (ADR-0023) on the client: the menu the server built from the member's keys,
@@ -117,7 +118,7 @@ export function StudioShell(props: {
         onValueChange={chooseSite}
         options={sites.map((s) => ({
           value: s.id,
-          label: `${'  '.repeat(s.depth)}${s.name}`,
+          label: indentedSiteName(s),
         }))}
       />
     );
