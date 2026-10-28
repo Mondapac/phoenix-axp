@@ -104,7 +104,7 @@
 | apexcharts 4.7.0 | MIT | استفاده نمی‌شود (نمودار با ECharts). |
 | **react-leaflet** | **Hippocratic-2.1** | **ممنوع.** نقشه نیاز نداریم؛ حذف شود. |
 | sharp (libvips) از Next.js | LGPL-3.0 | مثل PoC ۴ حذف شود. |
-| caniuse-lite، axe-core، lightningcss، minimatch | CC-BY-4.0، MPL-2.0، BlueOak | BlueOak مجاز است (P4، ADR-0022). CC-BY-4.0 و MPL-2.0 با استثنای موردی (ابزار ساخت). |
+| caniuse-lite، axe-core، lightningcss، minimatch | CC-BY-4.0، MPL-2.0، BlueOak | BlueOak مجاز است (P4، ADR-0022). CC-BY-4.0 و MPL-2.0 با استثنای موردی (ابزار ساخت). **lightningcss (MPL-2.0) برای Tailwind 4:** صاحب پروژه در ۱۴۰۵/۰۸/۰۶ (2026-10-28) استثنا را تأیید کرد، فقط برای ساخت و بدون تغییر در کد آن. ردیف آن در `config/licence-exceptions.json` با approver `owner` در همان PR برش 1.10 می‌آید که Tailwind 4 را اضافه می‌کند (فهرست استثنا ردیف بدون بسته را نمی‌پذیرد). |
 | **کد Metronic** (layoutها، Keenicons، CSS دموها) | **مجوز تجاری Envato** | تصمیم ۱. اجزای `components/ui` از ReUI هستند که احتمالاً MIT است. این باید روی مخزن ReUI تأیید شود. |
 
 ## ۷. ترتیب کار پیشنهادی (بعد از تأیید)
