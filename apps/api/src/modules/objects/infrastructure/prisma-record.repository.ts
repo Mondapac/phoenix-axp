@@ -114,14 +114,15 @@ export class PrismaRecordRepository implements RecordRepository {
     if (count === 0) throw new StaleAggregateError('objects.record', id);
   }
 
-  async splitElsewhere(
+  async splitUnder(
     tenant: TenantContext,
     definitionId: Id<'ObjectDefinition'>,
-    revisionId: Id<'ObjectRevision'>,
+    revisionIds: readonly Id<'ObjectRevision'>[],
     limit: number,
   ): Promise<StoredRecord[]> {
+    if (revisionIds.length === 0) return [];
     const rows = await this.prisma.tx(tenant).objectRecord.findMany({
-      where: { tenantId: tenant.tenantId, definitionId, sealedUnderId: { not: revisionId } },
+      where: { tenantId: tenant.tenantId, definitionId, sealedUnderId: { in: [...revisionIds] } },
       select: RECORD_COLUMNS,
       orderBy: { id: 'asc' },
       take: limit,
@@ -131,12 +132,16 @@ export class PrismaRecordRepository implements RecordRepository {
 
   async resplit(
     tenant: TenantContext,
-    id: Id<'ObjectRecord'>,
-    expectedVersion: number,
+    record: Pick<StoredRecord, 'id' | 'version' | 'sealedUnderId'>,
     split: RecordSplit,
   ): Promise<boolean> {
     const { count } = await this.prisma.tx(tenant).objectRecord.updateMany({
-      where: { tenantId: tenant.tenantId, id, version: expectedVersion },
+      where: {
+        tenantId: tenant.tenantId,
+        id: record.id,
+        version: record.version,
+        sealedUnderId: record.sealedUnderId,
+      },
       data: {
         values: valuesToJson(split.values),
         sealed: new Uint8Array(split.sealed),

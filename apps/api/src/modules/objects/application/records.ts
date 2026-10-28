@@ -46,9 +46,10 @@ export const sealedText = (sensitive: RecordValues): Buffer =>
   Buffer.from(JSON.stringify(valuesToJson(sensitive)), 'utf8');
 
 /**
- * The values of `plain` and `sealed` split again under `fields` (a published revision): a field
- * of the revision goes where its `sensitive` mark says; a value of a field the revision does
- * not have stays where it is, so nothing sealed is ever moved to plain by a dropped field.
+ * The values of `plain` and `sealed` split again under `fields` (a published revision): a plain
+ * value of a field the revision marks sensitive is sealed. Nothing sealed is ever opened to
+ * plain here, so personal data stays under erasure-by-key; a lowered field moves to plain only
+ * when a writer rewrites the record (ADR-0017 decision 4).
  */
 export function resplitValues(
   fields: readonly ObjectField[],
@@ -60,9 +61,7 @@ export function resplitValues(
   const nextSensitive = new Map<Id<'Field'>, StoredValue>();
   for (const [id, value] of plain)
     (marks.get(id) === true ? nextSensitive : nextPlain).set(id, value);
-  for (const [id, value] of sealed) {
-    (marks.get(id) === false ? nextPlain : nextSensitive).set(id, value);
-  }
+  for (const [id, value] of sealed) nextSensitive.set(id, value);
   return { plain: nextPlain, sensitive: nextSensitive };
 }
 

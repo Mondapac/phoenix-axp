@@ -18,7 +18,7 @@ const values = (...entries: [number, StoredValue][]) =>
   new Map(entries.map(([n, value]) => [id(n), value]));
 
 describe('splitting record values again under a published revision', () => {
-  it('seals a field marked sensitive since, opens a lowered one, and keeps dropped ones', () => {
+  it('seals a field marked sensitive since, and never opens a sealed value to plain', () => {
     // f1 is now sensitive, f2 was lowered, f3 stays plain; f4 (sealed) and f5 (plain) were dropped.
     const fields = [field(1, true), field(2, false), field(3, false)];
     const split = resplitValues(
@@ -26,7 +26,7 @@ describe('splitting record values again under a published revision', () => {
       values([1, 'a'], [3, 'c'], [5, 'e']),
       values([2, 'b'], [4, 'd']),
     );
-    expect(split.sensitive).toEqual(values([1, 'a'], [4, 'd']));
-    expect(split.plain).toEqual(values([3, 'c'], [5, 'e'], [2, 'b']));
+    expect(split.sensitive).toEqual(values([1, 'a'], [2, 'b'], [4, 'd']));
+    expect(split.plain).toEqual(values([3, 'c'], [5, 'e']));
   });
 });

@@ -101,6 +101,10 @@ export class ObjectRecordsController {
     );
   }
 
+  /**
+   * Changes the fields named in `values` (`null` clears one) at `version`. 409 `conflict.stale`
+   * on another version; 422 `objects.record.invalid` without `field` for an empty `values`.
+   */
   @Patch(':key/records/:recordId')
   async update(
     @Call() context: CallContext,

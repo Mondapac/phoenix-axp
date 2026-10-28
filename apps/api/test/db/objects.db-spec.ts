@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { encodeAuditFields, Temporal } from '@phoenix/shared-kernel';
+import { encodeAuditFields, ok, Temporal } from '@phoenix/shared-kernel';
 import type { AuditEntry, CallContext, Id, TenantContext } from '@phoenix/shared-kernel';
 import {
   FixedClock,
@@ -252,6 +252,7 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
       change: new UpdateRecord(gate, uow, definitions, records, access, keys, audit, clock),
       remove: new DeleteRecord(gate, uow, definitions, records, access, keys, audit, clock),
       seal: new SealRecords(gate, uow, definitions, records, keys, audit),
+      store: records,
     };
   }
 
@@ -592,6 +593,64 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
     // A second run finds nothing more to do for this record.
     await useCases.seal.execute(system, undefined);
     expect(audit.of(recordId)).toEqual(['objects.record.created', 'objects.record.resealed']);
+
+    // Revision 3 lowers the note again: the job never opens a sealed value to plain.
+    const lowered = await useCases.save.execute(admin, { definitionId: object.id, fields: FIELDS });
+    if (!lowered.ok) throw new Error('setup');
+    await useCases.publish.execute(admin, {
+      definitionId: object.id,
+      version: 3,
+      revisionId: lowered.value.id,
+    });
+    await useCases.seal.execute(system, undefined);
+    expect(await plainNote()).toBeUndefined();
+  });
+
+  it('never moves a record split under a newer revision back (QA review of PR #35)', async () => {
+    const siteId = await newSite();
+    const object = await published(siteId);
+    const note = object.field('note').id;
+    const raised = FIELDS.map((f) => (f.key === 'note' ? { ...f, sensitive: true } : f));
+    const saved = await useCases.save.execute(admin, { definitionId: object.id, fields: raised });
+    if (!saved.ok) throw new Error('setup');
+    await useCases.publish.execute(admin, {
+      definitionId: object.id,
+      version: 2,
+      revisionId: saved.value.id,
+    });
+    // Written under revision 2: the note is sealed at once.
+    const clerk = staffWith({
+      keys: ALL_KEYS,
+      rules: { [object.field('national-id').id]: 'edit', [note]: 'edit' },
+    });
+    const recordId = await addRecord(clerk, object.key);
+    const [row] = await asApplication<{ values: Record<string, unknown>; sealed_under_id: string }>(
+      'SELECT "values", sealed_under_id FROM objects.object_record WHERE id = $1',
+      [recordId],
+    );
+    expect(row!.values[note]).toBeUndefined();
+    expect(row!.sealed_under_id).toBe(saved.value.id);
+    // A run that still sees revision 1 as current selects only records split under earlier
+    // revisions, and a write names the split it read: this record is never taken back.
+    const store = useCases.store;
+    const read = await persistence.unitOfWork.run(
+      tenant,
+      async () => ok(await store.splitUnder(tenant, object.id, [object.revision.id], 100)),
+      { readOnly: true },
+    );
+    expect(read.ok && read.value.map((r) => r.id)).not.toContain(recordId);
+    const moved = await persistence.unitOfWork.run(tenant, async () =>
+      ok(
+        await store.resplit(
+          tenant,
+          { id: recordId, version: 1, sealedUnderId: object.revision.id },
+          { values: new Map(), sealed: Buffer.alloc(0), sealedUnderId: object.revision.id },
+        ),
+      ),
+    );
+    expect(moved.ok && moved.value).toBe(false);
+    await useCases.seal.execute(testCallContext(tenant, 'system'), undefined);
+    expect(audit.of(recordId)).toEqual(['objects.record.created']);
   });
 
   it('refuses a write built on a stale read and an empty change (security review M1, L3)', async () => {

@@ -70,24 +70,21 @@ export interface RecordRepository {
     write: RecordWrite,
     at: Temporal.Instant,
   ): Promise<void>;
-  /**
-   * Up to `limit` records of the definition split under another revision than `revisionId`,
-   * oldest first.
-   */
-  splitElsewhere(
+  /** Up to `limit` records of the definition split under one of `revisionIds`, oldest first. */
+  splitUnder(
     tenant: TenantContext,
     definitionId: Id<'ObjectDefinition'>,
-    revisionId: Id<'ObjectRevision'>,
+    revisionIds: readonly Id<'ObjectRevision'>[],
     limit: number,
   ): Promise<StoredRecord[]>;
   /**
    * Stores a new split of the same values: neither the version nor the time of the last change
-   * moves. False when the record is at another version or gone (a writer moved it first).
+   * moves. False when the record is at another version, split under another revision than
+   * `record.sealedUnderId`, or gone (a writer or another run moved it first).
    */
   resplit(
     tenant: TenantContext,
-    id: Id<'ObjectRecord'>,
-    expectedVersion: number,
+    record: Pick<StoredRecord, 'id' | 'version' | 'sealedUnderId'>,
     split: RecordSplit,
   ): Promise<boolean>;
   /** Throws StaleAggregateError on another version or a removed record. */
