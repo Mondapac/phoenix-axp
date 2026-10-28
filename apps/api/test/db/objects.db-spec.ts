@@ -630,12 +630,12 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
     );
     expect(row!.values[note]).toBeUndefined();
     expect(row!.sealed_under_id).toBe(saved.value.id);
-    // A run that still sees revision 1 as current selects only records split under earlier
-    // revisions, and a write names the split it read: this record is never taken back.
+    // A run still following revision 1 drops its batch once revision 2 is published, and a
+    // write names the split it read: this record is never taken back.
     const store = useCases.store;
     const read = await persistence.unitOfWork.run(
       tenant,
-      async () => ok(await store.splitUnder(tenant, object.id, [object.revision.id], 100)),
+      async () => ok(await store.splitUnder(tenant, object.id, [object.revision.id], null, 100)),
       { readOnly: true },
     );
     expect(read.ok && read.value.map((r) => r.id)).not.toContain(recordId);
@@ -651,6 +651,40 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
     expect(moved.ok && moved.value).toBe(false);
     await useCases.seal.execute(testCallContext(tenant, 'system'), undefined);
     expect(audit.of(recordId)).toEqual(['objects.record.created']);
+  });
+
+  it('seals records of a later revision when an older one is published again (QA review)', async () => {
+    const siteId = await newSite();
+    const object = await published(siteId);
+    const note = object.field('note').id;
+    // Revision 2 makes the note sensitive; revision 3 lowers it and a record is written there.
+    const raised = FIELDS.map((f) => (f.key === 'note' ? { ...f, sensitive: true } : f));
+    const second = await useCases.save.execute(admin, { definitionId: object.id, fields: raised });
+    const third = await useCases.save.execute(admin, { definitionId: object.id, fields: FIELDS });
+    if (!second.ok || !third.ok) throw new Error('setup');
+    await useCases.publish.execute(admin, {
+      definitionId: object.id,
+      version: 2,
+      revisionId: third.value.id,
+    });
+    const recordId = await addRecord(object.clerk, object.key);
+    const plainNote = async () => {
+      const [row] = await asApplication<{ values: Record<string, unknown> }>(
+        'SELECT "values" FROM objects.object_record WHERE id = $1',
+        [recordId],
+      );
+      return row!.values[note];
+    };
+    expect(await plainNote()).toBe('محرمانه نیست');
+    // Rolling back to revision 2 makes the note sensitive again: the job seals it.
+    await useCases.publish.execute(admin, {
+      definitionId: object.id,
+      version: 3,
+      revisionId: second.value.id,
+    });
+    await useCases.seal.execute(testCallContext(tenant, 'system'), undefined);
+    expect(await plainNote()).toBeUndefined();
+    expect(audit.of(recordId)).toEqual(['objects.record.created', 'objects.record.resealed']);
   });
 
   it('refuses a write built on a stale read and an empty change (security review M1, L3)', async () => {

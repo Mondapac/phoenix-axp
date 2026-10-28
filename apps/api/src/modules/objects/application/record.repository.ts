@@ -70,11 +70,15 @@ export interface RecordRepository {
     write: RecordWrite,
     at: Temporal.Instant,
   ): Promise<void>;
-  /** Up to `limit` records of the definition split under one of `revisionIds`, oldest first. */
+  /**
+   * Up to `limit` records of the definition split under one of `revisionIds`, oldest first,
+   * after the record `after` (ids are UUIDv7) when given.
+   */
   splitUnder(
     tenant: TenantContext,
     definitionId: Id<'ObjectDefinition'>,
     revisionIds: readonly Id<'ObjectRevision'>[],
+    after: Id<'ObjectRecord'> | null,
     limit: number,
   ): Promise<StoredRecord[]>;
   /**

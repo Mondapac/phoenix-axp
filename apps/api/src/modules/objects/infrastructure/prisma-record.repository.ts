@@ -118,11 +118,17 @@ export class PrismaRecordRepository implements RecordRepository {
     tenant: TenantContext,
     definitionId: Id<'ObjectDefinition'>,
     revisionIds: readonly Id<'ObjectRevision'>[],
+    after: Id<'ObjectRecord'> | null,
     limit: number,
   ): Promise<StoredRecord[]> {
     if (revisionIds.length === 0) return [];
     const rows = await this.prisma.tx(tenant).objectRecord.findMany({
-      where: { tenantId: tenant.tenantId, definitionId, sealedUnderId: { in: [...revisionIds] } },
+      where: {
+        tenantId: tenant.tenantId,
+        definitionId,
+        sealedUnderId: { in: [...revisionIds] },
+        ...(after === null ? {} : { id: { gt: after } }),
+      },
       select: RECORD_COLUMNS,
       orderBy: { id: 'asc' },
       take: limit,
