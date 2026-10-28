@@ -6,7 +6,7 @@ import type { TenantContext } from '@phoenix/shared-kernel';
 import {
   AUTHENTICATOR,
   CSRF_HEADER,
-  STUDIO_SESSION_COOKIE,
+  SESSION_COOKIES,
   type Authenticator,
 } from '../authz/authenticator';
 import type { AppConfig } from '../config/app-config';
@@ -30,9 +30,9 @@ type Refusal = 'authorization-header' | 'session-rejected' | 'origin' | 'csrf-to
  * Attaches the actor of every tenant-scoped request: the second global guard, after
  * TenantContextGuard, so a request without a tenant never gets this far.
  *
- * Without a session cookie the request acts as the anonymous actor of its tenant. With the
- * studio session cookie, identity's {@link Authenticator} decides the actor on every request (no
- * cache); a cookie it rejects answers 401 `session.invalid` rather than anonymous, and the BFF
+ * Without a session cookie the request acts as the anonymous actor of its tenant. With a
+ * panel's session cookie (studio or portal, each bound to its population), identity's
+ * {@link Authenticator} decides the actor on every request (no cache); a cookie it rejects answers 401 `session.invalid` rather than anonymous, and the BFF
  * drops the cookie. A state-changing request with a session must come from a panel origin
  * (`Origin` in `PANEL_ORIGINS`) and carry the session's CSRF token, or it answers 403
  * `csrf.invalid` before the session is read (ADR-0004 decision 2).
@@ -60,11 +60,19 @@ export class ActorGuard implements CanActivate {
     if (request.headers.authorization !== undefined) {
       return this.refuse(request, tenant, 'authorization-header');
     }
-    const token = cookieValue(request.headers.cookie, STUDIO_SESSION_COOKIE);
-    if (token === null || token === '') {
+    const presented = SESSION_COOKIES.flatMap((cookie) => {
+      const value = cookieValue(request.headers.cookie, cookie.name);
+      return value === null || value === ''
+        ? []
+        : [{ token: value, population: cookie.population }];
+    });
+    if (presented.length === 0) {
       attachActor(request, anonymousActor(tenant));
       return true;
     }
+    // One panel, one cookie: a request carrying two panels' sessions is not guessed between.
+    if (presented.length > 1) return this.refuse(request, tenant, 'session-rejected');
+    const { token, population } = presented[0]!;
     if (!SAFE_METHODS.has(request.method ?? '')) {
       const origin = request.headers.origin;
       if (typeof origin !== 'string' || !this.config.session.panelOrigins.includes(origin)) {
@@ -74,7 +82,7 @@ export class ActorGuard implements CanActivate {
         return this.refuse(request, tenant, 'csrf-token');
       }
     }
-    const actor = await this.authenticator.authenticate(tenant, token);
+    const actor = await this.authenticator.authenticate(tenant, token, population);
     if (!actor.ok) return this.refuse(request, tenant, 'session-rejected');
     attachActor(request, actor.value);
     return true;

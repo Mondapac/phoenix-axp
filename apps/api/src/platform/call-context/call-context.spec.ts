@@ -1,7 +1,7 @@
 import type { ExecutionContext } from '@nestjs/common';
 import { HttpException } from '@nestjs/common';
 import { err, isMinted, ok } from '@phoenix/shared-kernel';
-import type { AuthenticatedActor, TenantContext } from '@phoenix/shared-kernel';
+import type { AuthenticatedActor, Population, TenantContext } from '@phoenix/shared-kernel';
 import { systemActor } from '@phoenix/shared-kernel/contexts';
 import { testAuthenticatedActor, testTenantContext } from '@phoenix/shared-kernel/testing';
 import { TEST_TENANTS, testAppConfig } from '../../../test/support/test-config';
@@ -24,11 +24,13 @@ const TOKEN = 'a'.repeat(43);
 /** Accepts {@link TOKEN} only, in the tenant it is asked about, and counts its calls. */
 class FakeAuthenticator implements Authenticator {
   calls = 0;
-  authenticate(tenant: TenantContext, token: string) {
+  readonly populations: (Population | undefined)[] = [];
+  authenticate(tenant: TenantContext, token: string, population?: Population) {
     this.calls += 1;
+    this.populations.push(population);
     if (token !== TOKEN) return Promise.resolve(err({ code: 'credential.rejected' as const }));
     const actor: AuthenticatedActor = testAuthenticatedActor(tenant, {
-      population: 'tenant-staff',
+      population: population ?? 'tenant-staff',
       accountId: ACCOUNT as never,
       sessionId: SESSION as never,
     });
@@ -84,6 +86,28 @@ describe.each(TEST_TENANTS)('the call context of a request of %s', (code) => {
     ).resolves.toBe(true);
     expect(actorOf(request)).toMatchObject({ kind: 'authenticated', tenantId: code });
     expect(authenticator.calls).toBe(1);
+  });
+
+  it('asks for the population of the cookie: studio is staff, portal is portal users', async () => {
+    const authenticator = new FakeAuthenticator();
+    for (const cookie of [`__Host-phoenix-studio=${TOKEN}`, `__Host-phoenix-portal=${TOKEN}`]) {
+      const request = scopedRequest({ cookie });
+      await expect(
+        guardOf(authenticator).canActivate(httpContext(ScopedController, request)),
+      ).resolves.toBe(true);
+    }
+    expect(authenticator.populations).toEqual(['tenant-staff', 'portal-user']);
+  });
+
+  it("refuses a request carrying both panels' session cookies", async () => {
+    const authenticator = new FakeAuthenticator();
+    const request = scopedRequest({
+      cookie: `__Host-phoenix-studio=${TOKEN}; __Host-phoenix-portal=${TOKEN}`,
+    });
+    await expect(
+      guardOf(authenticator).canActivate(httpContext(ScopedController, request)),
+    ).rejects.toMatchObject({ response: { statusCode: 401, code: 'session.invalid' } });
+    expect(authenticator.calls).toBe(0);
   });
 
   it('answers 401 session.invalid to a rejected session cookie, never anonymous', async () => {

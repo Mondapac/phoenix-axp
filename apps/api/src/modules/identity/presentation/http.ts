@@ -32,6 +32,13 @@ const FAILURE_STATUS: Readonly<Record<string, number>> = Object.freeze({
   'sign-in.no-staff-account': 403,
   'sign-in.account-disabled': 403,
   'sign-in.unavailable': 503,
+  'portal.method-unavailable': 409,
+  'portal.delivery-failed': 503,
+  'portal.code-invalid': 400,
+  'portal.account-disabled': 403,
+  'portal.unavailable': 503,
+  'captcha.invalid': 400,
+  'rate-limit.exceeded': 429,
   ...ACCESS_DENIED_STATUS,
 });
 

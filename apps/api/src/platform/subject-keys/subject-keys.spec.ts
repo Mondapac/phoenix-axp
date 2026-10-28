@@ -93,10 +93,33 @@ describe.each(TEST_TENANTS)('SubjectKeyService in tenant %s', (code) => {
     expect(service.open(tenant, subject(3), keys.get(subject(3)), sealed.ciphertext)).toBeNull();
   });
 
+  it('gives a blind index equal for equal values only, per tenant, purpose and KEK', () => {
+    const service = new SubjectKeyService(new SubjectKeyCipher(kek), new MemoryStore());
+    const index = service.blindIndex(tenant, 'identity.contact', 'a@example.test');
+    expect(index).toHaveLength(32);
+    expect(service.blindIndex(tenant, 'identity.contact', 'a@example.test')).toEqual(index);
+    expect(index.includes(Buffer.from('a@example.test'))).toBe(false);
+    for (const different of [
+      service.blindIndex(tenant, 'identity.contact', 'b@example.test'),
+      service.blindIndex(other, 'identity.contact', 'a@example.test'),
+      service.blindIndex(tenant, 'identity.code', 'a@example.test'),
+      new SubjectKeyService(new SubjectKeyCipher(randomBytes(32)), new MemoryStore()).blindIndex(
+        tenant,
+        'identity.contact',
+        'a@example.test',
+      ),
+    ]) {
+      expect(different).not.toEqual(index);
+    }
+  });
+
   it('refuses everything without a KEK (fail closed)', () => {
     const service = new SubjectKeyService(new SubjectKeyCipher(null), new MemoryStore());
     expect(service.available).toBe(false);
     expect(() => service.seal(tenant, subject(1), plaintext)).toThrow(SubjectKeysUnavailableError);
+    expect(() => service.blindIndex(tenant, 'identity.contact', 'x')).toThrow(
+      SubjectKeysUnavailableError,
+    );
     expect(() => new SubjectKeyCipher(randomBytes(16))).toThrow(TypeError);
   });
 });

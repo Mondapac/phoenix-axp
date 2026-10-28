@@ -31,9 +31,10 @@ export const APP_OPTIONS = {
 export function configureApp(app: NestExpressApplication): void {
   const config = app.get<AppConfig>(APP_CONFIG);
   app.disable('x-powered-by');
-  // No proxy is trusted: `req.ip` is the socket's address; only the public forms routes read it,
-  // for their rate limits (docs/platform-deferred.md, client address). Never `true`.
-  app.set('trust proxy', false);
+  // Only the configured BFFs are trusted (`TRUSTED_PROXIES`): from them, `req.ip` is the
+  // client their X-Forwarded-For names; from anyone else, the socket's address. Only rate limits
+  // read it (public forms, portal sign-in). Never `true`.
+  app.set('trust proxy', config.trustedProxies.length > 0 ? [...config.trustedProxies] : false);
   app.enableShutdownHooks();
 
   app.use(app.get<HttpLogger>(HTTP_LOGGER));

@@ -6,3 +6,4 @@ export {
   type RateLimiter,
   type RateLimitRule,
 } from './rate-limiter';
+export { addressNetwork } from './address-network';

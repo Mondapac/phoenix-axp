@@ -1,5 +1,6 @@
 import { auditField, defineAuditAction } from '@phoenix/shared-kernel';
 import { ACCOUNT_SOURCES } from './account';
+import { PORTAL_ACCOUNT_SOURCE, PORTAL_METHODS } from './portal';
 import {
   CUSTOM_ROLE_SCOPES,
   GRANT_LEVELS,
@@ -14,12 +15,18 @@ import { SYNC_OUTCOMES } from './directory-sync';
 
 const boundSubjectId = auditField.id();
 
-/** A directory user's first sign-in created its account (no roles). */
+/**
+ * A first sign-in created its account (no roles): a directory user's, or a portal user's after
+ * the first right code (ADR-0026).
+ */
 export const ACCOUNT_PROVISIONED = defineAuditAction({
   action: 'identity.account.provisioned',
   targetType: 'identity.account',
   actors: ['anonymous'],
-  after: { boundSubjectId, source: auditField.enumOf(ACCOUNT_SOURCES) },
+  after: {
+    boundSubjectId,
+    source: auditField.enumOf([...ACCOUNT_SOURCES, PORTAL_ACCOUNT_SOURCE] as const),
+  },
 });
 
 /**
@@ -199,6 +206,21 @@ export const FOUNDING_ADMINISTRATOR_ASSIGNED = defineAuditAction({
   after: { accountId: auditField.id(), roleId: auditField.id() },
 });
 
+const portalSettings = {
+  methods: auditField.listOf(auditField.enumOf(PORTAL_METHODS), PORTAL_METHODS.length),
+  countryCallingCode: auditField.optional(auditField.integer()),
+};
+
+/** A tenant's portal sign-in settings changed (ADR-0026 decision 2). */
+export const PORTAL_SIGN_IN_SETTINGS_CHANGED = defineAuditAction({
+  action: 'identity.portal-sign-in.settings-changed',
+  targetType: 'identity.portal-sign-in-settings',
+  targetId: tenantTarget,
+  actors: ['authenticated'],
+  before: portalSettings,
+  after: portalSettings,
+});
+
 export const IDENTITY_AUDIT_ACTIONS = [
   ACCOUNT_PROVISIONED,
   ACCOUNT_CREATED,
@@ -218,4 +240,5 @@ export const IDENTITY_AUDIT_ACTIONS = [
   ROLE_REVOKED,
   SYSTEM_ROLE_SEEDED,
   FOUNDING_ADMINISTRATOR_ASSIGNED,
+  PORTAL_SIGN_IN_SETTINGS_CHANGED,
 ] as const;

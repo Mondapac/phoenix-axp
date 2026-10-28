@@ -32,5 +32,6 @@ about one page. An accepted ADR changes only through a new ADR or an italic
 | [0023](0023-panel-shell-colours-and-charts.md) | Panel shell, panel colours and chart library (amends 0016) | Accepted 2026-10-27 |
 | [0024](0024-field-level-access.md) | Field-level access and per-definition operation permissions (amends 0004) | Accepted 2026-10-27 |
 | [0025](0025-task-inbox-deadlines-and-escalation.md) | Task Inbox: assignment, core-owned deadlines and escalation (amends 0005) | Accepted 2026-10-27 |
+| [0026](0026-portal-sign-in-with-one-time-codes.md) | Portal users sign in with one-time codes verified by the core (amends 0004, 0019) | Accepted 2026-10-28 |
 
 Reserved (see the board): page builder (Phase 3 review, number to be reserved), 0017 Objects and generated APIs (Phase 2 review).

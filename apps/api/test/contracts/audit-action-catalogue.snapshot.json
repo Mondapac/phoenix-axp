@@ -158,7 +158,7 @@
     "before": null,
     "after": {
       "boundSubjectId": "id",
-      "source": "enumOf(directory|local)"
+      "source": "enumOf(directory|local|one-time-code)"
     }
   },
   {
@@ -184,6 +184,20 @@
       "accountsDisabled": "integer",
       "accountsEnabled": "integer",
       "outcome": "enumOf(completed|failed|halted)"
+    }
+  },
+  {
+    "action": "identity.portal-sign-in.settings-changed",
+    "targetType": "identity.portal-sign-in-settings",
+    "targetId": "enumOf(tenant)",
+    "actors": ["authenticated"],
+    "before": {
+      "countryCallingCode": "optional(integer)",
+      "methods": "listOf(enumOf(email|mobile), max 2)"
+    },
+    "after": {
+      "countryCallingCode": "optional(integer)",
+      "methods": "listOf(enumOf(email|mobile), max 2)"
     }
   },
   {
