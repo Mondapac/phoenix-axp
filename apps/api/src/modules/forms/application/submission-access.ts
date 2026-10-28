@@ -3,6 +3,7 @@ import {
   resolveFieldAccess,
   type FieldAccess,
   type FieldDescriptor,
+  type FieldMode,
   type FieldRuleReader,
   type PermissionKey,
   type SiteAncestryReader,
@@ -42,22 +43,35 @@ export class SubmissionAccess {
     private readonly sites: SiteAncestryReader,
   ) {}
 
-  /** For the inbox and the submission view: `canRead` and the modes from read grants only. */
-  forRead(
+  /**
+   * For the inbox and the submission view: `canRead` and the modes from read grants only. The
+   * write half is emptied, so nothing can write with a read grant (security review of PR #34, L1).
+   */
+  async forRead(
     context: CallContext,
     form: { readonly id: Id<'Form'>; readonly siteId: Id<'Site'> },
     fields: readonly FieldDescriptor[],
   ): Promise<FieldAccess> {
-    return this.#resolve(context, form, fields, FORMS_SUBMISSION_READ.key);
+    const access = await this.#resolve(context, form, fields, FORMS_SUBMISSION_READ.key);
+    return { ...access, canWrite: false, writeModes: hiddenModes(fields) };
   }
 
-  /** For submitting on behalf: `canWrite` and the modes from submit-on-behalf grants only. */
-  forOnBehalf(
+  /**
+   * For submitting on behalf: `canWrite` and the modes from submit-on-behalf grants only. The
+   * read half is emptied, so nothing projects with an on-behalf grant (review of PR #34, L1).
+   */
+  async forOnBehalf(
     context: CallContext,
     form: { readonly id: Id<'Form'>; readonly siteId: Id<'Site'> },
     fields: readonly FieldDescriptor[],
   ): Promise<FieldAccess> {
-    return this.#resolve(context, form, fields, FORMS_SUBMISSION_SUBMIT_ON_BEHALF.key);
+    const access = await this.#resolve(
+      context,
+      form,
+      fields,
+      FORMS_SUBMISSION_SUBMIT_ON_BEHALF.key,
+    );
+    return { ...access, canRead: false, readModes: hiddenModes(fields) };
   }
 
   #resolve(
@@ -73,5 +87,8 @@ export class SubmissionAccess {
     });
   }
 }
+
+const hiddenModes = (fields: readonly FieldDescriptor[]): ReadonlyMap<Id<'Field'>, FieldMode> =>
+  new Map(fields.map((field) => [field.id, 'hidden']));
 
 export const SUBMISSION_ACCESS = Symbol('SUBMISSION_ACCESS');

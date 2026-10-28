@@ -69,12 +69,17 @@ export interface FieldRequest {
 
 /**
  * The answer: whether the actor may read or write records of the definition at all, and the
- * mode of every field it was asked about. A field id not in `modes` is hidden.
+ * mode of every field it was asked about, kept apart per operation so that a field one grant
+ * opens for writing never becomes readable through another grant's read (slice 2.8 fix).
+ * `readModes` comes from the grants conferring the read key only and holds `read` or `hidden`;
+ * `writeModes` comes from the grants conferring the write key only, and a field is writable
+ * when it is `edit` there. A field id not in a map is hidden.
  */
 export interface FieldAccess {
   readonly canRead: boolean;
   readonly canWrite: boolean;
-  readonly modes: ReadonlyMap<Id<'Field'>, FieldMode>;
+  readonly readModes: ReadonlyMap<Id<'Field'>, FieldMode>;
+  readonly writeModes: ReadonlyMap<Id<'Field'>, FieldMode>;
 }
 
 const stepped = (
@@ -96,36 +101,38 @@ export const FieldPolicy = Object.freeze({
   /**
    * The field modes of an actor holding `grants`, every one of which already covers the
    * record's site (the caller filters with `grantCoversSite`; {@link resolveFieldAccess} does).
-   * Per grant: its operation (read, write) counts only when the grant confers the key and its
-   * qualifier covers the definition; a field takes the grant's rule, or without one follows the
-   * operation (write gives `edit`, read gives `read`), except a sensitive field, which is
-   * `hidden` without a rule; and no field is wider than the grant's operation. The actor's
-   * mode is the widest over its grants, then narrowed by the step.
+   * Each operation is evaluated on its own: a grant counts for an operation only when it confers
+   * that operation's key and its qualifier covers the definition. Per counting grant, a field
+   * takes the grant's rule, or without one follows the operation (write gives `edit`, read gives
+   * `read`), except a sensitive field, which is `hidden` without a rule; and no field is wider
+   * than the operation. The actor's mode per operation is the widest over the grants counting
+   * for it, then narrowed by the step. Read and write never mix: a grant conferring only the
+   * write key adds nothing to what is visible, and a read grant makes nothing writable.
    */
   evaluate(grants: readonly FieldGrant[], request: FieldRequest): FieldAccess {
     const { definitionId, operations, fields } = request;
-    let canRead = false;
-    let canWrite = false;
-    const modes = new Map<Id<'Field'>, FieldMode>(fields.map((field) => [field.id, 'hidden']));
-    for (const grant of grants) {
-      const read =
-        grant.keys.has(operations.read) &&
-        grantCoversDefinition(grant, operations.read, definitionId);
-      const write =
-        grant.keys.has(operations.write) &&
-        grantCoversDefinition(grant, operations.write, definitionId);
-      if (!read && !write) continue;
-      canRead ||= read;
-      canWrite ||= write;
-      const ceiling: FieldMode = write ? 'edit' : 'read';
-      for (const field of fields) {
-        const base = grant.fieldRules.get(field.id) ?? (field.sensitive ? 'hidden' : ceiling);
-        const mode = narrowerMode(base, ceiling);
-        const held = modes.get(field.id) ?? 'hidden';
-        if (RANK[mode] > RANK[held]) modes.set(field.id, mode);
+    const widest = (key: PermissionKey, ceiling: FieldMode) => {
+      let held = false;
+      const modes = new Map<Id<'Field'>, FieldMode>(fields.map((field) => [field.id, 'hidden']));
+      for (const grant of grants) {
+        if (!grant.keys.has(key) || !grantCoversDefinition(grant, key, definitionId)) continue;
+        held = true;
+        for (const field of fields) {
+          const base = grant.fieldRules.get(field.id) ?? (field.sensitive ? 'hidden' : ceiling);
+          const mode = narrowerMode(base, ceiling);
+          if (RANK[mode] > RANK[modes.get(field.id) ?? 'hidden']) modes.set(field.id, mode);
+        }
       }
-    }
-    return { canRead, canWrite, modes: stepped(modes, request.step) };
+      return { held, modes: stepped(modes, request.step) };
+    };
+    const read = widest(operations.read, 'read');
+    const write = widest(operations.write, 'edit');
+    return {
+      canRead: read.held,
+      canWrite: write.held,
+      readModes: read.modes,
+      writeModes: write.modes,
+    };
   },
 
   /**
@@ -149,17 +156,18 @@ export const FieldPolicy = Object.freeze({
    */
   project(
     values: Readonly<Record<string, unknown>>,
-    access: Pick<FieldAccess, 'canRead' | 'modes'>,
+    access: Pick<FieldAccess, 'canRead' | 'readModes'>,
   ): Record<string, unknown> {
     if (access.canRead !== true) return {};
     return Object.fromEntries(
-      Object.entries(values).filter(([id]) => isVisible(access.modes.get(id as Id<'Field'>))),
+      Object.entries(values).filter(([id]) => isVisible(access.readModes.get(id as Id<'Field'>))),
     );
   },
 
   /**
    * A write that names any field whose mode is not `edit` is refused, whatever its value
-   * (decision 7); an unknown field id is hidden, so it is refused too.
+   * (decision 7); an unknown field id is hidden, so it is refused too. Staff writes pass
+   * `FieldAccess.writeModes`; a portal write passes {@link forPortal}'s modes.
    */
   checkWrite(
     fieldIds: Iterable<string>,
@@ -186,11 +194,10 @@ export interface FieldRuleReader {
 /** Nest token of the {@link FieldRuleReader}. */
 export const FIELD_RULE_READER = Symbol('FIELD_RULE_READER');
 
-const NO_ACCESS = (fields: readonly FieldDescriptor[]): FieldAccess => ({
-  canRead: false,
-  canWrite: false,
-  modes: new Map(fields.map((field) => [field.id, 'hidden'])),
-});
+const NO_ACCESS = (fields: readonly FieldDescriptor[]): FieldAccess => {
+  const hidden = new Map<Id<'Field'>, FieldMode>(fields.map((field) => [field.id, 'hidden']));
+  return { canRead: false, canWrite: false, readModes: hidden, writeModes: new Map(hidden) };
+};
 
 /**
  * The field access of the calling staff member on a record of `request.definitionId` owned by

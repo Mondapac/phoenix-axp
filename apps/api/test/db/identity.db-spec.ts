@@ -1281,7 +1281,12 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
           null,
           request(definitionId),
         );
-        return { ...access, modes: Object.fromEntries(access.modes) };
+        return {
+          canRead: access.canRead,
+          canWrite: access.canWrite,
+          read: Object.fromEntries(access.readModes),
+          write: Object.fromEntries(access.writeModes),
+        };
       };
 
       it('qualifies a key, sets field rules, and the reader answers them on the next request', async () => {
@@ -1310,11 +1315,13 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
         expect(await modes(member.context, DEF_A)).toEqual({
           canRead: true,
           canWrite: true,
-          modes: { [NAME]: 'edit', [NOTE]: 'edit', [NATIONAL_ID]: 'hidden' },
+          read: { [NAME]: 'read', [NOTE]: 'read', [NATIONAL_ID]: 'hidden' },
+          write: { [NAME]: 'edit', [NOTE]: 'edit', [NATIONAL_ID]: 'hidden' },
         });
         expect(await modes(member.context, DEF_B)).toMatchObject({
           canWrite: false,
-          modes: { [NAME]: 'read', [NOTE]: 'read', [NATIONAL_ID]: 'hidden' },
+          read: { [NAME]: 'read', [NOTE]: 'read', [NATIONAL_ID]: 'hidden' },
+          write: { [NAME]: 'hidden', [NOTE]: 'hidden', [NATIONAL_ID]: 'hidden' },
         });
 
         const rules = [
@@ -1329,10 +1336,9 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
             rules,
           }),
         ).toEqual({ ok: true, value: undefined });
-        expect((await modes(member.context, DEF_A)).modes).toEqual({
-          [NAME]: 'edit',
-          [NOTE]: 'hidden',
-          [NATIONAL_ID]: 'read',
+        expect(await modes(member.context, DEF_A)).toMatchObject({
+          read: { [NAME]: 'read', [NOTE]: 'hidden', [NATIONAL_ID]: 'read' },
+          write: { [NAME]: 'edit', [NOTE]: 'hidden', [NATIONAL_ID]: 'read' },
         });
         expect(
           await identity.viewFieldRules.execute(admin, { roleId, definitionId: DEF_A }),
@@ -1381,6 +1387,46 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
           }),
         ).toEqual({ ok: true, value: undefined });
         expect(await modes(member.context, DEF_A)).toMatchObject({ canWrite: false });
+      });
+
+      it('keeps read and write apart across two roles of one member (PR #34)', async () => {
+        const readerRole = await customRole([READ]);
+        const writerRole = await customRole([UPDATE]);
+        const member = await staffMember('split');
+        await assigned(member.id, readerRole);
+        await assigned(member.id, writerRole);
+        for (const [roleId, permissionKey] of [
+          [readerRole, READ],
+          [writerRole, UPDATE],
+        ] as const) {
+          expect(
+            await identity.changeScope.execute(admin, {
+              roleId,
+              version: 1,
+              permissionKey,
+              definitions: 'all',
+            }),
+          ).toEqual({ ok: true, value: undefined });
+        }
+        // The reader hides NOTE; the writer opens NATIONAL_ID for writing only.
+        await identity.changeFieldRules.execute(admin, {
+          roleId: readerRole,
+          version: 2,
+          definitionId: DEF_A,
+          rules: [{ fieldId: NOTE, mode: 'hidden' }],
+        });
+        await identity.changeFieldRules.execute(admin, {
+          roleId: writerRole,
+          version: 2,
+          definitionId: DEF_A,
+          rules: [{ fieldId: NATIONAL_ID, mode: 'edit' }],
+        });
+        expect(await modes(member.context, DEF_A)).toEqual({
+          canRead: true,
+          canWrite: true,
+          read: { [NAME]: 'read', [NOTE]: 'hidden', [NATIONAL_ID]: 'hidden' },
+          write: { [NAME]: 'edit', [NOTE]: 'edit', [NATIONAL_ID]: 'edit' },
+        });
       });
 
       it('drops the qualifier of a key the role no longer confers (review L3)', async () => {

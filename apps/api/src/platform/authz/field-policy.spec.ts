@@ -81,8 +81,13 @@ const request = (overrides: Partial<FieldRequest> = {}): FieldRequest => ({
   ...overrides,
 });
 
-const modesOf = (grants: FieldGrant[], overrides: Partial<FieldRequest> = {}) =>
-  Object.fromEntries(FieldPolicy.evaluate(grants, request(overrides)).modes);
+const modesOf = (grants: FieldGrant[], overrides: Partial<FieldRequest> = {}) => {
+  const access = FieldPolicy.evaluate(grants, request(overrides));
+  return {
+    read: Object.fromEntries(access.readModes),
+    write: Object.fromEntries(access.writeModes),
+  };
+};
 
 describe('the definition qualifier', () => {
   it('covers every definition under all, the listed ones otherwise, none without one', () => {
@@ -111,14 +116,12 @@ describe('the definition qualifier', () => {
 describe('FieldPolicy.evaluate', () => {
   it('without a rule, a field follows the operation; a sensitive field stays hidden (D9)', () => {
     expect(modesOf([grant([READ])])).toEqual({
-      [NAME]: 'read',
-      [NOTE]: 'read',
-      [NATIONAL_ID]: 'hidden',
+      read: { [NAME]: 'read', [NOTE]: 'read', [NATIONAL_ID]: 'hidden' },
+      write: { [NAME]: 'hidden', [NOTE]: 'hidden', [NATIONAL_ID]: 'hidden' },
     });
     expect(modesOf([grant([READ, UPDATE])])).toEqual({
-      [NAME]: 'edit',
-      [NOTE]: 'edit',
-      [NATIONAL_ID]: 'hidden',
+      read: { [NAME]: 'read', [NOTE]: 'read', [NATIONAL_ID]: 'hidden' },
+      write: { [NAME]: 'edit', [NOTE]: 'edit', [NATIONAL_ID]: 'hidden' },
     });
   });
 
@@ -128,14 +131,13 @@ describe('FieldPolicy.evaluate', () => {
       [NOTE, 'hidden'],
     ];
     expect(modesOf([grant([READ, UPDATE], { rules })])).toEqual({
-      [NAME]: 'edit',
-      [NOTE]: 'hidden',
-      [NATIONAL_ID]: 'read',
+      read: { [NAME]: 'read', [NOTE]: 'hidden', [NATIONAL_ID]: 'read' },
+      write: { [NAME]: 'edit', [NOTE]: 'hidden', [NATIONAL_ID]: 'read' },
     });
   });
 
   it('never makes a field wider than its operation: edit without update is read', () => {
-    expect(modesOf([grant([READ], { rules: [[NAME, 'edit']] })])[NAME]).toBe('read');
+    expect(modesOf([grant([READ], { rules: [[NAME, 'edit']] })]).read[NAME]).toBe('read');
   });
 
   it('on create, the create key gives edit unless a rule narrows it', () => {
@@ -145,28 +147,60 @@ describe('FieldPolicy.evaluate', () => {
     );
     expect(access.canWrite).toBe(true);
     expect(access.canRead).toBe(false);
-    expect(Object.fromEntries(access.modes)).toEqual({
+    expect(Object.fromEntries(access.writeModes)).toEqual({
       [NAME]: 'edit',
       [NOTE]: 'read',
       [NATIONAL_ID]: 'hidden',
     });
+    expect([...access.readModes.values()]).toEqual(['hidden', 'hidden', 'hidden']);
   });
 
-  it('takes the widest mode over the grants', () => {
+  it('takes the widest mode per operation over the grants conferring it', () => {
     const narrow = grant([READ, UPDATE], { rules: [[NOTE, 'hidden']] });
     const reader = grant([READ], { rules: [[NATIONAL_ID, 'read']] });
     expect(modesOf([narrow, reader])).toEqual({
-      [NAME]: 'edit',
-      [NOTE]: 'read',
-      [NATIONAL_ID]: 'read',
+      read: { [NAME]: 'read', [NOTE]: 'read', [NATIONAL_ID]: 'read' },
+      write: { [NAME]: 'edit', [NOTE]: 'hidden', [NATIONAL_ID]: 'hidden' },
     });
+  });
+
+  it('never mixes read and write across grants (slice 2.8 fix)', () => {
+    // A read grant hides NOTE; an update-only grant opens NOTE and NATIONAL_ID for writing.
+    // The update grant must not make them readable, and the read grant must not make
+    // anything writable.
+    const reader = grant([READ], { rules: [[NOTE, 'hidden']] });
+    const writer = grant([UPDATE], { rules: [[NATIONAL_ID, 'edit']] });
+    const access = FieldPolicy.evaluate([reader, writer], request());
+    expect(access).toMatchObject({ canRead: true, canWrite: true });
+    expect(modesOf([reader, writer])).toEqual({
+      read: { [NAME]: 'read', [NOTE]: 'hidden', [NATIONAL_ID]: 'hidden' },
+      write: { [NAME]: 'edit', [NOTE]: 'edit', [NATIONAL_ID]: 'edit' },
+    });
+    const record = { [NAME]: 'Sara', [NOTE]: 'n', [NATIONAL_ID]: '0012345678' };
+    expect(FieldPolicy.project(record, access)).toEqual({ [NAME]: 'Sara' });
+    expect(FieldPolicy.checkWrite([NOTE, NATIONAL_ID], access.writeModes).ok).toBe(true);
+
+    // A write rule of read on the update grant does not open the field for a reader either.
+    const readOnlyWriter = grant([UPDATE], { rules: [[NOTE, 'read']] });
+    const second = FieldPolicy.evaluate([reader, readOnlyWriter], request());
+    expect(FieldPolicy.project(record, second)).toEqual({ [NAME]: 'Sara' });
+    expect(FieldPolicy.checkWrite([NOTE], second.writeModes).ok).toBe(false);
+
+    // And a reader's wide rule never makes a field writable through another grant.
+    const wideReader = grant([READ], { rules: [[NATIONAL_ID, 'edit']] });
+    const narrowWriter = grant([UPDATE], { rules: [[NATIONAL_ID, 'hidden']] });
+    const third = FieldPolicy.evaluate([wideReader, narrowWriter], request());
+    expect(third.readModes.get(NATIONAL_ID)).toBe('read');
+    expect(FieldPolicy.checkWrite([NATIONAL_ID], third.writeModes).ok).toBe(false);
   });
 
   it('ignores a grant whose qualifier does not cover the definition', () => {
     const elsewhere = grant([READ, UPDATE], { qualifier: only(OTHER_DEFINITION) });
     const access = FieldPolicy.evaluate([elsewhere], request());
     expect(access).toMatchObject({ canRead: false, canWrite: false });
-    expect([...access.modes.values()]).toEqual(['hidden', 'hidden', 'hidden']);
+    expect([...access.readModes.values(), ...access.writeModes.values()]).toEqual(
+      Array(6).fill('hidden'),
+    );
   });
 
   it('ignores a qualified key held without a qualifier: it covers no definition', () => {
@@ -180,9 +214,8 @@ describe('FieldPolicy.evaluate', () => {
       [NATIONAL_ID, 'edit'],
     ]);
     expect(modesOf([grant([READ, UPDATE])], { step })).toEqual({
-      [NAME]: 'read',
-      [NOTE]: 'edit',
-      [NATIONAL_ID]: 'hidden',
+      read: { [NAME]: 'read', [NOTE]: 'read', [NATIONAL_ID]: 'hidden' },
+      write: { [NAME]: 'read', [NOTE]: 'edit', [NATIONAL_ID]: 'hidden' },
     });
   });
 
@@ -213,14 +246,16 @@ describe('FieldPolicy.project and checkWrite', () => {
   it('leaves hidden and unknown fields out of a read, not nulled', () => {
     const projected = FieldPolicy.project(
       { [NAME]: 'Sara', [NOTE]: 'n', [NATIONAL_ID]: '0012345678', [id(9)]: 'x' },
-      { canRead: true, modes },
+      { canRead: true, readModes: modes },
     );
     expect(projected).toEqual({ [NAME]: 'Sara', [NOTE]: 'n' });
     expect(Object.hasOwn(projected, NATIONAL_ID)).toBe(false);
   });
 
   it('shows nothing without the read operation, whatever the modes (review M1)', () => {
-    expect(FieldPolicy.project({ [NAME]: 'Sara' }, { canRead: false, modes })).toEqual({});
+    expect(FieldPolicy.project({ [NAME]: 'Sara' }, { canRead: false, readModes: modes })).toEqual(
+      {},
+    );
     for (const write of [UPDATE, CREATE]) {
       const access = FieldPolicy.evaluate(
         [grant([write])],
@@ -228,7 +263,7 @@ describe('FieldPolicy.project and checkWrite', () => {
       );
       expect(access.canRead).toBe(false);
       expect(FieldPolicy.project({ [NAME]: 'Sara', [NOTE]: 'n' }, access)).toEqual({});
-      expect(FieldPolicy.checkWrite([NAME], access.modes).ok).toBe(true);
+      expect(FieldPolicy.checkWrite([NAME], access.writeModes).ok).toBe(true);
     }
   });
 
@@ -280,7 +315,7 @@ describe.each(TEST_TENANTS)('resolveFieldAccess in tenant %s', (code) => {
     const access = await resolveFieldAccess(rules, tree, staff, CHILD_SITE, request());
     expect(rules.asked).toEqual([[code, DEFINITION]]);
     expect(access).toMatchObject({ canRead: true, canWrite: false });
-    expect(access.modes.get(NAME)).toBe('read');
+    expect(access.readModes.get(NAME)).toBe('read');
   });
 
   it('lets only tenant grants cover a tenant-level record', async () => {
@@ -308,7 +343,7 @@ describe.each(TEST_TENANTS)('resolveFieldAccess in tenant %s', (code) => {
     const rules = new Rules([grant([READ, UPDATE])]);
     const access = await resolveFieldAccess(rules, tree, context, SITE, request());
     expect(access.canRead).toBe(false);
-    expect([...access.modes.values()]).toEqual(['hidden', 'hidden', 'hidden']);
+    expect([...access.readModes.values()]).toEqual(['hidden', 'hidden', 'hidden']);
     expect(rules.asked).toEqual([]);
   });
 
@@ -321,7 +356,7 @@ describe.each(TEST_TENANTS)('resolveFieldAccess in tenant %s', (code) => {
       request(),
     );
     expect(access.canRead).toBe(false);
-    expect([...access.modes.values()]).toEqual(['hidden', 'hidden', 'hidden']);
+    expect([...access.readModes.values()]).toEqual(['hidden', 'hidden', 'hidden']);
   });
 
   it('throws when the reader throws: an unanswered question is never access', async () => {

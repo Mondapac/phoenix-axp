@@ -69,7 +69,7 @@ export class SubmitFormOnBehalf extends UseCase<
     if (!answers.ok) return answers;
     const allowed = FieldPolicy.checkWrite(
       Object.keys(answersById(answers.value, fields)),
-      access.modes,
+      access.writeModes,
     );
     if (!allowed.ok) return allowed;
     return this.intake.take(context, served, 'on-behalf', answers.value);
