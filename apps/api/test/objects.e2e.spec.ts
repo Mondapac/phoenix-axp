@@ -1,0 +1,85 @@
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import request from 'supertest';
+import { createTestApp } from './support/test-app';
+import { TEST_TENANTS } from './support/test-config';
+
+// The HTTP edge of the objects module (slice 2.8), without a database: every request here is
+// anonymous, so each route of the studio API and of the generated record API is refused by the
+// gate before any unit of work opens, and a malformed request before the gate. The database
+// behaviour is in test/db/objects.db-spec.ts.
+
+const unauthenticated = { statusCode: 401, code: 'access.unauthenticated' };
+
+describe('the objects API (HTTP)', () => {
+  let app: NestExpressApplication;
+
+  beforeAll(async () => {
+    ({ app } = await createTestApp());
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  describe.each(TEST_TENANTS)('in tenant %s', (tenant) => {
+    const call = (method: 'get' | 'post' | 'patch' | 'delete', path: string) =>
+      request(app.getHttpServer())[method](path).set('x-tenant-id', tenant);
+    const ID = '01890a5d-ac96-774b-bcce-b302099a8057';
+    const field = { key: 'title', label: 'عنوان', type: 'text' };
+
+    it.each([
+      ['get', '/objects/definitions', undefined],
+      ['post', '/objects/definitions', { siteId: ID, key: 'contracts', name: 'قراردادها' }],
+      ['get', `/objects/definitions/${ID}`, undefined],
+      ['patch', `/objects/definitions/${ID}`, { version: 1, name: 'x' }],
+      ['post', `/objects/definitions/${ID}/revisions`, { fields: [field] }],
+      ['get', `/objects/revisions/${ID}`, undefined],
+      ['post', `/objects/definitions/${ID}/publish`, { version: 1, revisionId: ID }],
+      ['post', `/objects/definitions/${ID}/retire`, { version: 1 }],
+      ['get', '/objects/o/contracts', undefined],
+      ['get', '/objects/o/contracts/records', undefined],
+      ['post', '/objects/o/contracts/records', { values: { title: 'x' } }],
+      ['get', `/objects/o/contracts/records/${ID}`, undefined],
+      ['patch', `/objects/o/contracts/records/${ID}`, { version: 1, values: { title: 'y' } }],
+      ['delete', `/objects/o/contracts/records/${ID}?version=1`, undefined],
+    ] as const)('refuses an anonymous %s %s with 401', async (method, path, body) => {
+      const response = await call(method, path).send(body);
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual(unauthenticated);
+    });
+
+    it('answers 400 request.invalid with the field for a malformed body or query', async () => {
+      const type = await call('post', `/objects/definitions/${ID}/revisions`).send({
+        fields: [{ ...field, type: 'file' }],
+      });
+      expect(type.body).toEqual({
+        statusCode: 400,
+        code: 'request.invalid',
+        field: 'fields.0.type',
+      });
+      const nested = await call('post', '/objects/o/contracts/records').send({
+        values: { title: { $ne: 1 } },
+      });
+      expect(nested.status).toBe(400);
+      const extra = await call('patch', `/objects/o/contracts/records/${ID}`).send({
+        version: 1,
+        values: {},
+        siteId: ID,
+      });
+      expect(extra.body).toMatchObject({ code: 'request.invalid' });
+      const limit = await call('get', '/objects/o/contracts/records?limit=101');
+      expect(limit.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'limit' });
+      const version = await call('delete', `/objects/o/contracts/records/${ID}`);
+      expect(version.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'version' });
+    });
+
+    it('answers 404 for a path id or key that cannot exist', async () => {
+      const definition = await call('get', '/objects/definitions/contracts');
+      expect(definition.body).toEqual({ statusCode: 404, code: 'objects.definition.not-found' });
+      const record = await call('get', '/objects/o/contracts/records/1');
+      expect(record.body).toEqual({ statusCode: 404, code: 'objects.record.not-found' });
+      const key = await call('get', '/objects/o/Contracts_1/records');
+      expect(key.body).toEqual({ statusCode: 404, code: 'objects.definition.not-found' });
+    });
+  });
+});

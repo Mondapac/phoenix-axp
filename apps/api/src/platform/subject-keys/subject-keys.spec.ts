@@ -113,6 +113,19 @@ describe.each(TEST_TENANTS)('SubjectKeyService in tenant %s', (code) => {
     }
   });
 
+  it('reseals new data under the same key, never under a destroyed one', () => {
+    const service = new SubjectKeyService(new SubjectKeyCipher(kek), new MemoryStore());
+    const sealed = service.seal(tenant, subject(4), plaintext);
+    const changed = Buffer.from('{"name":"مریم"}', 'utf8');
+    const resealed = service.reseal(tenant, subject(4), sealed.wrappedKey, changed);
+    expect(resealed.includes(changed)).toBe(false);
+    expect(service.open(tenant, subject(4), sealed.wrappedKey, resealed)).toEqual(changed);
+    expect(() => service.reseal(tenant, subject(5), sealed.wrappedKey, changed)).toThrow(
+      SealedValueError,
+    );
+    expect(() => service.reseal(tenant, subject(4), null, changed)).toThrow();
+  });
+
   it('refuses everything without a KEK (fail closed)', () => {
     const service = new SubjectKeyService(new SubjectKeyCipher(null), new MemoryStore());
     expect(service.available).toBe(false);

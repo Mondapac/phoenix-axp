@@ -51,6 +51,28 @@ export class SubjectKeyService {
     }
   }
 
+  /**
+   * New ciphertext under the subject's existing key, for a record whose sealed data changes
+   * (an Object record update, ADR-0017): the key stays, so erasure still destroys one key.
+   * Throws when the key was destroyed (`wrappedKey` null): erased data is never written again.
+   */
+  reseal(
+    tenant: TenantContext,
+    subjectId: Id<string>,
+    wrappedKey: Uint8Array | null | undefined,
+    plaintext: Uint8Array,
+  ): Buffer {
+    if (wrappedKey === null || wrappedKey === undefined) {
+      throw new Error('subject-keys: the subject key was destroyed or never stored');
+    }
+    const dataKey = this.cipher.unwrap(tenant, subjectId, wrappedKey);
+    try {
+      return this.cipher.encrypt(dataKey, tenant, subjectId, plaintext);
+    } finally {
+      dataKey.fill(0);
+    }
+  }
+
   /** In the caller's unit, with the record the key protects. */
   store(
     tenant: TenantContext,

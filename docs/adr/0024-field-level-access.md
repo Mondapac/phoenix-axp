@@ -84,6 +84,11 @@ application layer).
    written under (V3); a field is sensitive if that revision or the current one marks it. It is
    computed once per request and definition revision inside the actor-snapshot unit (ADR-0020);
    nothing is cached across requests.
+   *Clarified 2026-10-28 (PR #34):* several grants combine per operation. The read modes come only
+   from grants conferring the read key, and the write modes only from grants conferring the write
+   key; each is the widest over its own grants. A write-only grant shows nothing, and a read grant
+   makes nothing writable. Projections use the read modes; staff writes call `checkWrite` with the
+   write modes.
 6. Reads: REST leaves hidden fields out. GraphQL generated fields are nullable and a hidden field
    resolves to `null` without an error. A reference expands only with read on the target
    definition and record, under the target's policy; otherwise `null`. Search projects at query
