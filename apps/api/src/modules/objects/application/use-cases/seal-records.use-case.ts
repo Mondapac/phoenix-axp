@@ -40,6 +40,8 @@ export class SealRecords extends UseCase<void, { readonly resealed: number }, ne
   };
 
   readonly #logger = new Logger('SealRecords');
+  /** Where the next run starts in the definitions, so each run begins with another one. */
+  #start = 0;
 
   constructor(
     gate: UseCaseGate,
@@ -56,6 +58,9 @@ export class SealRecords extends UseCase<void, { readonly resealed: number }, ne
     context: CallContext,
   ): Promise<Result<{ readonly resealed: number }, never>> {
     const { tenant } = context;
+    // Without the key-encryption key nothing can be sealed: fail the run, never skip quietly.
+    if (!this.subjectKeys.available)
+      throw new Error('objects.seal-records: subject keys unavailable');
     const targets = await this.unitOfWork.run(
       tenant,
       async () => {
@@ -83,7 +88,10 @@ export class SealRecords extends UseCase<void, { readonly resealed: number }, ne
     if (!targets.ok) throw new Error('objects: the definitions could not be read');
     let resealed = 0;
     let batches = 0;
-    for (const target of targets.value) {
+    const order = targets.value;
+    const start = order.length === 0 ? 0 : this.#start % order.length;
+    this.#start += 1;
+    for (const target of [...order.slice(start), ...order.slice(0, start)]) {
       let after: Id<'ObjectRecord'> | null = null;
       for (let taken = 0; taken < MAX_SEAL_BATCHES_PER_DEFINITION; taken += 1) {
         if (batches >= MAX_SEAL_BATCHES) return ok({ resealed });

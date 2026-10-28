@@ -47,6 +47,8 @@ both REST and GraphQL are served in Phase 2 (D6). The studio screens are slice 2
    runs, reads already hide the field. The job only seals: it never opens a sealed value to
    plain. A field whose sensitivity was lowered moves to plain only when a writer rewrites the
    record.
+   Publishing a revision that leaves plain a field the served revision marks sensitive (a
+   rollback) is a lowering: it needs `objects.definitions.lower-sensitivity` and is audited.
 5. **Record-level access.** A record is owned by one site: the definition's site or a site
    below it, chosen at creation and checked against the creator's grants (never trusted from
    input alone). Check order (ADR-0024 decision 2): tenant, then the record's site against the

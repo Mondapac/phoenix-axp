@@ -43,6 +43,7 @@ import { ViewRecord } from '../../src/modules/objects/application/use-cases/view
 import { ViewRevision } from '../../src/modules/objects/application/use-cases/view-revision.use-case';
 import {
   OBJECTS_DEFINITIONS_DESIGN,
+  OBJECTS_DEFINITIONS_PUBLISH,
   OBJECTS_DEFINITIONS_VIEW,
   OBJECTS_PERMISSIONS,
   OBJECTS_RECORD_CREATE,
@@ -685,6 +686,32 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
     await useCases.seal.execute(testCallContext(tenant, 'system'), undefined);
     expect(await plainNote()).toBeUndefined();
     expect(audit.of(recordId)).toEqual(['objects.record.created', 'objects.record.resealed']);
+
+    // Publishing revision 3 again lowers the note against the served revision 2: it needs the
+    // protected key, as saving a lowering revision does (security review of PR #35).
+    const publisher = staffWith({
+      keys: [OBJECTS_DEFINITIONS_PUBLISH.key, OBJECTS_DEFINITIONS_VIEW.key],
+    });
+    expect(
+      await useCases.publish.execute(publisher, {
+        definitionId: object.id,
+        version: 4,
+        revisionId: third.value.id,
+      }),
+    ).toEqual({ ok: false, error: { code: 'objects.revision.lowering-denied' } });
+    expect(
+      await useCases.publish.execute(admin, {
+        definitionId: object.id,
+        version: 4,
+        revisionId: third.value.id,
+      }),
+    ).toEqual({ ok: true, value: undefined });
+    // Saved lowering the note against revision 2, then published lowering it against it.
+    expect(audit.of(third.value.id)).toEqual([
+      'objects.revision.saved',
+      'objects.revision.sensitivity-lowered',
+      'objects.revision.sensitivity-lowered',
+    ]);
   });
 
   it('refuses a write built on a stale read and an empty change (security review M1, L3)', async () => {
