@@ -1,7 +1,12 @@
 import { Module, type Provider } from '@nestjs/common';
 import { registerAuditActions } from '../../platform/audit/audit-action-catalogue';
 import { AUDIT_WRITER } from '../../platform/audit/audit-writer';
-import { registerPermissions, SITE_ANCESTRY_READER, USE_CASE_GATE } from '../../platform/authz';
+import {
+  registerPermissions,
+  SITE_ANCESTRY_READER,
+  USE_CASE_GATE,
+  type UseCaseGate,
+} from '../../platform/authz';
 import { CLOCK } from '../../platform/clock/clock.module';
 import { ID_GENERATOR } from '../../platform/ids/ids.module';
 import { PersistenceModule } from '../../platform/persistence/persistence.module';
@@ -22,6 +27,7 @@ import { RenameOrganization } from './application/use-cases/rename-organization.
 import { UpdateSite } from './application/use-cases/update-site.use-case';
 import { UpdateTenantSettings } from './application/use-cases/update-tenant-settings.use-case';
 import { ViewSite } from './application/use-cases/view-site.use-case';
+import { ViewTenantPresentation } from './application/use-cases/view-tenant-presentation.use-case';
 import { ViewTenantSettings } from './application/use-cases/view-tenant-settings.use-case';
 import { TENANCY_PERMISSIONS } from './contracts/permissions';
 import { TENANCY_AUDIT_ACTIONS } from './domain/audit-actions';
@@ -31,7 +37,10 @@ import { PrismaTenantSettingsRepository } from './infrastructure/prisma-tenant-s
 import { ClosureSiteAncestryReader } from './infrastructure/site-ancestry.reader';
 import { OrganizationsController } from './presentation/organizations.controller';
 import { SitesController } from './presentation/sites.controller';
-import { TenantSettingsController } from './presentation/tenant-settings.controller';
+import {
+  TenantPresentationController,
+  TenantSettingsController,
+} from './presentation/tenant-settings.controller';
 
 const SITES = { provide: SITE_REPOSITORY, useClass: PrismaSiteRepository };
 
@@ -64,7 +73,12 @@ const ORGANIZATIONS = ORGANIZATION_REPOSITORY;
  * and the tenant's settings, behind the studio API. Its audit writer stays inside the module.
  */
 @Module({
-  controllers: [SitesController, OrganizationsController, TenantSettingsController],
+  controllers: [
+    SitesController,
+    OrganizationsController,
+    TenantSettingsController,
+    TenantPresentationController,
+  ],
   providers: [
     registerPermissions('tenancy', TENANCY_PERMISSIONS),
     registerAuditActions('tenancy', TENANCY_AUDIT_ACTIONS),
@@ -91,6 +105,12 @@ const ORGANIZATIONS = ORGANIZATION_REPOSITORY;
     useCase(RenameOrganization, [ORGANIZATIONS, AUDIT_WRITER, CLOCK]),
     useCase(MoveOrganization, [SETTINGS, ORGANIZATIONS, AUDIT_WRITER, CLOCK]),
     useCase(ViewTenantSettings, [SETTINGS, TenantRegistry]),
+    {
+      provide: ViewTenantPresentation,
+      inject: [USE_CASE_GATE, TenantRegistry],
+      useFactory: (gate: UseCaseGate, tenants: TenantRegistry) =>
+        new ViewTenantPresentation(gate, tenants),
+    },
     useCase(UpdateTenantSettings, [SETTINGS, SITE_REPOSITORY, AUDIT_WRITER, CLOCK]),
   ],
 })

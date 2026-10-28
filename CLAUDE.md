@@ -129,9 +129,10 @@ change one only through a new ADR or an "Amended by" note.
 - Requires Node.js 24.20.0+ and pnpm 10 (ADR-0014).
 - `pnpm verify` = db:generate + typecheck + lint + boundaries + licences + test + test:db +
   db:check-reversible. CI runs exactly this. Run it before saying "done".
-- `pnpm boundaries` = dependency-cruiser (`apps/api`) + `scripts/check-prisma-boundaries.mjs`;
-  `apps/api/test/boundary-fixtures/` proves every rule fires. `check-panel-boundaries` comes
-  with the first panel (frontend track).
+- `pnpm boundaries` = dependency-cruiser (`apps/api`) + `scripts/check-prisma-boundaries.mjs` +
+  `scripts/check-module-bindings.mjs` + `scripts/check-panel-boundaries.mjs` (panels reach the
+  core only through their BFF; `packages/panel-server` is server-only);
+  `apps/api/test/boundary-fixtures/` proves every rule fires.
 - `pnpm licences` = the dependency licence gate (ADR-0009); `pnpm db:check-reversible` runs
   every migration up -> down -> up; `pnpm db:bootstrap` recreates the dev DB roles (and Flowable's
   database) on an existing volume; `pnpm flowable:check` probes the Flowable image (CI runs it).

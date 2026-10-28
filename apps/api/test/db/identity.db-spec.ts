@@ -41,6 +41,8 @@ import { SyncDirectoryAccounts } from '../../src/modules/identity/application/us
 import { UpdateDirectorySyncInterval } from '../../src/modules/identity/application/use-cases/update-directory-sync-interval.use-case';
 import { ViewDirectorySync } from '../../src/modules/identity/application/use-cases/view-directory-sync.use-case';
 import { ViewOwnAccount } from '../../src/modules/identity/application/use-cases/view-own-account.use-case';
+import { ViewOwnPermissions } from '../../src/modules/identity/application/use-cases/view-own-permissions.use-case';
+import { IdentityActorGrantReader } from '../../src/modules/identity/application/access/identity-actor-grant-reader';
 import { AssignRole } from '../../src/modules/identity/application/use-cases/assign-role.use-case';
 import { BootstrapTenantAdministrator } from '../../src/modules/identity/application/use-cases/bootstrap-tenant-administrator.use-case';
 import { ChangeRoleDefinitionScope } from '../../src/modules/identity/application/use-cases/change-role-definition-scope.use-case';
@@ -247,6 +249,10 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
       ),
       signOut: new SignOut(gate, uow, sessions, audit),
       viewOwn: new ViewOwnAccount(gate, uow, accounts),
+      viewOwnPermissions: new ViewOwnPermissions(
+        gate,
+        new IdentityActorGrantReader(uow, sessions, roles, permissions, clock),
+      ),
       list: new ListStaffAccounts(gate, uow, accounts),
       create: new CreateLocalStaffAccount(gate, uow, accounts, audit, clock, ids),
       disable: new DisableStaffAccount(
@@ -962,6 +968,47 @@ describe.each(TEST_TENANTS)('the identity module in tenant %s (database integrat
           ok: true,
         });
         expect(await identity.roleHoldings.holdingsOf(peer.context, member.id)).toEqual([]);
+      });
+
+      it("answers the caller's own permission keys for the panel menu, on every call (slice 1.10)", async () => {
+        const member = await staffMember('menu');
+        const fars = await site(null);
+        const viewer = await customRole('tenant', ['identity.accounts.view']);
+        const editor = await customRole('site', [editKey]);
+        expect(await identity.viewOwnPermissions.execute(member.context, undefined)).toEqual({
+          ok: true,
+          value: { tenant: [], sites: [] },
+        });
+        await assigned(member.id, viewer, { level: 'tenant' });
+        const grant = await assigned(member.id, editor, {
+          level: 'site',
+          siteId: fars,
+          includeDescendants: true,
+        });
+        expect(await identity.viewOwnPermissions.execute(member.context, undefined)).toEqual({
+          ok: true,
+          value: {
+            tenant: ['identity.accounts.view'],
+            sites: [{ siteId: fars, includeDescendants: true, keys: [editKey] }],
+          },
+        });
+        // A revoke applies on the next request: nothing is cached.
+        expect(await identity.revoke.execute(admin, { assignmentId: grant })).toMatchObject({
+          ok: true,
+        });
+        expect(await identity.viewOwnPermissions.execute(member.context, undefined)).toEqual({
+          ok: true,
+          value: { tenant: ['identity.accounts.view'], sites: [] },
+        });
+        // Anonymous callers are refused by the gate.
+        expect(
+          (
+            await identity.viewOwnPermissions.execute(
+              testCallContext(tenant, 'anonymous'),
+              undefined,
+            )
+          ).ok,
+        ).toBe(false);
       });
 
       it('refuses a grant to an unlinked local account, itself, or a role of another level (M1)', async () => {
