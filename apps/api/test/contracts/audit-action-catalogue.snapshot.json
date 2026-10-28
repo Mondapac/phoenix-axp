@@ -309,6 +309,107 @@
     }
   },
   {
+    "action": "objects.definition.created",
+    "targetType": "objects.definition",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "siteId": "id"
+    }
+  },
+  {
+    "action": "objects.definition.published",
+    "targetType": "objects.definition",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "revisionId": "optional(id)",
+      "status": "enumOf(draft|published|retired)"
+    },
+    "after": {
+      "number": "integer",
+      "revisionId": "id"
+    }
+  },
+  {
+    "action": "objects.definition.renamed",
+    "targetType": "objects.definition",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": null
+  },
+  {
+    "action": "objects.definition.retired",
+    "targetType": "objects.definition",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "revisionId": "id"
+    },
+    "after": null
+  },
+  {
+    "action": "objects.record.created",
+    "targetType": "objects.record",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "definitionId": "id",
+      "fieldIds": "listOf(id, max 128)",
+      "revisionId": "id",
+      "siteId": "id"
+    }
+  },
+  {
+    "action": "objects.record.deleted",
+    "targetType": "objects.record",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "definitionId": "id",
+      "siteId": "id"
+    },
+    "after": null
+  },
+  {
+    "action": "objects.record.updated",
+    "targetType": "objects.record",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": {
+      "revisionId": "id"
+    },
+    "after": {
+      "fieldIds": "listOf(id, max 128)",
+      "revisionId": "id"
+    }
+  },
+  {
+    "action": "objects.revision.saved",
+    "targetType": "objects.revision",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "definitionId": "id",
+      "number": "integer"
+    }
+  },
+  {
+    "action": "objects.revision.sensitivity-lowered",
+    "targetType": "objects.revision",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "definitionId": "id",
+      "fieldIds": "listOf(id, max 128)"
+    }
+  },
+  {
     "action": "process.calendar.changed",
     "targetType": "process.calendar",
     "targetId": "enumOf(tenant)",
