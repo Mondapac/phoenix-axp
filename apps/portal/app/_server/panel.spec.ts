@@ -4,7 +4,13 @@ import { apiUrlOf, readPanelServerConfig } from '@phoenix/panel-server';
 
 jest.mock('next/headers', () => ({ headers: () => Promise.resolve(new Headers()) }));
 
-import { ANONYMOUS_API_PREFIXES, PORTAL_API_PREFIXES, startsWithAny } from './panel';
+import {
+  ANONYMOUS_API_PREFIXES,
+  PORTAL_API_PREFIXES,
+  portalServerConfig,
+  relayedRequest,
+  startsWithAny,
+} from './panel';
 
 const config = readPanelServerConfig(
   {
@@ -39,5 +45,43 @@ describe('the portal relay allow-list', () => {
       expect(startsWithAny(['identity', 'portal', route], ANONYMOUS_API_PREFIXES)).toBe(true);
     }
     expect(startsWithAny(['identity', 'portal', 'sign-out'], ANONYMOUS_API_PREFIXES)).toBe(false);
+  });
+});
+
+describe('the portal configuration', () => {
+  const env = {
+    PHOENIX_API_URL: 'http://api.internal:3000/',
+    PORTAL_TENANT_HOSTS: 'portal.fa.test=demo-fa,portal.en.test:3002=demo-en',
+  };
+
+  it('needs a proxy that writes the visitor address in production', () => {
+    expect(() => portalServerConfig({ ...env, NODE_ENV: 'production' })).toThrow(
+      'PANEL_PROXY_HOPS',
+    );
+    expect(
+      portalServerConfig({ ...env, NODE_ENV: 'production', PANEL_PROXY_HOPS: '1' }).proxyHops,
+    ).toBe(1);
+    expect(portalServerConfig({ ...env, NODE_ENV: 'development' }).proxyHops).toBe(0);
+  });
+});
+
+describe('relayedRequest', () => {
+  const browser = () =>
+    new Request('http://portal.fa.test/api/identity/portal/code', {
+      method: 'POST',
+      headers: { cookie: '__Host-phoenix-portal=stale', origin: 'http://portal.fa.test' },
+      body: JSON.stringify({ method: 'email' }),
+    });
+
+  it('drops the cookies of an anonymous sign-in route and keeps the rest', async () => {
+    const relayed = relayedRequest(browser(), ['identity', 'portal', 'code']);
+    expect(relayed.headers.get('cookie')).toBeNull();
+    expect(relayed.headers.get('origin')).toBe('http://portal.fa.test');
+    expect(await relayed.text()).toBe('{"method":"email"}');
+  });
+
+  it('keeps the session cookie of sign-out', () => {
+    const relayed = relayedRequest(browser(), ['identity', 'portal', 'sign-out']);
+    expect(relayed.headers.get('cookie')).toBe('__Host-phoenix-portal=stale');
   });
 });

@@ -414,6 +414,13 @@ function messagingIssues(env: Record<string, string | undefined>, nodeEnv: strin
       issues.push(`TRUSTED_PROXIES: "${entry}" must be an IP address or CIDR range`);
     }
   }
+  // Behind the portal BFF the socket is the BFF's: without its address here, every visitor of a
+  // tenant would share one bucket of the sign-in rate limits.
+  if (nodeEnv === 'production' && env.SMTP_URL && listOf(env.TRUSTED_PROXIES).length === 0) {
+    issues.push(
+      'TRUSTED_PROXIES: required in production with SMTP_URL (portal sign-in limits each visitor by address, ADR-0026)',
+    );
+  }
   if (env.SMS_PROVIDER === 'mail-relay') {
     if (nodeEnv === 'production') {
       issues.push('SMS_PROVIDER: "mail-relay" is for development and tests only');

@@ -113,9 +113,18 @@ class ReplyReader {
     });
   }
 
-  detach(socket: Socket | TLSSocket): void {
+  /**
+   * Stops reading `socket` before a STARTTLS upgrade. False when the server sent anything after
+   * its STARTTLS reply: plaintext injected before the handshake (RFC 3207 section 6), which
+   * must never be read as an answer over TLS.
+   */
+  detach(socket: Socket | TLSSocket): boolean {
     socket.removeAllListeners('data');
+    const clean = this.#buffer === '' && this.#lines.length === 0 && this.#pending.length === 0;
     this.#buffer = '';
+    this.#lines = [];
+    this.#pending = [];
+    return clean;
   }
 
   fail(error: Error): void {
@@ -194,9 +203,14 @@ export async function sendSmtp(
       if (offersTls) {
         write('STARTTLS');
         await expect([220], 'STARTTLS');
-        reader.detach(socket);
+        if (!reader.detach(socket)) {
+          throw new SmtpError('The mail server sent data after its STARTTLS reply');
+        }
         socket = await upgrade(socket, server);
         socket.on('error', () => reader.fail(new SmtpError('The mail server connection failed')));
+        socket.on('close', () =>
+          reader.fail(new SmtpError('The mail server closed the connection')),
+        );
         reader.attach(socket);
         write(`EHLO ${clientName}`);
         hello = await expect([250], 'EHLO');

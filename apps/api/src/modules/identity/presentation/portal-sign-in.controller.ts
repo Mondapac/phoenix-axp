@@ -114,10 +114,14 @@ export class PortalSignInController {
   @HttpCode(200)
   async signIn(
     @Call() context: CallContext,
+    @Req() request: Request,
     @Body() body: unknown,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.verifyCode.execute(context, parseRequest(signInBody, body));
+    const result = await this.verifyCode.execute(context, {
+      ...parseRequest(signInBody, body),
+      clientAddress: clientAddressOf(request),
+    });
     if (!result.ok) {
       // The reason code only: never the address or the code.
       this.#logger.warn({

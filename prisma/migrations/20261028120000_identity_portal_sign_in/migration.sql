@@ -72,6 +72,9 @@ ALTER TABLE "identity"."portal_sign_in_settings"
   ADD CONSTRAINT "portal_sign_in_settings_tenant_id_check" CHECK ("tenant_id" ~ '^[a-z][a-z0-9-]{1,31}$'),
   ADD CONSTRAINT "portal_sign_in_settings_methods_check" CHECK (
     "methods" IS NOT NULL AND "methods" <@ ARRAY['email', 'mobile']::VARCHAR(16)[] AND cardinality("methods") <= 2
+    -- Each method once: {email,email} is refused.
+    AND cardinality(array_positions("methods", 'email'::VARCHAR(16))) <= 1
+    AND cardinality(array_positions("methods", 'mobile'::VARCHAR(16))) <= 1
   ),
   ADD CONSTRAINT "portal_sign_in_settings_country_calling_code_check" CHECK (
     "country_calling_code" IS NULL OR "country_calling_code" ~ '^[1-9][0-9]{0,3}$'

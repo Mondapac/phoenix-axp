@@ -30,7 +30,11 @@ proof-of-work CAPTCHA, rate limits and per-subject keys (slice 2.5).
    needed. Only an HMAC of the code (keyed from `SESSION_SECRET`, bound to the challenge id)
    and an HMAC of the address are stored; the address itself is never stored with the code.
    A code request needs a solved proof-of-work challenge and passes three rate limits: per
-   address, per client network and per tenant (the last caps a tenant's SMS spend).
+   address, per client network and per tenant (the last caps a tenant's SMS spend). Answers
+   are limited per client network, never per address, so nobody who knows an address can lock
+   its owner out; each wrong answer counts against its code atomically. The client network is
+   the visitor's own only behind a proxy that writes `X-Forwarded-For`: production refuses an
+   API with mail but no `TRUSTED_PROXIES`, and a portal with `PANEL_PROXY_HOPS` 0.
 4. **Personal data.** The address is sealed under the account's subject key (ADR-0003); its
    lookup is a keyed hash (blind index) derived from the subject-key KEK, unique per tenant and
    kind. Addresses never reach logs, audit values or events.

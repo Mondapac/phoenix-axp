@@ -2,7 +2,11 @@ import { err, ok, Temporal } from '@phoenix/shared-kernel';
 import type { CallContext, Clock, Id, IdGenerator, Result } from '@phoenix/shared-kernel';
 import { UseCase, type AccessDeclaration, type UseCaseGate } from '../../../../platform/authz';
 import type { AuditWriter } from '../../../../platform/audit/audit-writer';
-import type { RateLimited, RateLimiter } from '../../../../platform/rate-limit';
+import {
+  addressNetwork,
+  type RateLimited,
+  type RateLimiter,
+} from '../../../../platform/rate-limit';
 import type { SubjectKeyService } from '../../../../platform/subject-keys';
 import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work';
 import { ACCOUNT_PROVISIONED, SESSION_STARTED } from '../../domain/audit-actions';
@@ -24,7 +28,7 @@ import {
   type PortalAccountDisabled,
   type PortalUnavailable,
 } from '../portal/portal-failures';
-import { ANSWERS_PER_ADDRESS, PORTAL_ADDRESS_INDEX } from '../portal/portal-limits';
+import { ANSWERS_PER_CLIENT, PORTAL_ADDRESS_INDEX } from '../portal/portal-limits';
 import type { PortalRepository } from '../portal/portal.repository';
 import type { SessionRepository } from '../session.repository';
 import { newSessionToken, sessionTokenHash } from '../session-token';
@@ -35,6 +39,8 @@ export interface VerifyPortalCodeInput {
   readonly method: PortalMethod;
   readonly address: string;
   readonly code: string;
+  /** The client's address, for the rate limit only; never stored. */
+  readonly clientAddress: string;
 }
 
 export type VerifyPortalCodeFailure =
@@ -54,8 +60,9 @@ type Checked =
  * Checks a one-time code and signs the portal user in (ADR-0026 decisions 1, 3 to 5): the
  * first right code for an address creates its portal account, with the address sealed under
  * the account's own subject key; every right code starts a session. A wrong answer counts
- * against the code (spent at {@link MAX_CODE_FAILURES}) and, through a rate limit, against the
- * address across its codes. Every wrong, expired, spent or foreign code answers the same.
+ * against the code (spent at {@link MAX_CODE_FAILURES}); every answer counts, through a rate
+ * limit, against the client's network. Every wrong, expired, spent or foreign code answers
+ * the same.
  * `anonymous`: the visitor has no session yet.
  */
 export class VerifyPortalCode extends UseCase<
@@ -109,8 +116,8 @@ export class VerifyPortalCode extends UseCase<
     );
     const limited = await this.limiter.consume(
       tenant,
-      ANSWERS_PER_ADDRESS,
-      `address:${lookupHash.toString('hex')}`,
+      ANSWERS_PER_CLIENT,
+      `client:${addressNetwork(input.clientAddress)}`,
     );
     if (!limited.ok) return limited;
     const candidate = this.codes.hash(tenant, input.challengeId, input.code);
@@ -133,15 +140,7 @@ export class VerifyPortalCode extends UseCase<
         return err(CODE_INVALID);
       }
       if (!PortalCodes.matches(code.codeHash, candidate)) {
-        const failures = code.failures + 1;
-        // A concurrent answer that changed the code first leaves this one uncounted here; the
-        // per-address rate limit still counted it.
-        await this.portal.recordFailure(
-          tenant,
-          code.id,
-          code.failures,
-          failures >= MAX_CODE_FAILURES ? now : null,
-        );
+        await this.portal.recordFailure(tenant, code.id, MAX_CODE_FAILURES, now);
         return ok({ kind: 'wrong' });
       }
       // Conditional: of two right answers at once, one signs in.

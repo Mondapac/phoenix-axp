@@ -440,6 +440,18 @@ describe('loadAppConfig', () => {
       expect(
         issuesOf({ HOSTED_TENANTS: 'demo-fa', NODE_ENV: 'production', SMS_PROVIDER: 'mail-relay' }),
       ).toContain('SMS_PROVIDER: "mail-relay" is for development and tests only');
+      const productionMail = {
+        HOSTED_TENANTS: 'demo-fa',
+        NODE_ENV: 'production',
+        SMTP_URL: 'smtps://mail.example.test',
+        MAIL_FROM: 'no-reply@example.test',
+      };
+      const trustedProxies =
+        'TRUSTED_PROXIES: required in production with SMTP_URL (portal sign-in limits each visitor by address, ADR-0026)';
+      expect(issuesOf(productionMail)).toContain(trustedProxies);
+      expect(issuesOf({ ...productionMail, TRUSTED_PROXIES: '10.0.0.5' })).not.toContain(
+        trustedProxies,
+      );
       expect(
         issuesOf({ HOSTED_TENANTS: 'demo-fa', TRUSTED_PROXIES: '10.0.0.0/40,example' }),
       ).toEqual(

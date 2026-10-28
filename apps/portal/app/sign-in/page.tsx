@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardTitle, EmptyState } from '@phoenix/ui';
+import { redirect } from 'next/navigation';
 import { messagesFor } from '../_i18n/messages';
 import { readApi, tenantPresentation } from '../_server/panel';
 import { SignInFlow, type PortalMethod } from './sign-in-flow';
@@ -15,10 +16,13 @@ interface SignInOptions {
 export const dynamic = 'force-dynamic';
 
 export default async function SignInPage() {
-  const [tenant, options] = await Promise.all([
+  const [tenant, options, me] = await Promise.all([
     tenantPresentation(),
     readApi<SignInOptions>('identity/portal/sign-in-options', { anonymous: true }),
+    readApi<unknown>('identity/portal/me'),
   ]);
+  // Already signed in: the account page.
+  if (me.ok) redirect('/');
   if (!options.ok) throw new Error(`identity/portal/sign-in-options answered ${options.status}`);
   const t = messagesFor(tenant.defaultLocale);
   return (

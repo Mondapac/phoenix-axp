@@ -1,4 +1,5 @@
 import {
+  PanelConfigError,
   readFromApi,
   readPanelServerConfig,
   type ApiRead,
@@ -11,9 +12,24 @@ import { headers } from 'next/headers';
 
 let config: PanelServerConfig | undefined;
 
+/**
+ * The portal's configuration from `env`. In production the portal must sit behind a proxy that
+ * writes the visitor's address (`PANEL_PROXY_HOPS` 1 or more): without it the API's sign-in
+ * limits would count every visitor of the tenant as one (ADR-0026 decision 3).
+ */
+export function portalServerConfig(
+  env: Readonly<Record<string, string | undefined>>,
+): PanelServerConfig {
+  const read = readPanelServerConfig(env, 'PORTAL_TENANT_HOSTS');
+  if (env.NODE_ENV === 'production' && read.proxyHops === 0) {
+    throw new PanelConfigError('PANEL_PROXY_HOPS must be 1 or more for the portal in production');
+  }
+  return read;
+}
+
 /** Read on first use, so `next build` needs no environment; a bad setting fails the request. */
 export function portalConfig(): PanelServerConfig {
-  config ??= readPanelServerConfig(process.env, 'PORTAL_TENANT_HOSTS');
+  config ??= portalServerConfig(process.env);
   return config;
 }
 
@@ -46,6 +62,14 @@ export function startsWithAny(
   return prefixes.some(
     (prefix) => prefix.length > 0 && prefix.every((part, index) => segments[index] === part),
   );
+}
+
+/** `request` as the relay forwards it: without its cookies on an anonymous sign-in route. */
+export function relayedRequest(request: Request, segments: readonly string[]): Request {
+  if (!startsWithAny(segments, ANONYMOUS_API_PREFIXES)) return request;
+  const headers = new Headers(request.headers);
+  headers.delete('cookie');
+  return new Request(request, { headers });
 }
 
 /**

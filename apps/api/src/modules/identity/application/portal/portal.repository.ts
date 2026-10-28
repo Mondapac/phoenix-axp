@@ -52,15 +52,15 @@ export interface PortalRepository {
   ): Promise<void>;
   findCode(tenant: TenantContext, id: Id<'PortalCode'>): Promise<StoredPortalCode | null>;
   /**
-   * Counts a wrong answer if the code still has `expectedFailures` and is unspent; `spentAt`
-   * spends it with it. False when a concurrent answer changed it first.
+   * Counts a wrong answer against an unspent code, atomically (concurrent answers each count),
+   * and spends the code at its `maxFailures`-th.
    */
   recordFailure(
     tenant: TenantContext,
     id: Id<'PortalCode'>,
-    expectedFailures: number,
-    spentAt: Temporal.Instant | null,
-  ): Promise<boolean>;
+    maxFailures: number,
+    at: Temporal.Instant,
+  ): Promise<void>;
   /** Spends an unspent code; false when a concurrent answer spent it first. */
   spendCode(tenant: TenantContext, id: Id<'PortalCode'>, at: Temporal.Instant): Promise<boolean>;
   /** Deletes the codes that expired before `before`; how many. */

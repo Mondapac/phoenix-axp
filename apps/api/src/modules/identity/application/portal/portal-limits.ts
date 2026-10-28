@@ -30,10 +30,14 @@ export const CODES_PER_TENANT: RateLimitRule = Object.freeze({
   windowSeconds: 3600,
 });
 
-/** Answers tried for one address, across its codes: 10 per hour. */
-export const ANSWERS_PER_ADDRESS: RateLimitRule = Object.freeze({
-  name: 'identity.portal-answer-address',
-  limit: 10,
+/**
+ * Answers tried from one client network: 120 per hour. Not per address: a limit keyed on the
+ * address would let anyone who knows it lock its owner out. A code's own cap
+ * (MAX_CODE_FAILURES) and the codes per address bound the guesses on one address.
+ */
+export const ANSWERS_PER_CLIENT: RateLimitRule = Object.freeze({
+  name: 'identity.portal-answer-client',
+  limit: 120,
   windowSeconds: 3600,
 });
 

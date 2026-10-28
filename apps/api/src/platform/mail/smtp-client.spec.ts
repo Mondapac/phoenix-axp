@@ -13,6 +13,7 @@ interface Session {
 function scriptedServer(options: {
   readonly startTls?: boolean;
   readonly refuseRecipient?: boolean;
+  readonly injectAfterStartTls?: boolean;
 }) {
   const sessions: Session[] = [];
   const server: Server = createServer((socket: Socket) => {
@@ -42,6 +43,9 @@ function scriptedServer(options: {
           socket.write(
             `250-test\r\n${options.startTls ? '250-STARTTLS\r\n' : ''}250 AUTH PLAIN\r\n`,
           );
+        } else if (verb === 'STARTTLS' && options.injectAfterStartTls) {
+          // A man in the middle appends a plaintext reply after the server's 220.
+          socket.write('220 go ahead\r\n250 injected\r\n');
         } else if (verb === 'AUTH') socket.write('235 ok\r\n');
         else if (verb === 'MAIL') socket.write('250 ok\r\n');
         else if (verb === 'RCPT')
@@ -123,6 +127,19 @@ describe('the SMTP client', () => {
       ).rejects.toThrow('The mail server offers no STARTTLS');
     } finally {
       refusing.server.close();
+    }
+  });
+
+  it('refuses a server that sends anything after its STARTTLS reply', async () => {
+    const { server, sessions } = scriptedServer({ startTls: true, injectAfterStartTls: true });
+    const port = await listen(server);
+    try {
+      await expect(sendSmtp(serverOf(port), message, 'example.test')).rejects.toThrow(
+        'The mail server sent data after its STARTTLS reply',
+      );
+      expect(sessions[0]!.commands).toEqual(['EHLO example.test', 'STARTTLS']);
+    } finally {
+      server.close();
     }
   });
 

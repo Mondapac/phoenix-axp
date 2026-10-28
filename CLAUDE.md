@@ -78,7 +78,8 @@ change one only through a new ADR or an "Amended by" note.
 ## Identity and authorisation (hybrid, ADR-0004; MP ADR-0018 for sessions and authz)
 - Authentication: Keycloak (OIDC Authorization Code + PKCE) for SSO, LDAP/AD, SAML, MFA.
   Keycloak answers "who are you" only; it holds no roles or permissions. MFA is mandatory for
-  administrators.
+  administrators. Portal users sign in with one-time codes (email or SMS) verified by the
+  core, not Keycloak (ADR-0026).
 - After sign-in: opaque server-side session in PostgreSQL (only the SHA-256 of the token is
   stored), no session or permission cache, `__Host-` cookies (`SameSite=Strict` for admin),
   CSRF = HMAC of the session token + Origin check, one host per panel; the BFF sets

@@ -122,17 +122,19 @@ export class PrismaPortalRepository implements PortalRepository {
   async recordFailure(
     tenant: TenantContext,
     id: Id<'PortalCode'>,
-    expectedFailures: number,
-    spentAt: Temporal.Instant | null,
-  ): Promise<boolean> {
-    const { count } = await this.prisma.tx(tenant).portalCode.updateMany({
-      where: { tenantId: tenant.tenantId, id, failures: expectedFailures, spentAt: null },
-      data: {
-        failures: expectedFailures + 1,
-        ...(spentAt === null ? {} : { spentAt: dateOf(spentAt) }),
-      },
+    maxFailures: number,
+    at: Temporal.Instant,
+  ): Promise<void> {
+    const tx = this.prisma.tx(tenant);
+    // `failures = failures + 1` under the row lock of the update: no answer goes uncounted.
+    await tx.portalCode.updateMany({
+      where: { tenantId: tenant.tenantId, id, spentAt: null, failures: { lt: maxFailures } },
+      data: { failures: { increment: 1 } },
     });
-    return count === 1;
+    await tx.portalCode.updateMany({
+      where: { tenantId: tenant.tenantId, id, spentAt: null, failures: { gte: maxFailures } },
+      data: { spentAt: dateOf(at) },
+    });
   }
 
   async spendCode(

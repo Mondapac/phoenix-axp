@@ -184,7 +184,7 @@ model DirectorySync {
 
 /// The portal sign-in settings of a tenant (ADR-0026 decision 2; owner decision P1). No row
 /// means no method: a tenant's portal sign-in is closed until staff open it. Versioning
-/// (ADR-0007): a mutable settings row with `version`; its history is the audit log
+/// (ADR-0007, V1): a mutable settings row with `version`; its history is the audit log
 /// (`identity.portal-sign-in.settings-changed`).
 model PortalSignInSettings {
   tenantId           String   @id @map("tenant_id") @db.VarChar(32)
@@ -202,7 +202,7 @@ model PortalSignInSettings {
 
 /// The address a portal user signs in with (ADR-0026 decision 4): sealed under the account's
 /// subject key, found by its keyed hash. One per kind and account; an address belongs to one
-/// account of the tenant. Versioning (ADR-0007): inserted, never updated.
+/// account of the tenant. Versioning (ADR-0007, V4): append-only, inserted and never updated.
 model PortalContact {
   tenantId   String   @map("tenant_id") @db.VarChar(32)
   accountId  String   @map("account_id") @db.Uuid
@@ -222,8 +222,9 @@ model PortalContact {
 }
 
 /// A one-time sign-in code sent to an address (ADR-0026 decision 3). Neither the code nor the
-/// address is stored: only their keyed hashes. Versioning (ADR-0007): a short-lived row,
-/// updated as answers are tried and deleted by the prune job a day after it expires.
+/// address is stored: only their keyed hashes. Versioning (ADR-0007): none of V1 to V4, a
+/// recorded exception (ADR-0026): an ephemeral credential, updated as answers are tried and
+/// deleted by the prune job a day after it expires; its effects are audited (session started).
 model PortalCode {
   /// UUIDv7 from the IdGenerator; the browser holds it between the two steps.
   id         String    @id @db.Uuid

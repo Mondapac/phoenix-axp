@@ -349,6 +349,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     const wrong = String((Number(mail.codeTo(address)) + 1) % 1_000_000).padStart(6, '0');
     expect(
       await portal.verify.execute(anonymous(), {
+        clientAddress: client(),
         challengeId: first,
         method: 'email',
         address,
@@ -357,6 +358,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     ).toEqual({ ok: false, error: { code: 'portal.code-invalid' } });
 
     const signedUp = await portal.verify.execute(anonymous(), {
+      clientAddress: client(),
       challengeId: first,
       method: 'email',
       address,
@@ -414,6 +416,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     // A spent code does not sign in twice; a second code signs in to the same account.
     expect(
       await portal.verify.execute(anonymous(), {
+        clientAddress: client(),
         challengeId: first,
         method: 'email',
         address,
@@ -422,6 +425,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     ).toEqual({ ok: false, error: { code: 'portal.code-invalid' } });
     const second = await sentCode('email', address);
     const again = await portal.verify.execute(anonymous(), {
+      clientAddress: client(),
       challengeId: second,
       method: 'email',
       address,
@@ -443,10 +447,72 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
       .slice(1);
     const relayed = `sms+${mobile.code}${digits}@sms.invalid`;
     const signedIn = await portal.verify.execute(anonymous(), {
+      clientAddress: client(),
       challengeId: id,
       method: 'mobile',
       address: `+${mobile.code}${digits}`,
       code: mail.codeTo(relayed),
+    });
+    expect(signedIn.ok).toBe(true);
+  });
+
+  it('counts every one of concurrent wrong answers', async () => {
+    await openPortal();
+    const address = email();
+    const id = await sentCode('email', address);
+    const right = mail.codeTo(address);
+    const wrong = right === '000000' ? '000001' : '000000';
+    await Promise.all(
+      Array.from({ length: 5 }, () =>
+        portal.verify.execute(anonymous(), {
+          clientAddress: client(),
+          challengeId: id,
+          method: 'email',
+          address,
+          code: wrong,
+        }),
+      ),
+    );
+    const [row] = await sql<{ failures: number; spent_at: Date | null }>(
+      tenant,
+      'SELECT failures, spent_at FROM identity.portal_code WHERE id = $1',
+      [id],
+    );
+    expect(row!.failures).toBe(5);
+    expect(row!.spent_at).not.toBeNull();
+  });
+
+  it('lets no one lock an address out by answering for it, and limits answers per network', async () => {
+    await openPortal();
+    const victim = email();
+    const attacker = `203.0.113.${Math.floor(Math.random() * 250) + 1}`;
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      expect(
+        await portal.verify.execute(anonymous(), {
+          clientAddress: attacker,
+          challengeId: ids.next<'PortalCode'>(),
+          method: 'email',
+          address: victim,
+          code: '123456',
+        }),
+      ).toEqual({ ok: false, error: { code: 'portal.code-invalid' } });
+    }
+    const limited = await portal.verify.execute(anonymous(), {
+      clientAddress: attacker,
+      challengeId: ids.next<'PortalCode'>(),
+      method: 'email',
+      address: victim,
+      code: '123456',
+    });
+    expect(limited.ok ? null : limited.error.code).toBe('rate-limit.exceeded');
+
+    const id = await sentCode('email', victim);
+    const signedIn = await portal.verify.execute(anonymous(), {
+      clientAddress: client(),
+      challengeId: id,
+      method: 'email',
+      address: victim,
+      code: mail.codeTo(victim),
     });
     expect(signedIn.ok).toBe(true);
   });
@@ -459,6 +525,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     const wrong = right === '000000' ? '000001' : '000000';
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await portal.verify.execute(anonymous(), {
+        clientAddress: client(),
         challengeId: id,
         method: 'email',
         address,
@@ -474,6 +541,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     expect(row!.spent_at).not.toBeNull();
     expect(
       await portal.verify.execute(anonymous(), {
+        clientAddress: client(),
         challengeId: id,
         method: 'email',
         address,
@@ -487,6 +555,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     try {
       expect(
         await portal.verify.execute(anonymous(), {
+          clientAddress: client(),
           challengeId: lateId,
           method: 'email',
           address: late,
@@ -505,6 +574,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     const code = mail.codeTo(address);
     expect(
       await portal.verify.execute(anonymous(), {
+        clientAddress: client(),
         challengeId: id,
         method: 'email',
         address: email(),
@@ -513,6 +583,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     ).toEqual({ ok: false, error: { code: 'portal.code-invalid' } });
     // Another tenant does not find the code (row-level security and the tenant guard).
     const elsewhere = await portal.verify.execute(anonymous(other), {
+      clientAddress: client(),
       challengeId: id,
       method: 'email',
       address,
@@ -540,6 +611,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     ).toEqual({ ok: false, error: { code: 'captcha.invalid' } });
 
     const signedUp = await portal.verify.execute(anonymous(), {
+      clientAddress: client(),
       challengeId: id,
       method: 'email',
       address,
@@ -558,6 +630,7 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
     const next = await sentCode('email', address);
     expect(
       await portal.verify.execute(anonymous(), {
+        clientAddress: client(),
         challengeId: next,
         method: 'email',
         address,
@@ -584,6 +657,63 @@ describe.each(TEST_TENANTS)('portal sign-in in tenant %s (database integration)'
       ok: false,
       error: { code: 'identity.value.invalid', field: 'address' },
     });
+  });
+
+  it('signs in once when the right answer arrives twice at once', async () => {
+    await openPortal();
+    const address = email();
+    const id = await sentCode('email', address);
+    const answer = () =>
+      portal.verify.execute(anonymous(), {
+        clientAddress: client(),
+        challengeId: id,
+        method: 'email',
+        address,
+        code: mail.codeTo(address),
+      });
+    const results = await Promise.all([answer(), answer()]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.find((result) => !result.ok)).toEqual({
+      ok: false,
+      error: { code: 'portal.code-invalid' },
+    });
+  });
+
+  it('refuses a method named twice in the database', async () => {
+    await openPortal();
+    await expect(
+      sql(
+        tenant,
+        "UPDATE identity.portal_sign_in_settings SET methods = '{email,email}' WHERE tenant_id = $1",
+        [tenant.tenantId],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+  });
+
+  it.each([
+    ['a staff account without a username', 'tenant-staff', 'local', null, null],
+    ['a portal account with a username', 'portal-user', 'one-time-code', null, 'visitor'],
+    ['a portal account with a subject', 'portal-user', 'one-time-code', 'kc-subject', null],
+    ['a staff account signing in by code', 'tenant-staff', 'one-time-code', null, 'staff'],
+    ['a portal account of the directory', 'portal-user', 'directory', 'kc-subject', null],
+  ])('refuses %s in the database', async (_name, population, source, subject, username) => {
+    await expect(
+      sql(
+        tenant,
+        `INSERT INTO identity.account
+           (id, tenant_id, population, source, subject, username, status, version, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'active', 1, $7, $7)`,
+        [
+          ids.next<'Account'>(),
+          tenant.tenantId,
+          population,
+          source,
+          subject,
+          username,
+          '2026-10-28T10:00:00Z',
+        ],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
   });
 
   it('prunes codes a day after they expired', async () => {
