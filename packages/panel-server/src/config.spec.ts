@@ -57,4 +57,19 @@ describe('the panel server configuration', () => {
     );
     expect(read.apiUrl.href).toBe('https://core.internal/api/');
   });
+
+  it('reads PANEL_PROXY_HOPS, 0 when unset, and refuses anything but 0 to 5', () => {
+    const read = (hops: string | undefined) =>
+      readPanelServerConfig(
+        {
+          PHOENIX_API_URL: 'http://api.internal/',
+          HOSTS: 'a.test=demo-fa',
+          PANEL_PROXY_HOPS: hops,
+        },
+        'HOSTS',
+      ).proxyHops;
+    expect(read(undefined)).toBe(0);
+    expect(read('1')).toBe(1);
+    for (const bad of ['-1', '6', '1.5', 'one']) expect(() => read(bad)).toThrow(PanelConfigError);
+  });
 });

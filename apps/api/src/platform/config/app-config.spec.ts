@@ -54,10 +54,18 @@ describe('loadAppConfig', () => {
       databaseUrl: DATABASE_URL,
       databasePoolMax: 10,
       storage: null,
-      session: { secret: config.session.secret, panelOrigins: [], staffSessionHours: 8 },
+      session: {
+        secret: config.session.secret,
+        panelOrigins: [],
+        staffSessionHours: 8,
+        portalSessionHours: 24,
+      },
       keycloak: null,
       subjectKeyKek: null,
       flowable: null,
+      mail: null,
+      smsProvider: 'none',
+      trustedProxies: [],
     });
     expect(config.session.secret).toHaveLength(32);
     expect(Object.isFrozen(config)).toBe(true);
@@ -284,6 +292,7 @@ describe('loadAppConfig', () => {
         secret: Buffer.alloc(32, 7),
         panelOrigins: ['https://studio.example.test', 'http://localhost:3001'],
         staffSessionHours: 4,
+        portalSessionHours: 24,
       });
       expect(config.keycloak).toEqual({
         url: 'https://sso.example.test',
@@ -387,6 +396,76 @@ describe('loadAppConfig', () => {
         KEYCLOAK_STUDIO_CLIENT_SECRET: 'top-secret',
       });
       expect(issues.join('\n')).not.toContain('top-secret');
+    });
+  });
+  describe('mail, SMS and trusted proxies (ADR-0026)', () => {
+    it('reads SMTP_URL and MAIL_FROM together; STARTTLS is required in production', () => {
+      const config = loadAppConfig({
+        HOSTED_TENANTS: 'demo-fa',
+        SMTP_URL: 'smtp://mailer:p%40ss@mail.example.test:2525',
+        MAIL_FROM: 'portal@example.test',
+        SMS_PROVIDER: 'mail-relay',
+        TRUSTED_PROXIES: '10.0.0.5, 10.1.0.0/16,::1',
+      });
+      expect(config.mail).toEqual({
+        server: {
+          host: 'mail.example.test',
+          port: 2525,
+          implicitTls: false,
+          requireTls: false,
+          auth: { user: 'mailer', password: 'p@ss' },
+          timeoutMs: 10_000,
+        },
+        from: 'portal@example.test',
+        clientName: 'example.test',
+      });
+      expect(config.smsProvider).toBe('mail-relay');
+      expect(config.trustedProxies).toEqual(['10.0.0.5', '10.1.0.0/16', '::1']);
+      expect(
+        loadAppConfig({
+          HOSTED_TENANTS: 'demo-fa',
+          SMTP_URL: 'smtps://mail.example.test',
+          MAIL_FROM: 'portal@example.test',
+        }).mail?.server,
+      ).toMatchObject({ port: 465, implicitTls: true, auth: null });
+    });
+
+    it('refuses half a mail setting, the mail relay in production, and a bad proxy', () => {
+      expect(
+        issuesOf({ HOSTED_TENANTS: 'demo-fa', SMTP_URL: 'smtp://mail.example.test' }),
+      ).toContain('SMTP_URL and MAIL_FROM: set both or neither (outgoing mail, ADR-0026)');
+      expect(issuesOf({ HOSTED_TENANTS: 'demo-fa', SMS_PROVIDER: 'mail-relay' })).toContain(
+        'SMS_PROVIDER: "mail-relay" needs SMTP_URL and MAIL_FROM',
+      );
+      expect(
+        issuesOf({ HOSTED_TENANTS: 'demo-fa', NODE_ENV: 'production', SMS_PROVIDER: 'mail-relay' }),
+      ).toContain('SMS_PROVIDER: "mail-relay" is for development and tests only');
+      const productionMail = {
+        HOSTED_TENANTS: 'demo-fa',
+        NODE_ENV: 'production',
+        SMTP_URL: 'smtps://mail.example.test',
+        MAIL_FROM: 'no-reply@example.test',
+      };
+      const trustedProxies =
+        'TRUSTED_PROXIES: required in production with SMTP_URL (portal sign-in limits each visitor by address, ADR-0026)';
+      expect(issuesOf(productionMail)).toContain(trustedProxies);
+      expect(issuesOf({ ...productionMail, TRUSTED_PROXIES: '10.0.0.5' })).not.toContain(
+        trustedProxies,
+      );
+      expect(
+        issuesOf({ HOSTED_TENANTS: 'demo-fa', TRUSTED_PROXIES: '10.0.0.0/40,example' }),
+      ).toEqual(
+        expect.arrayContaining([
+          'TRUSTED_PROXIES: "10.0.0.0/40" must be an IP address or CIDR range',
+          'TRUSTED_PROXIES: "example" must be an IP address or CIDR range',
+        ]),
+      );
+      const issues = issuesOf({
+        HOSTED_TENANTS: 'demo-fa',
+        SMTP_URL: 'smtp://mailer:very-secret@:25',
+        MAIL_FROM: 'portal@example.test',
+      });
+      expect(issues.join('\n')).not.toContain('very-secret');
     });
   });
 });

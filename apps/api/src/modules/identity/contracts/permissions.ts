@@ -47,10 +47,22 @@ export const IDENTITY_ROLE_ASSIGNMENTS_MANAGE = definePermission('identity', {
   protected: true,
 });
 
+/**
+ * See and change how portal users sign in (ADR-0026 decision 2): which methods the tenant
+ * offers, and its country calling code. Opening a method lets the public request codes the
+ * tenant pays to send.
+ */
+export const IDENTITY_PORTAL_SIGN_IN_MANAGE = definePermission('identity', {
+  key: 'identity.portal-sign-in.manage',
+  scope: 'tenant',
+  protected: false,
+});
+
 export const IDENTITY_PERMISSIONS = declarePermissions('identity', [
   IDENTITY_ACCOUNTS_VIEW,
   IDENTITY_ACCOUNTS_MANAGE,
   IDENTITY_ROLES_VIEW,
   IDENTITY_ROLES_MANAGE,
   IDENTITY_ROLE_ASSIGNMENTS_MANAGE,
+  IDENTITY_PORTAL_SIGN_IN_MANAGE,
 ]);

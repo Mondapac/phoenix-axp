@@ -9,6 +9,12 @@ export interface PanelServerConfig {
   readonly apiUrl: URL;
   /** The panel's hosts (`host` or `host:port`, lower case) and the tenant each one serves. */
   readonly tenantHosts: ReadonlyMap<string, string>;
+  /**
+   * How many reverse proxies in front of the panel append to `X-Forwarded-For` (0: none, the
+   * panel is reached directly). With 0 the relay forwards no client address, since Next.js
+   * keeps a client's own header.
+   */
+  readonly proxyHops: number;
 }
 
 /** A missing or malformed setting: the panel does not start. */
@@ -31,7 +37,17 @@ export function readPanelServerConfig(
   return {
     apiUrl: parseApiUrl(env.PHOENIX_API_URL),
     tenantHosts: parseTenantHosts(env[hostsVariable], hostsVariable),
+    proxyHops: parseProxyHops(env.PANEL_PROXY_HOPS),
   };
+}
+
+/** `PANEL_PROXY_HOPS`: 0 to 5, 0 when unset. */
+function parseProxyHops(text: string | undefined): number {
+  if (text === undefined || text.trim() === '') return 0;
+  if (!/^[0-5]$/.test(text.trim())) {
+    throw new PanelConfigError('PANEL_PROXY_HOPS must be a whole number from 0 to 5');
+  }
+  return Number(text.trim());
 }
 
 function parseApiUrl(text: string | undefined): URL {

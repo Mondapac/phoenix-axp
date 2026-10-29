@@ -15,6 +15,7 @@ and transferable.
    core connects with OIDC Authorization Code + PKCE, starting from MondaPac's
    `oidc-sign-in-providers` adapter. Keycloak answers "who are you" only and holds no roles or
    permissions. MFA is mandatory for administrators (in Keycloak, or the organisation's IdP).
+   *(Amended by ADR-0026: the `portal-user` population signs in with one-time codes verified by the core, not through Keycloak.)*
 2. **Sessions in the core** (MondaPac): opaque server-side session in PostgreSQL storing only the
    SHA-256 of the token; no JWT in the browser; no session or permission cache — suspension,
    role removal and disabling apply on the next request; `__Host-` cookies, `SameSite=Strict`

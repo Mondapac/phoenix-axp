@@ -17,6 +17,7 @@ export {
 export {
   apiUrlOf,
   bffAnswer,
+  clientAddressOf,
   MAX_BODY_BYTES,
   readFromApi,
   relayToApi,

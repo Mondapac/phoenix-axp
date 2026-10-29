@@ -1,8 +1,11 @@
 import { randomBytes } from 'node:crypto';
+import { isIP } from 'node:net';
 import path from 'node:path';
 import { parseTenantId } from '@phoenix/shared-kernel';
 import type { TenantId } from '@phoenix/shared-kernel';
 import { z } from 'zod';
+import type { MailConfig } from '../mail/mail-sender';
+import { SMS_PROVIDERS, type SmsProvider } from '../sms/sms-sender';
 
 // apps/api/{src|dist}/platform/config -> repository root
 const DEFAULT_TENANT_CONFIG_DIR = path.resolve(__dirname, '../../../../../config/tenants');
@@ -76,6 +79,24 @@ const envSchema = z.object({
     .regex(/^[A-Za-z0-9_-]{43}$/, 'must be exactly 32 random bytes, base64url without padding')
     .optional(),
   STAFF_SESSION_HOURS: z.coerce.number().int().min(1).max(24).default(8),
+  PORTAL_SESSION_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  // Outgoing mail (ADR-0026 decision 6): the submission server and the sender, together, or
+  // none. `smtps://` is TLS from the start; `smtp://` upgrades with STARTTLS, which production
+  // requires.
+  SMTP_URL: z
+    .string()
+    .regex(/^smtps?:\/\/\S+$/, 'must be an smtp:// or smtps:// URL')
+    .optional(),
+  MAIL_FROM: z
+    .string()
+    .regex(/^[^\s<>()\\,;:"@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, 'must be a plain address')
+    .optional(),
+  // The proxies whose X-Forwarded-For names the client (the panels' BFFs), as IP addresses or
+  // CIDR ranges, comma-separated; none unless set. Read for rate limits only.
+  TRUSTED_PROXIES: z.string().optional(),
+  // Outgoing SMS (ADR-0026): none built in; `mail-relay` sends each text to the mail catcher,
+  // development and tests only.
+  SMS_PROVIDER: z.enum(SMS_PROVIDERS).default('none'),
   // Keycloak (ADR-0004 decision 1): the URL, the studio client's secret and its callback URL
   // together, or none.
   KEYCLOAK_URL: httpUrl.optional(),
@@ -173,6 +194,15 @@ export interface AppConfig {
    * it. Required in production.
    */
   readonly subjectKeyKek: Buffer | null;
+  /** Outgoing mail (`SMTP_URL` and `MAIL_FROM`), or `null`: every send then fails closed. */
+  readonly mail: MailConfig | null;
+  /** The SMS adapter (`SMS_PROVIDER`); `none` fails every send closed. */
+  readonly smsProvider: SmsProvider;
+  /**
+   * The BFF addresses whose `X-Forwarded-For` gives `req.ip` (`TRUSTED_PROXIES`); empty: the
+   * socket's address. For rate limits only.
+   */
+  readonly trustedProxies: readonly string[];
   /**
    * The process engine (Flowable REST, ADR-0005), or `null` when `FLOWABLE_*` is unset: then
    * every engine call fails as unavailable and process commands wait. Required in production.
@@ -201,6 +231,8 @@ export interface SessionConfig {
   readonly panelOrigins: readonly string[];
   /** How long a staff session lives, in hours (`STAFF_SESSION_HOURS`, 1 to 24, default 8). */
   readonly staffSessionHours: number;
+  /** How long a portal session lives, in hours (`PORTAL_SESSION_HOURS`, 1 to 168, default 24). */
+  readonly portalSessionHours: number;
 }
 
 export interface KeycloakConfig {
@@ -265,6 +297,7 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
     );
   }
   if (parsed.success) {
+    issues.push(...messagingIssues(env, parsed.data.NODE_ENV));
     issues.push(...storageIssues(env, parsed.data.NODE_ENV));
     issues.push(...sessionIssues(env, parsed.data.NODE_ENV));
     issues.push(...flowableIssues(env, parsed.data.NODE_ENV));
@@ -301,7 +334,14 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
           : Buffer.from(data.SESSION_SECRET, 'base64url'),
       panelOrigins: Object.freeze(originsOf(data.PANEL_ORIGINS)),
       staffSessionHours: data.STAFF_SESSION_HOURS,
+      portalSessionHours: data.PORTAL_SESSION_HOURS,
     }),
+    mail:
+      data.SMTP_URL && data.MAIL_FROM
+        ? mailConfigOf(data.SMTP_URL, data.MAIL_FROM, data.NODE_ENV)
+        : null,
+    smsProvider: data.SMS_PROVIDER,
+    trustedProxies: Object.freeze(listOf(data.TRUSTED_PROXIES)),
     keycloak:
       data.KEYCLOAK_URL && data.KEYCLOAK_STUDIO_CLIENT_SECRET && data.STUDIO_SIGN_IN_CALLBACK_URL
         ? Object.freeze({
@@ -326,6 +366,87 @@ export function loadAppConfig(env: Record<string, string | undefined>): AppConfi
           })
         : null,
   });
+}
+
+/** The mail settings of a valid `SMTP_URL` (credentials percent-decoded) and sender. */
+function mailConfigOf(smtpUrl: string, from: string, nodeEnv: string): MailConfig {
+  const url = new URL(smtpUrl);
+  const implicitTls = url.protocol === 'smtps:';
+  return Object.freeze({
+    server: Object.freeze({
+      host: url.hostname,
+      port: url.port === '' ? (implicitTls ? 465 : 587) : Number(url.port),
+      implicitTls,
+      requireTls: nodeEnv === 'production',
+      auth:
+        url.username === ''
+          ? null
+          : Object.freeze({
+              user: decodeURIComponent(url.username),
+              password: decodeURIComponent(url.password),
+            }),
+      timeoutMs: 10_000,
+    }),
+    from,
+    clientName: from.slice(from.indexOf('@') + 1),
+  });
+}
+
+/**
+ * Mail's variables together; SMS through the mail catcher never in production, and only with
+ * mail configured.
+ */
+function messagingIssues(env: Record<string, string | undefined>, nodeEnv: string): string[] {
+  const issues: string[] = [];
+  if (Boolean(env.SMTP_URL) !== Boolean(env.MAIL_FROM)) {
+    issues.push('SMTP_URL and MAIL_FROM: set both or neither (outgoing mail, ADR-0026)');
+  }
+  if (env.SMTP_URL) {
+    try {
+      const url = new URL(env.SMTP_URL);
+      if (url.hostname === '' || (url.port !== '' && Number(url.port) > 65535)) throw new Error();
+    } catch {
+      issues.push('SMTP_URL: must name a host, as smtp://user:password@host:port');
+    }
+  }
+  for (const entry of listOf(env.TRUSTED_PROXIES)) {
+    if (!isAddressOrRange(entry)) {
+      issues.push(`TRUSTED_PROXIES: "${entry}" must be an IP address or CIDR range`);
+    }
+  }
+  // Behind the portal BFF the socket is the BFF's: without its address here, every visitor of a
+  // tenant would share one bucket of the sign-in rate limits.
+  if (nodeEnv === 'production' && env.SMTP_URL && listOf(env.TRUSTED_PROXIES).length === 0) {
+    issues.push(
+      'TRUSTED_PROXIES: required in production with SMTP_URL (portal sign-in limits each visitor by address, ADR-0026)',
+    );
+  }
+  if (env.SMS_PROVIDER === 'mail-relay') {
+    if (nodeEnv === 'production') {
+      issues.push('SMS_PROVIDER: "mail-relay" is for development and tests only');
+    } else if (!env.SMTP_URL) {
+      issues.push('SMS_PROVIDER: "mail-relay" needs SMTP_URL and MAIL_FROM');
+    }
+  }
+  return issues;
+}
+
+/** A comma-separated list: trimmed, empty entries dropped. */
+function listOf(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/** An IP address, or one with a CIDR prefix length. */
+function isAddressOrRange(entry: string): boolean {
+  const [address = '', prefix, ...rest] = entry.split('/');
+  const family = isIP(address);
+  if (family === 0 || rest.length > 0) return false;
+  if (prefix === undefined) return true;
+  const bits = Number(prefix);
+  return /^\d{1,3}$/.test(prefix) && bits <= (family === 4 ? 32 : 128);
 }
 
 /** `PANEL_ORIGINS` as a list: comma-separated, trimmed, empty entries dropped. */

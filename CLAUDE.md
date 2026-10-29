@@ -48,7 +48,7 @@ change one only through a new ADR or an "Amended by" note.
   internals. Every facade call carries a `CallContext` (TenantContext + ActorContext + correlation id).
 - `platform/` holds cross-cutting runtime (authz, call-context, tenant-context, clock, ids,
   unit-of-work, persistence, events, scheduler, worker, audit, subject-keys, i18n, mail,
-  storage, rate-limit, http, health, ai, extensions). `platform` never imports a module.
+  sms, storage, rate-limit, http, health, ai, extensions). `platform` never imports a module.
 - Deferral with triggers (ADR-0010): a platform piece lands no later than its first consumer,
   or at phase start when the phase review lists it (ADR-0020). Unbuilt facades bind to a
   `@FailClosedPlaceholder` that always refuses (allowed for a permission check too);
@@ -78,7 +78,8 @@ change one only through a new ADR or an "Amended by" note.
 ## Identity and authorisation (hybrid, ADR-0004; MP ADR-0018 for sessions and authz)
 - Authentication: Keycloak (OIDC Authorization Code + PKCE) for SSO, LDAP/AD, SAML, MFA.
   Keycloak answers "who are you" only; it holds no roles or permissions. MFA is mandatory for
-  administrators.
+  administrators. Portal users sign in with one-time codes (email or SMS) verified by the
+  core, not Keycloak (ADR-0026).
 - After sign-in: opaque server-side session in PostgreSQL (only the SHA-256 of the token is
   stored), no session or permission cache, `__Host-` cookies (`SameSite=Strict` for admin),
   CSRF = HMAC of the session token + Origin check, one host per panel; the BFF sets

@@ -78,8 +78,30 @@ import { bootstrapTenantAdminCommand } from './presentation/commands/bootstrap-t
 import { syncDirectoryAccountsJob } from './presentation/jobs/sync-directory-accounts.job';
 import { StaffAccountsController } from './presentation/staff-accounts.controller';
 import { StaffSignInController } from './presentation/staff-sign-in.controller';
+import { CAPTCHA_SERVICE } from '../../platform/captcha';
+import { MAIL_SENDER } from '../../platform/mail';
+import { RATE_LIMITER } from '../../platform/rate-limit';
+import { SMS_SENDER } from '../../platform/sms';
+import { SUBJECT_KEY_SERVICE } from '../../platform/subject-keys';
+import { TenantRegistry } from '../../platform/tenant-config/tenant-registry';
+import { PORTAL_CODES, PortalCodes } from './application/portal/portal-codes';
+import { PORTAL_REPOSITORY } from './application/portal/portal.repository';
+import { IssuePortalChallenge } from './application/use-cases/issue-portal-challenge.use-case';
+import { PrunePortalCodes } from './application/use-cases/prune-portal-codes.use-case';
+import { RequestPortalCode } from './application/use-cases/request-portal-code.use-case';
+import { UpdatePortalSignInSettings } from './application/use-cases/update-portal-sign-in-settings.use-case';
+import { VerifyPortalCode } from './application/use-cases/verify-portal-code.use-case';
+import { ViewOwnPortalAccount } from './application/use-cases/view-own-portal-account.use-case';
+import { ViewPortalSignInOptions } from './application/use-cases/view-portal-sign-in-options.use-case';
+import { ViewPortalSignInSettings } from './application/use-cases/view-portal-sign-in-settings.use-case';
+import { PrismaPortalRepository } from './infrastructure/prisma-portal.repository';
+import { prunePortalCodesJob } from './presentation/jobs/prune-portal-codes.job';
+import { PortalSignInSettingsController } from './presentation/portal-sign-in-settings.controller';
+import { PortalSignInController } from './presentation/portal-sign-in.controller';
 
 const SESSIONS = { provide: SESSION_REPOSITORY, useClass: PrismaSessionRepository };
+/** How long a portal session lives, in hours (`PORTAL_SESSION_HOURS`). */
+const PORTAL_SESSION_HOURS = Symbol('PORTAL_SESSION_HOURS');
 const ROLE_RECORDS = { provide: ROLE_REPOSITORY, useClass: PrismaRoleRepository };
 const ACCOUNT_RECORDS = { provide: ACCOUNT_REPOSITORY, useClass: PrismaAccountRepository };
 
@@ -193,6 +215,8 @@ const CATALOGUE = PermissionRegistry;
     DirectorySyncController,
     RolesController,
     RoleAssignmentsController,
+    PortalSignInController,
+    PortalSignInSettingsController,
   ],
   providers: [
     registerPermissions('identity', IDENTITY_PERMISSIONS),
@@ -249,6 +273,51 @@ const CATALOGUE = PermissionRegistry;
       inject: [APP_CONFIG],
       useFactory: (config: AppConfig) => config.session.staffSessionHours,
     },
+    { provide: PORTAL_REPOSITORY, useClass: PrismaPortalRepository },
+    {
+      provide: PORTAL_CODES,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => new PortalCodes(config.session.secret),
+    },
+    {
+      provide: PORTAL_SESSION_HOURS,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => config.session.portalSessionHours,
+    },
+    useCase(ViewPortalSignInOptions, [UNIT_OF_WORK, PORTAL_REPOSITORY, MAIL_SENDER, SMS_SENDER]),
+    useCase(IssuePortalChallenge, [CAPTCHA_SERVICE, RATE_LIMITER]),
+    useCase(RequestPortalCode, [
+      UNIT_OF_WORK,
+      PORTAL_REPOSITORY,
+      PORTAL_CODES,
+      CAPTCHA_SERVICE,
+      RATE_LIMITER,
+      SUBJECT_KEY_SERVICE,
+      MAIL_SENDER,
+      SMS_SENDER,
+      TenantRegistry,
+      CLOCK,
+      ID_GENERATOR,
+    ]),
+    useCase(VerifyPortalCode, [
+      UNIT_OF_WORK,
+      PORTAL_REPOSITORY,
+      PORTAL_CODES,
+      RATE_LIMITER,
+      SUBJECT_KEY_SERVICE,
+      SESSION_REPOSITORY,
+      AUDIT_WRITER,
+      CLOCK,
+      ID_GENERATOR,
+      PORTAL_SESSION_HOURS,
+    ]),
+    useCase(ViewOwnPortalAccount, [UNIT_OF_WORK, PORTAL_REPOSITORY, SUBJECT_KEY_SERVICE]),
+    useCase(ViewPortalSignInSettings, [UNIT_OF_WORK, PORTAL_REPOSITORY, MAIL_SENDER, SMS_SENDER]),
+    useCase(UpdatePortalSignInSettings, [UNIT_OF_WORK, PORTAL_REPOSITORY, AUDIT_WRITER, CLOCK]),
+    useCase(PrunePortalCodes, [UNIT_OF_WORK, PORTAL_REPOSITORY, CLOCK]),
+    registerJobsFrom('identity', [PrunePortalCodes], (prune: PrunePortalCodes) => [
+      prunePortalCodesJob(prune),
+    ]),
     useCase(BeginStaffSignIn, [SIGN_IN_FLOWS, STAFF_IDENTITY_PROVIDER]),
     useCase(CompleteStaffSignIn, [
       UNIT_OF_WORK,

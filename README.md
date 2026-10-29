@@ -85,6 +85,28 @@ place. `pnpm --filter @phoenix/studio test` runs the studio's specs (texts, the 
 dates and the session reads); the screens themselves are checked in a browser at 375, 768 and
 1280 px, light and dark, on both tenant fixtures.
 
+### Portal (the portal-user panel)
+
+`apps/portal` is the portal users' Next.js panel, built like the studio (its own BFF relay and
+`PORTAL_TENANT_HOSTS`). A visitor signs in, or signs up on first use, with a six-digit code sent
+by email or SMS (ADR-0026); a tenant offers no method until a member holding
+`identity.portal-sign-in.manage` opens one (`PUT /identity/portal-sign-in-settings`). Email
+needs `SMTP_URL` and `MAIL_FROM` on the API; locally `SMS_PROVIDER=mail-relay` mails each SMS
+through the same server. For both fixtures locally:
+
+```sh
+PHOENIX_API_URL=http://localhost:3000 \
+PORTAL_TENANT_HOSTS="localhost:3002=demo-fa,demo-en.localhost:3002=demo-en" \
+  pnpm --filter @phoenix/portal dev     # http://localhost:3002 and http://demo-en.localhost:3002
+```
+
+The API must list the portal origins in `PANEL_ORIGINS`. Screens: `/sign-in` (method, address,
+code) and `/` ("My account": the masked addresses and sign-out). Behind a reverse proxy, set
+`PANEL_PROXY_HOPS` on the portal and the portal's address in the API's `TRUSTED_PROXIES`, so the
+rate limits count each visitor's network rather than the portal's. `pnpm --filter
+@phoenix/portal test` runs the portal's specs; the screens are checked in a browser at 375, 768
+and 1280 px, light and dark, on both tenant fixtures.
+
 ## Commands
 
 | Command                   | What it does                                                    |

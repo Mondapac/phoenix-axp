@@ -13,14 +13,16 @@ model Account {
   tenantId    String           @map("tenant_id") @db.VarChar(32)
   /// platform-operator | tenant-staff | portal-user. Fixed for the account's life.
   population  String           @db.VarChar(32)
-  /// directory | local (ADR-0019 decision 3).
+  /// directory | local (ADR-0019 decision 3) for staff; one-time-code for a portal user
+  /// (ADR-0026).
   source      String           @db.VarChar(16)
   /// The identity provider's subject (`sub`) of this person; null for a local account that has
   /// not signed in yet. Set once, never changed.
   subject     String?          @db.VarChar(255)
   /// The sign-in name, lower case: how a local account is matched on its first sign-in. Never
-  /// logged, audited or put in an event.
-  username    String           @db.VarChar(255)
+  /// logged, audited or put in an event. Null exactly for a portal user, whose address is a
+  /// sealed PortalContact (ADR-0026).
+  username    String?          @db.VarChar(255)
   /// active | disabled
   status      String           @db.VarChar(16)
   version     Int
@@ -28,6 +30,7 @@ model Account {
   updatedAt   DateTime         @map("updated_at") @db.Timestamptz(3)
   sessions    Session[]
   assignments RoleAssignment[]
+  contacts    PortalContact[]
 
   @@unique([tenantId, id], map: "account_tenant_id_id_key")
   @@unique([tenantId, subject], map: "account_tenant_id_subject_key")
@@ -176,5 +179,71 @@ model DirectorySync {
   updatedAt        DateTime  @map("updated_at") @db.Timestamptz(3)
 
   @@map("directory_sync")
+  @@schema("identity")
+}
+
+/// The portal sign-in settings of a tenant (ADR-0026 decision 2; owner decision P1). No row
+/// means no method: a tenant's portal sign-in is closed until staff open it. Versioning
+/// (ADR-0007, V1): a mutable settings row with `version`; its history is the audit log
+/// (`identity.portal-sign-in.settings-changed`).
+model PortalSignInSettings {
+  tenantId           String   @id @map("tenant_id") @db.VarChar(32)
+  /// The methods a portal user may sign in with: email, mobile, both or none.
+  methods            String[] @db.VarChar(16)
+  /// The country calling code that turns a national mobile number (leading 0) into E.164,
+  /// digits only; null accepts international numbers only.
+  countryCallingCode String?  @map("country_calling_code") @db.VarChar(4)
+  version            Int
+  updatedAt          DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@map("portal_sign_in_settings")
+  @@schema("identity")
+}
+
+/// The address a portal user signs in with (ADR-0026 decision 4): sealed under the account's
+/// subject key, found by its keyed hash. One per kind and account; an address belongs to one
+/// account of the tenant. Versioning (ADR-0007, V4): append-only, inserted and never updated.
+model PortalContact {
+  tenantId   String   @map("tenant_id") @db.VarChar(32)
+  accountId  String   @map("account_id") @db.Uuid
+  /// email | mobile
+  kind       String   @db.VarChar(16)
+  /// HMAC-SHA-256 of the normalised address under the blind-index key: 32 bytes.
+  lookupHash Bytes    @map("lookup_hash")
+  /// The normalised address, sealed under the account's subject key.
+  sealed     Bytes
+  createdAt  DateTime @map("created_at") @db.Timestamptz(3)
+  account    Account  @relation(fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict, map: "portal_contact_account_fkey")
+
+  @@id([tenantId, accountId, kind], map: "portal_contact_pkey")
+  @@unique([tenantId, kind, lookupHash], map: "portal_contact_tenant_id_kind_lookup_hash_key")
+  @@map("portal_contact")
+  @@schema("identity")
+}
+
+/// A one-time sign-in code sent to an address (ADR-0026 decision 3). Neither the code nor the
+/// address is stored: only their keyed hashes. Versioning (ADR-0007): none of V1 to V4, a
+/// recorded exception (ADR-0026): an ephemeral credential, updated as answers are tried and
+/// deleted by the prune job a day after it expires; its effects are audited (session started).
+model PortalCode {
+  /// UUIDv7 from the IdGenerator; the browser holds it between the two steps.
+  id         String    @id @db.Uuid
+  tenantId   String    @map("tenant_id") @db.VarChar(32)
+  /// email | mobile
+  kind       String    @db.VarChar(16)
+  /// The keyed hash of the address, as PortalContact.lookupHash.
+  lookupHash Bytes     @map("lookup_hash")
+  /// HMAC-SHA-256 of the code, bound to the id: 32 bytes.
+  codeHash   Bytes     @map("code_hash")
+  /// Wrong answers so far; the code is spent at the limit.
+  failures   Int       @db.SmallInt
+  createdAt  DateTime  @map("created_at") @db.Timestamptz(3)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  /// Set when the right answer, or the last wrong one, spends the code.
+  spentAt    DateTime? @map("spent_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, id], map: "portal_code_tenant_id_id_key")
+  @@index([tenantId, expiresAt], map: "portal_code_tenant_id_expires_at_idx")
+  @@map("portal_code")
   @@schema("identity")
 }

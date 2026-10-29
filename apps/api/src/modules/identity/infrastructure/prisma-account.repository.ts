@@ -24,14 +24,25 @@ const COLUMNS = {
 
 const UNIQUE_KEYS = new Set(['account_tenant_id_username_key', 'account_tenant_id_subject_key']);
 
-/** Staff accounts in `identity.account`. */
+/** The population every read and write of this repository is bound to. */
+const STAFF = 'tenant-staff';
+
+/**
+ * Staff accounts in `identity.account`. Portal accounts (ADR-0026) share the table but never
+ * this repository: every read and write here is bound to staff, so a portal user can never be
+ * found, disabled or granted a role through it (ADR-0019 decision 2).
+ */
 @Injectable()
 export class PrismaAccountRepository implements AccountRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async find(tenant: TenantContext, id: Id<'Account'>): Promise<Account | null> {
     const row = await this.prisma.tx(tenant).account.findUnique({
-      where: { tenantId_id: { tenantId: tenant.tenantId, id }, tenantId: tenant.tenantId },
+      where: {
+        tenantId_id: { tenantId: tenant.tenantId, id },
+        tenantId: tenant.tenantId,
+        population: STAFF,
+      },
       select: COLUMNS,
     });
     return row === null ? null : accountOf(row);
@@ -42,6 +53,7 @@ export class PrismaAccountRepository implements AccountRepository {
       where: {
         tenantId_subject: { tenantId: tenant.tenantId, subject },
         tenantId: tenant.tenantId,
+        population: STAFF,
       },
       select: COLUMNS,
     });
@@ -53,6 +65,7 @@ export class PrismaAccountRepository implements AccountRepository {
       where: {
         tenantId_username: { tenantId: tenant.tenantId, username },
         tenantId: tenant.tenantId,
+        population: STAFF,
       },
       select: COLUMNS,
     });
@@ -61,7 +74,7 @@ export class PrismaAccountRepository implements AccountRepository {
 
   async list(tenant: TenantContext): Promise<AccountListItem[]> {
     const rows = await this.prisma.tx(tenant).account.findMany({
-      where: { tenantId: tenant.tenantId },
+      where: { tenantId: tenant.tenantId, population: STAFF },
       select: { ...COLUMNS, createdAt: true },
       orderBy: [{ username: 'asc' }],
     });
@@ -86,7 +99,7 @@ export class PrismaAccountRepository implements AccountRepository {
         data: {
           tenantId: tenant.tenantId,
           id: account.id,
-          population: 'tenant-staff',
+          population: STAFF,
           source: account.source,
           subject: account.subject,
           username: account.username,
@@ -111,7 +124,13 @@ export class PrismaAccountRepository implements AccountRepository {
     at: Temporal.Instant,
   ): Promise<void> {
     const { count } = await this.prisma.tx(tenant).account.updateMany({
-      where: { tenantId: tenant.tenantId, id, version: expectedVersion, subject: null },
+      where: {
+        tenantId: tenant.tenantId,
+        id,
+        population: STAFF,
+        version: expectedVersion,
+        subject: null,
+      },
       data: { subject, version: { increment: 1 }, updatedAt: dateOf(at) },
     });
     if (count === 0) throw new StaleAggregateError('identity.account', id);
@@ -125,7 +144,7 @@ export class PrismaAccountRepository implements AccountRepository {
     const rows = await this.prisma.tx(tenant).account.findMany({
       where: {
         tenantId: tenant.tenantId,
-        population: 'tenant-staff',
+        population: STAFF,
         source: 'directory',
         ...(afterId === null ? {} : { id: { gt: afterId } }),
       },
@@ -156,7 +175,13 @@ export class PrismaAccountRepository implements AccountRepository {
     at: Temporal.Instant,
   ): Promise<boolean> {
     const { count } = await this.prisma.tx(tenant).account.updateMany({
-      where: { tenantId: tenant.tenantId, id, version: expectedVersion, status: { not: status } },
+      where: {
+        tenantId: tenant.tenantId,
+        id,
+        population: STAFF,
+        version: expectedVersion,
+        status: { not: status },
+      },
       data: { status, version: { increment: 1 }, updatedAt: dateOf(at) },
     });
     return count === 1;
@@ -169,7 +194,7 @@ export class PrismaAccountRepository implements AccountRepository {
     at: Temporal.Instant,
   ): Promise<void> {
     const { count } = await this.prisma.tx(tenant).account.updateMany({
-      where: { tenantId: tenant.tenantId, id, version: expectedVersion },
+      where: { tenantId: tenant.tenantId, id, population: STAFF, version: expectedVersion },
       data: { status: 'disabled', version: { increment: 1 }, updatedAt: dateOf(at) },
     });
     if (count === 0) throw new StaleAggregateError('identity.account', id);
@@ -181,7 +206,7 @@ function accountOf(row: {
   population: string;
   source: string;
   subject: string | null;
-  username: string;
+  username: string | null;
   status: string;
   version: number;
 }): Account {
@@ -190,7 +215,8 @@ function accountOf(row: {
     population: row.population as Population,
     source: row.source as AccountSource,
     subject: row.subject,
-    username: row.username,
+    // The CHECK gives every staff account a username.
+    username: row.username ?? '',
     status: row.status as AccountStatus,
     version: row.version,
   };

@@ -14,6 +14,7 @@ is a separate identity from the same person's employee account.
 1. **Guest** is the anonymous actor; only use cases with `access: anonymous` serve it.
 2. **Public user** is the `portal-user` population: open self-registration (email or mobile,
    in Keycloak). A public user can never hold a staff or operator role.
+   *(Amended by ADR-0026: self-registration and sign-in use one-time codes by email or mobile, verified by the core, not Keycloak.)*
 3. **Employee** is the `tenant-staff` population. Employees sign in either with a directory
    account (AD/LDAP federated in Keycloak) or with a local account created in the platform
    (stored in Keycloak, with its password policy and OTP-based MFA). Each tenant configures

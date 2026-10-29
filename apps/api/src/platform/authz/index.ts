@@ -18,6 +18,8 @@ export type { AccessDeclaration, AccessRule, PermissionKey } from './access-rule
 export {
   AUTHENTICATOR,
   CSRF_HEADER,
+  PORTAL_SESSION_COOKIE,
+  SESSION_COOKIES,
   STUDIO_SESSION_COOKIE,
   type Authenticator,
   type CredentialRejected,

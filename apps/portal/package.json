@@ -1,0 +1,32 @@
+{
+  "name": "@phoenix/portal",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Portal: the portal-user panel (Next.js), built from packages/ui on Base UI (ADR-0016, ADR-0026).",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start --port 3002",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"
+  },
+  "dependencies": {
+    "@phoenix/panel-server": "workspace:*",
+    "@phoenix/ui": "workspace:*",
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.19.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "jest": "^30.5.2",
+    "tailwindcss": "4.3.3",
+    "ts-jest": "^29.4.14",
+    "typescript": "~6.0.3"
+  }
+}

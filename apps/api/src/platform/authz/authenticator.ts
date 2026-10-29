@@ -1,6 +1,6 @@
 // Phoenix ADR-0004 decision 2 (Mondapac identity design 5.1): the port the ActorGuard asks for
 // the actor of a session. Ported from the PoC 2 spike (platform/authz/authenticator.ts).
-import type { AuthenticatedActor, Result, TenantContext } from '@phoenix/shared-kernel';
+import type { AuthenticatedActor, Population, Result, TenantContext } from '@phoenix/shared-kernel';
 
 /** Any refusal of a credential: one code, so an answer never tells why. */
 export type CredentialRejected = { readonly code: 'credential.rejected' };
@@ -17,9 +17,15 @@ export type CredentialRejected = { readonly code: 'credential.rejected' };
  * `placeholders/fail-closed-authenticator.ts`: every credential is rejected.
  */
 export interface Authenticator {
+  /**
+   * `population` is the one the cookie belongs to (`tenant-staff` for the studio cookie, unless
+   * given): a session of any other population is rejected, so a cookie never crosses panels
+   * (ADR-0026 decision 5).
+   */
   authenticate(
     tenant: TenantContext,
     sessionToken: string,
+    population?: Population,
   ): Promise<Result<AuthenticatedActor, CredentialRejected>>;
 }
 
@@ -31,6 +37,18 @@ export const AUTHENTICATOR = Symbol('AUTHENTICATOR');
  * studio BFF forwards it. The admin and portal panels get their own cookies with their sign-in.
  */
 export const STUDIO_SESSION_COOKIE = '__Host-phoenix-studio';
+
+/** The portal's session cookie (portal users, ADR-0026 decision 5); the portal BFF forwards it. */
+export const PORTAL_SESSION_COOKIE = '__Host-phoenix-portal';
+
+/** Each panel's session cookie and the one population its sessions belong to. */
+export const SESSION_COOKIES: readonly {
+  readonly name: string;
+  readonly population: Population;
+}[] = Object.freeze([
+  Object.freeze({ name: STUDIO_SESSION_COOKIE, population: 'tenant-staff' as const }),
+  Object.freeze({ name: PORTAL_SESSION_COOKIE, population: 'portal-user' as const }),
+]);
 
 /** The header that carries the CSRF token of a state-changing request with a session. */
 export const CSRF_HEADER = 'x-csrf-token';

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from 'node:crypto';
 import type { Id, TenantContext } from '@phoenix/shared-kernel';
 
 // The cryptography of per-subject keys (ADR-0003, ADR-0007): AES-256-GCM from node:crypto, no
@@ -81,6 +81,22 @@ export class SubjectKeyCipher {
   #key(): Buffer {
     if (this.#kek === null) throw new SubjectKeysUnavailableError();
     return this.#kek;
+  }
+
+  /**
+   * The blind index of `value` for `purpose` in `tenant`: HMAC-SHA-256 under a key derived
+   * from the KEK for that purpose only, so equal values can be found without storing them.
+   * Deterministic: it reveals equality, never the value.
+   */
+  blindIndex(tenant: TenantContext, purpose: string, value: string): Buffer {
+    const key = Buffer.from(
+      hkdfSync('sha256', this.#key(), Buffer.alloc(0), `phoenix:blind-index:${purpose}:v1`, 32),
+    );
+    try {
+      return createHmac('sha256', key).update(`${tenant.tenantId}\0${value}`, 'utf8').digest();
+    } finally {
+      key.fill(0);
+    }
   }
 
   /** A new random data key for a subject and its wrapped form. */

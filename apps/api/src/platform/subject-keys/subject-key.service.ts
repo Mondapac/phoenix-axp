@@ -30,6 +30,15 @@ export class SubjectKeyService {
     return this.cipher.available;
   }
 
+  /**
+   * A keyed hash to find personal data by value (an address) without storing the value
+   * (`purpose` is `<module>.<what>`). CPU only: call it outside the unit. Throws when no KEK
+   * is configured.
+   */
+  blindIndex(tenant: TenantContext, purpose: string, value: string): Buffer {
+    return this.cipher.blindIndex(tenant, purpose, value);
+  }
+
   seal(tenant: TenantContext, subjectId: Id<string>, plaintext: Uint8Array): SealedSubjectData {
     const { dataKey, wrapped } = this.cipher.newKey(tenant, subjectId);
     try {
