@@ -44,6 +44,7 @@ import { OBJECTS_AUDIT_ACTIONS } from './domain/audit-actions';
 import { PrismaDefinitionRepository } from './infrastructure/prisma-definition.repository';
 import { PrismaRecordRepository } from './infrastructure/prisma-record.repository';
 import { sealRecordsJob } from './presentation/jobs/seal-records.job';
+import { ObjectGraphqlController } from './presentation/object-graphql.controller';
 import { ObjectRecordsController } from './presentation/object-records.controller';
 import { ObjectDefinitionsController } from './presentation/objects.controller';
 
@@ -70,7 +71,7 @@ const KEYS = SUBJECT_KEY_SERVICE;
  * grant and field-rule questions go through platform/authz's ports.
  */
 @Module({
-  controllers: [ObjectDefinitionsController, ObjectRecordsController],
+  controllers: [ObjectDefinitionsController, ObjectRecordsController, ObjectGraphqlController],
   providers: [
     registerPermissions('objects', OBJECTS_PERMISSIONS),
     registerAuditActions('objects', OBJECTS_AUDIT_ACTIONS),

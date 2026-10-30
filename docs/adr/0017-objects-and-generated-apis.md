@@ -72,6 +72,18 @@ both REST and GraphQL are served in Phase 2 (D6). The studio screens are slice 2
    access and `FieldPolicy` hold unchanged; generated fields are nullable and a hidden field
    resolves to `null` (ADR-0024 decision 6); depth and complexity are limited and introspection
    is off in production.
+   *Clarified 2026-10-30 (generated GraphQL PR):* the library is `graphql` (graphql-js, MIT) behind
+   `platform/graphql` (≤ 2 000 tokens, depth ≤ 6, ≤ 200 selected fields, ≤ 3 root fields in a
+   query and 1 in a mutation, no subscriptions, no batched bodies, the document sized before
+   the schema is built; unexpected errors masked as `internal`). Each Object is served at
+   `POST /objects/o/<key>/graphql[?site=<id>]`; its schema is built per request from
+   DescribeObject at that site (the definition's site by default), so it names only fields the
+   caller may read, create or update there, and a caller DescribeObject refuses gets REST's 401
+   or 404. Queries `record(id)` and `records(site, before, limit)`; mutations `createRecord`,
+   `updateRecord` (only when a field is writable) and `deleteRecord`; a write answers
+   `{ id, version }`. Field names map `-` to `_` (and a leading digit gets `_`); integers use the
+   `Long` scalar. Use-case failures come back as errors with their code in `extensions.code`, a
+   stale write as `conflict.stale`.
 9. **Portal users** read and write records only through `own-resources` use cases with
    `FieldPolicy.forPortal`, in a later slice; slice 2.8 serves staff only.
 10. **Events.** `objects.record-*.v1` events land with their first consumer (ADR-0010).

@@ -18,6 +18,7 @@ import type { FieldGrant, FieldMode } from '../../src/platform/authz/field-polic
 import type { PermissionDeclaration } from '../../src/platform/authz/permission';
 import type { GrantScope } from '../../src/platform/authz/roles/role-model';
 import { createUseCaseGate } from '../../src/platform/authz/use-case-gate';
+import { DEFAULT_GRAPHQL_LIMITS, runGraphql } from '../../src/platform/graphql';
 import { PrismaSubjectKeyStore } from '../../src/platform/persistence/subject-keys/prisma-subject-key-store';
 import { SubjectKeyCipher } from '../../src/platform/subject-keys/subject-key-cipher';
 import { SubjectKeyService } from '../../src/platform/subject-keys/subject-key.service';
@@ -55,6 +56,10 @@ import { OBJECTS_AUDIT_ACTIONS } from '../../src/modules/objects/domain/audit-ac
 import type { FieldInput, ObjectField } from '../../src/modules/objects/domain/fields';
 import { PrismaDefinitionRepository } from '../../src/modules/objects/infrastructure/prisma-definition.repository';
 import { PrismaRecordRepository } from '../../src/modules/objects/infrastructure/prisma-record.repository';
+import {
+  recordOperationsOf,
+  recordSchema,
+} from '../../src/modules/objects/presentation/graphql/record-schema';
 import { CreateSite } from '../../src/modules/tenancy/application/use-cases/create-site.use-case';
 import { TENANCY_PERMISSIONS } from '../../src/modules/tenancy/contracts/permissions';
 import { PrismaOrganizationRepository } from '../../src/modules/tenancy/infrastructure/prisma-organization.repository';
@@ -304,6 +309,39 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
     return { id: created.value.id, key, revision: saved.value, field, clerk };
   }
 
+  /**
+   * A GraphQL request to the generated API of `key`, as ObjectGraphqlController runs it: the
+   * schema from DescribeObject for the caller, resolvers through the record use cases.
+   */
+  async function graphql(
+    of: CallContext,
+    key: string,
+    query: string,
+    variables?: Record<string, unknown>,
+  ) {
+    const described = await useCases.describe.execute(of, { definitionKey: key, siteId: null });
+    if (!described.ok) return { refused: described.error.code };
+    const operations = recordOperationsOf(
+      {
+        view: useCases.record,
+        list: useCases.records,
+        create: useCases.add,
+        update: useCases.change,
+        remove: useCases.remove,
+      },
+      key,
+    );
+    return runGraphql(
+      () => recordSchema(described.value, operations),
+      { query, ...(variables === undefined ? {} : { variables }) },
+      of,
+      { ...DEFAULT_GRAPHQL_LIMITS, introspection: false },
+      (error) => {
+        throw error;
+      },
+    );
+  }
+
   async function addRecord(of: CallContext, key: string, siteId: Id<'Site'> | null = null) {
     const added = await useCases.add.execute(of, { definitionKey: key, siteId, values: VALUES });
     if (!added.ok) throw new Error(`setup: ${added.error.code}`);
@@ -466,6 +504,232 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
       ['title', true, false],
       ['national-id', true, false],
       ['amount', true, false],
+    ]);
+  });
+
+  it('serves the same record access through GraphQL: hidden fields resolve to null (D6)', async () => {
+    const siteId = await newSite();
+    const object = await published(siteId);
+    const recordId = await addRecord(object.clerk, object.key);
+    const note = object.field('note').id;
+    const nationalId = object.field('national-id').id;
+    const opened = staffWith(
+      { keys: [OBJECTS_RECORD_READ.key], rules: { [nationalId]: 'read' } },
+      {
+        keys: [OBJECTS_RECORD_READ.key],
+        scope: { level: 'site', siteId, includeDescendants: false },
+        rules: { [note]: 'hidden' },
+      },
+    );
+    // The widest read mode wins across grants, so this member reads every field.
+    const read = await graphql(
+      opened,
+      object.key,
+      `
+        query R($id: ID!) {
+          record(id: $id) {
+            id
+            version
+            revisionNumber
+            values {
+              title
+              national_id
+              note
+              amount
+            }
+          }
+        }
+      `,
+      { id: recordId },
+    );
+    expect(read).toEqual({
+      data: {
+        record: {
+          id: recordId,
+          version: 1,
+          revisionNumber: 1,
+          values: {
+            title: 'قرارداد ۱',
+            national_id: '0012345678',
+            note: 'محرمانه نیست',
+            amount: '1200.5',
+          },
+        },
+      },
+    });
+
+    // A holder of every key without a rule for the sensitive field: it is not in the schema.
+    const unnamed = await graphql(
+      admin,
+      object.key,
+      '{ records { items { values { national_id } } } }',
+    );
+    expect(unnamed).toMatchObject({ errors: [{ extensions: { code: 'graphql.invalid' } }] });
+    expect(JSON.stringify(unnamed)).not.toContain('0012345678');
+
+    // A field readable by the definition's description but hidden on this record's site
+    // resolves to null without an error, in a single record and in a list.
+    const child = await newSite(siteId);
+    const childRecord = await addRecord(object.clerk, object.key, child);
+    const narrow = staffWith(
+      {
+        keys: [OBJECTS_RECORD_READ.key],
+        scope: { level: 'site', siteId, includeDescendants: false },
+      },
+      {
+        keys: [OBJECTS_RECORD_READ.key],
+        scope: { level: 'site', siteId: child, includeDescendants: false },
+        rules: { [note]: 'hidden' },
+      },
+    );
+    const page = await graphql(
+      narrow,
+      object.key,
+      '{ records(limit: 10) { next items { id siteId values { title note } } } }',
+    );
+    expect(page).toEqual({
+      data: {
+        records: {
+          next: null,
+          items: [
+            { id: childRecord, siteId: child, values: { title: 'قرارداد ۱', note: null } },
+            { id: recordId, siteId, values: { title: 'قرارداد ۱', note: 'محرمانه نیست' } },
+          ],
+        },
+      },
+    });
+
+    // An unreached or malformed record id answers not-found; a bad page size is refused.
+    const outside = staffWith({
+      keys: [OBJECTS_RECORD_READ.key],
+      scope: { level: 'site', siteId: child, includeDescendants: false },
+    });
+    expect(await graphql(outside, object.key, '{ records { items { id } } }')).toEqual({
+      refused: 'objects.definition.not-found',
+    });
+    const missing = await graphql(
+      narrow,
+      object.key,
+      `{ a: record(id: "${ids.next()}") { id } b: record(id: "1") { id } c: records(limit: 101) { next } }`,
+    );
+    expect(missing).toMatchObject({ data: { a: null, b: null, c: null } });
+    const errors = (missing as unknown as { errors: { path: string[]; extensions: object }[] })
+      .errors;
+    expect(Object.fromEntries(errors.map((e) => [e.path[0], e.extensions]))).toEqual({
+      a: { code: 'objects.record.not-found' },
+      b: { code: 'objects.record.not-found' },
+      c: { code: 'request.invalid', field: 'limit' },
+    });
+  });
+
+  it('writes through GraphQL under the same field and version rules as REST', async () => {
+    const siteId = await newSite();
+    const object = await published(siteId);
+    const note = object.field('note').id;
+    const child = await newSite(siteId);
+    const created = await graphql(
+      object.clerk,
+      object.key,
+      `
+        mutation C($site: ID, $v: RecordInput!) {
+          createRecord(siteId: $site, values: $v) {
+            id
+            version
+          }
+        }
+      `,
+      { site: child, v: { title: 'قرارداد ۲', national_id: '۰۰۱۲۳۴۵۶۷۸', amount: '۱۰' } },
+    );
+    expect(created).toMatchObject({ data: { createRecord: { version: 1 } } });
+    const recordId = (created as unknown as { data: { createRecord: { id: Id<'ObjectRecord'> } } })
+      .data.createRecord.id;
+    expect(audit.of(recordId)).toEqual(['objects.record.created']);
+
+    // The note is editable at the definition's site, so the schema takes it; on the record's
+    // site it is read-only for this member, and the use case refuses it, as for REST.
+    const editor = staffWith(
+      { keys: [OBJECTS_RECORD_READ.key] },
+      {
+        keys: [OBJECTS_RECORD_UPDATE.key],
+        scope: { level: 'site', siteId, includeDescendants: false },
+      },
+      {
+        keys: [OBJECTS_RECORD_UPDATE.key],
+        scope: { level: 'site', siteId: child, includeDescendants: false },
+        rules: { [note]: 'read' },
+      },
+    );
+    const update = `mutation U($id: ID!, $version: Int!, $v: RecordInput!) {
+      updateRecord(id: $id, version: $version, values: $v) { id version } }`;
+    const refused = await graphql(editor, object.key, update, {
+      id: recordId,
+      version: 1,
+      v: { note: 'x' },
+    });
+    expect(refused).toEqual({
+      data: { updateRecord: null },
+      errors: [
+        {
+          message: 'access.field-denied',
+          path: ['updateRecord'],
+          extensions: { code: 'access.field-denied' },
+        },
+      ],
+    });
+    // A field the member may not edit anywhere is not in the schema at all.
+    expect(
+      await graphql(editor, object.key, update, {
+        id: recordId,
+        version: 1,
+        v: { national_id: '1' },
+      }),
+    ).toMatchObject({ errors: [{ extensions: { code: 'graphql.invalid' } }] });
+    // An explicit null clears a field; a required one is refused naming its GraphQL name.
+    expect(
+      await graphql(editor, object.key, update, { id: recordId, version: 1, v: { title: null } }),
+    ).toMatchObject({
+      errors: [{ extensions: { code: 'objects.record.invalid', field: 'title' } }],
+    });
+    expect(
+      await graphql(editor, object.key, update, { id: recordId, version: 1, v: { title: 'نو' } }),
+    ).toEqual({ data: { updateRecord: { id: recordId, version: 2 } } });
+    // A write on a stale version answers conflict.stale, as REST's 409.
+    const stale = await graphql(editor, object.key, update, {
+      id: recordId,
+      version: 1,
+      v: { title: 'دیر' },
+    });
+    expect(stale).toMatchObject({
+      data: { updateRecord: null },
+      errors: [{ extensions: { code: 'conflict.stale' } }],
+    });
+
+    // A reader with no write grant gets no RecordInput, and delete answers as for an unknown
+    // definition, as REST does.
+    const reader = staffWith({ keys: [OBJECTS_RECORD_READ.key] });
+    expect(
+      await graphql(reader, object.key, update, { id: recordId, version: 2, v: {} }),
+    ).toMatchObject({
+      errors: [
+        {
+          message:
+            'Unknown type "RecordInput". Did you mean "Record", "RecordPage", or "RecordValues"?',
+        },
+        { extensions: { code: 'graphql.invalid' } },
+      ],
+    });
+    const remove = `mutation D($id: ID!) { deleteRecord(id: $id, version: 2) }`;
+    expect(await graphql(reader, object.key, remove, { id: recordId })).toMatchObject({
+      data: { deleteRecord: null },
+      errors: [{ extensions: { code: 'objects.definition.not-found' } }],
+    });
+    expect(await graphql(admin, object.key, remove, { id: recordId })).toEqual({
+      data: { deleteRecord: true },
+    });
+    expect(audit.of(recordId)).toEqual([
+      'objects.record.created',
+      'objects.record.updated',
+      'objects.record.deleted',
     ]);
   });
 

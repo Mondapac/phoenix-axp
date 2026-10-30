@@ -176,12 +176,24 @@ describe.each(TEST_TENANTS)('the tenancy module in tenant %s (database integrati
     return created.value.id;
   }
 
-  /** The closure rows the parent pointers imply, against the stored ones (read under the tenant's own policy). */
+  /**
+   * The closure rows the parent pointers imply, against the stored ones (read under the tenant's
+   * own policy). Both are read in one statement, so one snapshot: other spec files create sites
+   * in the same tenant fixtures in parallel, and two reads could see different trees.
+   */
   async function closureMatchesParents(): Promise<void> {
-    const sites = await rowsOf<{ id: string; parent_site_id: string | null; depth: number }>(
-      'SELECT id, parent_site_id, depth FROM tenancy.site WHERE tenant_id = $1',
+    type Site = { id: string; parent_site_id: string | null; depth: number };
+    type Ancestry = { ancestor_id: string; descendant_id: string; depth: number };
+    const [snapshot] = await rowsOf<{ sites: Site[] | null; stored: Ancestry[] | null }>(
+      `SELECT
+         (SELECT json_agg(json_build_object('id', id, 'parent_site_id', parent_site_id,
+            'depth', depth)) FROM tenancy.site WHERE tenant_id = $1) AS sites,
+         (SELECT json_agg(json_build_object('ancestor_id', ancestor_id,
+            'descendant_id', descendant_id, 'depth', depth))
+            FROM tenancy.site_ancestry WHERE tenant_id = $1) AS stored`,
       [tenant.tenantId],
     );
+    const sites = snapshot?.sites ?? [];
     const parent = new Map(sites.map((row) => [row.id, row.parent_site_id]));
     const expected: string[] = [];
     for (const row of sites) {
@@ -194,10 +206,7 @@ describe.each(TEST_TENANTS)('the tenancy module in tenant %s (database integrati
       }
       expect(row.depth).toBe(distance - 1);
     }
-    const stored = await rowsOf<{ ancestor_id: string; descendant_id: string; depth: number }>(
-      'SELECT ancestor_id, descendant_id, depth FROM tenancy.site_ancestry WHERE tenant_id = $1',
-      [tenant.tenantId],
-    );
+    const stored = snapshot?.stored ?? [];
     expect(stored.map((r) => `${r.ancestor_id}>${r.descendant_id}:${r.depth}`).sort()).toEqual(
       expected.sort(),
     );
