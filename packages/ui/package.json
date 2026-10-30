@@ -18,6 +18,8 @@
   "dependencies": {
     "@base-ui/react": "1.9.0",
     "@fontsource-variable/vazirmatn": "5.3.0",
+    "@jsonforms/core": "3.8.0",
+    "@jsonforms/react": "3.8.0",
     "@phoenix/shared-kernel": "workspace:*",
     "lucide-react": "1.62.0"
   },
