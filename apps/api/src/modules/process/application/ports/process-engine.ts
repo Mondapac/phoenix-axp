@@ -16,8 +16,9 @@ export interface ProcessEngine {
   /** Deploys a revision to the tenant once, named `<processKey>@<revisionId>`; a repeat is a no-op. */
   deployRevision(tenant: TenantContext, deployment: EngineDeployment): Promise<void>;
   /**
-   * Deploys a decision table to the tenant once, named `<decisionKey>@<revisionId>.dmn`; a repeat
-   * is a no-op. The engine runs the latest deployed revision of a key (slice 2.7).
+   * Makes a decision table the one the tenant's decision tasks run (slice 2.7): the engine runs
+   * the highest deployed version of a key, so the table, named `<decisionKey>@<revisionId>.dmn`,
+   * is deployed unless it already is that version; a repeat is a no-op.
    */
   deployDecision(tenant: TenantContext, decision: EngineDecision): Promise<void>;
   /** Every instance with this business key, running or ended, oldest first. */

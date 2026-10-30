@@ -14,7 +14,7 @@ const publishBody = z.strictObject({
 });
 
 const publishDecisionBody = z.strictObject({
-  decisionKey: z.string().max(64),
+  decisionKey: z.string().min(1).max(64),
   dmnXml: z.string().min(1),
 });
 

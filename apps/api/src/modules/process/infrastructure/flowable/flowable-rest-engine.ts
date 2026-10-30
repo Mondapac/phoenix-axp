@@ -122,19 +122,31 @@ export class FlowableRestEngine implements ProcessEngine {
 
   /**
    * Flowable's DMN API names a deployment after its file and ignores a deployment name, so the
-   * file carries the core's name; it finds a decision by key in the instance's tenant only.
+   * file carries the core's name; a decision task runs the highest version of the key in the
+   * instance's tenant. Done when that version is this revision's file; otherwise (never
+   * deployed, or an older revision deployed after it by a slower relay) it is deployed again
+   * and becomes the highest (security review of slice 2.7, M1).
    */
   async deployDecision(tenant: TenantContext, decision: EngineDecision): Promise<void> {
     const name = `${decision.decisionKey}@${decision.revisionId}.dmn`;
-    const query = new URLSearchParams({ name, tenantId: tenant.tenantId });
-    const page = (await this.call('GET', `/dmn-repository/deployments?${query.toString()}`, {
+    const query = new URLSearchParams({
+      key: decision.decisionKey,
+      tenantId: tenant.tenantId,
+      latest: 'true',
+    });
+    const page = (await this.call('GET', `/dmn-repository/decisions?${query.toString()}`, {
       dmn: true,
-    })) as Page<{ name: string; tenantId: string }>;
+    })) as Page<{ key: string; tenantId: string; version: number; resourceName: string }>;
     for (const entry of page.data) {
-      if (entry.name !== name) throw new EngineTenantMismatchError();
+      if (entry.key !== decision.decisionKey) throw new EngineTenantMismatchError();
       this.checkTenant(tenant, entry.tenantId);
     }
-    if (page.data.length > 0) return;
+    // A filter Flowable ignored would list every version: the highest is the one that runs.
+    const running = page.data.reduce<(typeof page.data)[number] | null>(
+      (highest, entry) => (highest === null || entry.version > highest.version ? entry : highest),
+      null,
+    );
+    if (running?.resourceName === name) return;
     const form = new FormData();
     form.append('file', new Blob([decision.dmnXml], { type: 'text/xml' }), name);
     const created = (await this.call(

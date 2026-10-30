@@ -546,6 +546,25 @@ describe('checkBpmn: decision tasks (slice 2.7)', () => {
     expect(refusal(model(process))).toEqual({ code: 'process.bpmn.forbidden-construct', field });
   });
 
+  it('refuses a key in the core variable prefix (L3)', () => {
+    expect(
+      refusal(model(decisionTask(field('decisionTableReferenceKey', 'phoenixOutcome')))),
+    ).toEqual({ code: 'process.bpmn.forbidden-construct', field: 'decisionTableReferenceKey' });
+  });
+
+  it('refuses more decision tables than a deployment may carry', () => {
+    const tasks = Array.from(
+      { length: 6 },
+      (_, n) =>
+        `<sequenceFlow id="g${n}" sourceRef="${n === 0 ? 'start' : `t${n - 1}`}" targetRef="t${n}"/>` +
+        `<serviceTask id="t${n}" flowable:type="dmn"><extensionElements>${field('decisionTableReferenceKey', `table${n}`)}</extensionElements></serviceTask>`,
+    ).join('');
+    expect(refusal(model(`<startEvent id="start"/>${tasks}`))).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'serviceTask',
+    });
+  });
+
   it('refuses a field set twice', () => {
     expect(refusal(model(decisionTask(KEY_FIELD + KEY_FIELD)))).toEqual({
       code: 'process.bpmn.malformed',

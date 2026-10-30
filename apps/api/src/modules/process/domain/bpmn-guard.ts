@@ -212,6 +212,16 @@ const FORM_KEY = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 /** A decision table's key: the DMN decision id, the engine's decision key (dmn-guard.ts). */
 export const DECISION_KEY = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
+/** The prefix of the core's own variables (engine-command.ts), never a decision key. */
+export const RESERVED_DECISION_PREFIX = 'phoenix';
+
+/**
+ * The most decision tables one model may name: each costs a deployment and a start up to two
+ * engine calls (engine-command.ts, MAX_CALLS_PER_COMMAND).
+ */
+export const MAX_DECISION_TABLES = 5;
+/** The most decision tasks one model may hold: each runs in the engine without a wait. */
+export const MAX_DECISION_TASKS = 20;
 
 const DECISION_KEY_FIELD = 'decisionTableReferenceKey';
 const THROW_ON_NO_HITS_FIELD = 'decisionTaskThrowErrorOnNoHits';
@@ -527,7 +537,13 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
       const { id, fields } = decisionTask;
       decisionTask = null;
       const decisionKey = fields.get(DECISION_KEY_FIELD);
-      if (decisionKey === undefined || !DECISION_KEY.test(decisionKey)) {
+      // A decision key never names one of the core's variables: the engine may store a
+      // result under the key (security review of slice 2.7, L3).
+      if (
+        decisionKey === undefined ||
+        !DECISION_KEY.test(decisionKey) ||
+        decisionKey.startsWith(RESERVED_DECISION_PREFIX)
+      ) {
         return refusal(DECISION_KEY_FIELD);
       }
       const onNoHits = fields.get(THROW_ON_NO_HITS_FIELD);
@@ -553,6 +569,10 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
   // nothing.
   if (formOutsideRun) return forbidden('formKey');
   if (decisionOutsideRun) return forbidden('serviceTask');
+  const tables = new Set(decisions.map((decision) => decision.decisionKey));
+  if (decisions.length > MAX_DECISION_TASKS || tables.size > MAX_DECISION_TABLES) {
+    return forbidden('serviceTask');
+  }
   if (!flowBounded(flow)) return err({ code: 'process.bpmn.unbounded-flow' });
   return ok({ userTasks, forms, decisions });
 }

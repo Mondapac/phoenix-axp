@@ -1,6 +1,6 @@
 import { err, ok } from '@phoenix/shared-kernel';
 import type { Result } from '@phoenix/shared-kernel';
-import { DECISION_KEY } from './bpmn-guard';
+import { DECISION_KEY, RESERVED_DECISION_PREFIX } from './bpmn-guard';
 import { RESERVED_VARIABLE_PREFIX } from './engine-command';
 import { isScanFailure, localName, scanXml, type XmlStartTag } from './xml-scan';
 
@@ -19,7 +19,9 @@ import { isScanFailure, localName, scanXml, type XmlStartTag } from './xml-scan'
  *   variables the core sends (engine-command.ts): no free text or personal data;
  * - each output names the process variable it sets: never one of the core's own;
  * - no expression syntax (`${`, `#{`) anywhere; at most MAX_DMN_RULES rules, MAX_DMN_COLUMNS
- *   inputs and outputs, each rule with one entry per column.
+ *   inputs and outputs and MAX_DMN_CELLS cells, each rule with one entry per column;
+ * - an input may read a core variable (`phoenixOutcome`, the person's decision): read only;
+ * - the key never starts with the core's variable prefix.
  *
  * Pure, no I/O.
  */
@@ -28,6 +30,8 @@ import { isScanFailure, localName, scanXml, type XmlStartTag } from './xml-scan'
 export const MAX_DMN_BYTES = 262_144;
 export const MAX_DMN_RULES = 500;
 export const MAX_DMN_COLUMNS = 16;
+/** The most cells (rules × columns) one table may hold: the engine evaluates each per decision. */
+export const MAX_DMN_CELLS = 2000;
 
 export type DmnRefusal =
   | { readonly code: 'process.dmn.too-large' }
@@ -153,7 +157,9 @@ export function checkDmn(xml: string, decisionKey: string): Result<CheckedDecisi
   if (new TextEncoder().encode(xml).length > MAX_DMN_BYTES) {
     return err({ code: 'process.dmn.too-large' });
   }
-  if (!DECISION_KEY.test(decisionKey)) return err({ code: 'process.dmn.decision-key-mismatch' });
+  if (!DECISION_KEY.test(decisionKey) || decisionKey.startsWith(RESERVED_DECISION_PREFIX)) {
+    return err({ code: 'process.dmn.decision-key-mismatch' });
+  }
 
   const decisions: (string | null)[] = [];
   let tables = 0;
@@ -265,7 +271,8 @@ export function checkDmn(xml: string, decisionKey: string): Result<CheckedDecisi
   if (
     rules > MAX_DMN_RULES ||
     inputs.length > MAX_DMN_COLUMNS ||
-    outputs.length > MAX_DMN_COLUMNS
+    outputs.length > MAX_DMN_COLUMNS ||
+    rules * (inputs.length + outputs.length) > MAX_DMN_CELLS
   ) {
     return err(refusal('rule'));
   }

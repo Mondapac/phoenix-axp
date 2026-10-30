@@ -154,35 +154,55 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
 
     describe('decision tables (slice 2.7)', () => {
       const DMN = '/flowable-rest/dmn-api/dmn-repository/deployments';
-      const decision = { decisionKey: 'route', revisionId: 'dec-1', dmnXml: '<definitions/>' };
-      const name = 'route@dec-1.dmn';
+      const DECISIONS = '/flowable-rest/dmn-api/dmn-repository/decisions';
+      const decision = { decisionKey: 'route', revisionId: 'dec-2', dmnXml: '<definitions/>' };
+      const name = 'route@dec-2.dmn';
+      const version = (resourceName: string, n: number, of = tenantId, key = 'route') => ({
+        key,
+        tenantId: of,
+        version: n,
+        resourceName,
+      });
 
-      it('deploys a table once through the DMN API, named by its file, under the tenant', async () => {
+      it('deploys a table through the DMN API, named by its file, under the tenant', async () => {
         const deployed = scripted([
-          on('GET', DMN, () => page([])),
+          on('GET', DECISIONS, () => page([])),
           on('POST', DMN, () => ({ status: 201, json: { name, tenantId } })),
         ]);
         await deployed.engine.deployDecision(tenant, decision);
         expect(deployed.calls.map((call) => [call.method, call.path])).toEqual([
-          ['GET', DMN],
+          ['GET', DECISIONS],
           ['POST', DMN],
         ]);
-        expect(deployed.calls[0]!.query.get('name')).toBe(name);
+        expect(deployed.calls[0]!.query.get('key')).toBe('route');
         expect(deployed.calls[0]!.query.get('tenantId')).toBe(tenantId);
         expect(deployed.calls[1]!.query.get('tenantId')).toBe(tenantId);
         const file = (deployed.calls[1]!.body as FormData).get('file') as File;
         expect(file.name).toBe(name);
+      });
 
-        const repeat = scripted([on('GET', DMN, () => page([{ name, tenantId }]))]);
-        await repeat.engine.deployDecision(tenant, decision);
-        expect(repeat.calls.map((call) => call.method)).toEqual(['GET']);
+      it('does nothing when the table is the version the engine runs', async () => {
+        const { engine, calls } = scripted([
+          on('GET', DECISIONS, () => page([version('route@dec-1.dmn', 1), version(name, 2)])),
+        ]);
+        await engine.deployDecision(tenant, decision);
+        expect(calls.map((call) => call.method)).toEqual(['GET']);
+      });
+
+      it('deploys it again when an older revision was deployed after it (M1)', async () => {
+        const { engine, calls } = scripted([
+          on('GET', DECISIONS, () => page([version(name, 2), version('route@dec-1.dmn', 3)])),
+          on('POST', DMN, () => ({ status: 201, json: { name, tenantId } })),
+        ]);
+        await engine.deployDecision(tenant, decision);
+        expect(calls.map((call) => call.method)).toEqual(['GET', 'POST']);
       });
 
       it.each([
-        ['a deployment of another tenant', [{ name, tenantId: other }]],
-        ['a deployment of another name', [{ name: 'route@dec-2.dmn', tenantId }]],
+        ['a decision of another tenant', [version(name, 1, other)]],
+        ['a decision of another key', [version(name, 1, tenantId, 'other')]],
       ])('refuses %s', async (_label, found) => {
-        const { engine } = scripted([on('GET', DMN, () => page(found))]);
+        const { engine } = scripted([on('GET', DECISIONS, () => page(found))]);
         await expect(engine.deployDecision(tenant, decision)).rejects.toBeInstanceOf(
           EngineTenantMismatchError,
         );
@@ -190,7 +210,7 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
 
       it('refuses a created deployment of another tenant', async () => {
         const { engine } = scripted([
-          on('GET', DMN, () => page([])),
+          on('GET', DECISIONS, () => page([])),
           on('POST', DMN, () => ({ status: 201, json: { name, tenantId: other } })),
         ]);
         await expect(engine.deployDecision(tenant, decision)).rejects.toBeInstanceOf(
@@ -200,7 +220,7 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
 
       it('deploys the tables a revision names before the revision', async () => {
         const { engine, calls } = scripted([
-          on('GET', DMN, () => page([{ name, tenantId }])),
+          on('GET', DECISIONS, () => page([version(name, 1)])),
           on('GET', '/repository/deployments', () => page([deployment])),
         ]);
         await engine.deployRevision(tenant, {
@@ -208,7 +228,7 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
           bpmnXml: '<definitions/>',
           decisions: [decision],
         });
-        expect(calls.map((call) => call.path)).toEqual([DMN, '/repository/deployments']);
+        expect(calls.map((call) => call.path)).toEqual([DECISIONS, '/repository/deployments']);
       });
     });
 

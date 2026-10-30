@@ -143,6 +143,28 @@ describe('checkDmn (slice 2.7: only a plain decision table reaches the shared en
     expect(refusal(two)).toEqual({ code: 'process.dmn.decision-key-mismatch' });
   });
 
+  it('refuses a key in the core variable prefix', () => {
+    expect(refusal(table(RULES, { key: 'phoenixRoute' }), 'phoenixRoute')).toEqual({
+      code: 'process.dmn.decision-key-mismatch',
+    });
+  });
+
+  it('refuses a table past its cell limit', () => {
+    const outputs = Array.from(
+      { length: 9 },
+      (_, n) => `<output id="x${n}" name="out${n}" typeRef="string"/>`,
+    ).join('');
+    const columns = TWO_INPUTS + outputs;
+    const rules = Array.from({ length: 200 }, (_, n) =>
+      rule(
+        `r${n}`,
+        ['-', '-'],
+        Array.from({ length: 10 }, () => '1'),
+      ),
+    ).join('');
+    expect(refusal(table(rules, { columns }))).toEqual(forbidden('rule'));
+  });
+
   it('refuses a table past its size or rule limits', () => {
     expect(refusal(table(RULES) + ' '.repeat(MAX_DMN_BYTES))).toEqual({
       code: 'process.dmn.too-large',

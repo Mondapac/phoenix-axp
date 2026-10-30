@@ -156,14 +156,17 @@ export class PrismaProcessRepository implements ProcessRepository {
   }
 
   async latestDecisions(tenant: TenantContext, keys: readonly string[]): Promise<DecisionRecord[]> {
-    if (keys.length === 0) return [];
-    const rows = await this.prisma.tx(tenant).decisionRevision.findMany({
-      where: { tenantId: tenant.tenantId, decisionKey: { in: [...keys] } },
-      distinct: ['decisionKey'],
-      orderBy: [{ decisionKey: 'asc' }, { revision: 'desc' }],
-      select: DECISION_COLUMNS,
-    });
-    return rows.map(decisionOf);
+    // One indexed read of the latest row per key: never every revision's XML.
+    const decisions: DecisionRecord[] = [];
+    for (const decisionKey of new Set(keys)) {
+      const row = await this.prisma.tx(tenant).decisionRevision.findFirst({
+        where: { tenantId: tenant.tenantId, decisionKey },
+        orderBy: { revision: 'desc' },
+        select: DECISION_COLUMNS,
+      });
+      if (row !== null) decisions.push(decisionOf(row));
+    }
+    return decisions;
   }
 
   async findTaskSettings(

@@ -339,7 +339,7 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
   describe('decision tables (slice 2.7)', () => {
     const tableKey = `route_${code.replace('-', '_')}`;
 
-    it('stores numbered revisions, audits them, and deploys only the latest under the tenant', async () => {
+    it('stores numbered revisions, audits them, and leaves the engine running the latest', async () => {
       const first = await bridge.publishDecision.execute(staff(tenant), {
         decisionKey: tableKey,
         dmnXml: decisionTable(tableKey),
@@ -359,6 +359,38 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       // the engine's latest.
       const deployed = engine.decisions.filter((name) => name.startsWith(`${code}/${tableKey}@`));
       expect(deployed).toEqual([`${code}/${tableKey}@${second.ok ? second.value.id : ''}`]);
+    });
+
+    it('puts the latest table back when a slower relay deployed an older one after it (M1)', async () => {
+      const key = `slow_${code.replace('-', '_')}`;
+      const first = await bridge.publishDecision.execute(staff(tenant), {
+        decisionKey: key,
+        dmnXml: decisionTable(key),
+      });
+      const second = await bridge.publishDecision.execute(staff(tenant), {
+        decisionKey: key,
+        dmnXml: decisionTable(key, 'other'),
+      });
+      await drain();
+      const firstId = first.ok ? first.value.id : '';
+      const secondId = second.ok ? second.value.id : '';
+      // A relay that read the first as latest delivers it late.
+      await engine.deployDecision(tenant, {
+        decisionKey: key,
+        revisionId: firstId,
+        dmnXml: decisionTable(key),
+      });
+      expect(engine.runningDecision(code, key)).toBe(`${code}/${key}@${firstId}`);
+      // The next delivery that names the table settles it on the latest again.
+      const process = `slow-${code.replace('-', '_')}`;
+      expect(
+        await bridge.publish.execute(staff(tenant), {
+          processKey: process,
+          bpmnXml: decisionProcess(process, key),
+        }),
+      ).toMatchObject({ ok: true });
+      await drain();
+      expect(engine.runningDecision(code, key)).toBe(`${code}/${key}@${secondId}`);
     });
 
     it('refuses a table that would evaluate code in the shared engine, and stores nothing', async () => {
@@ -388,6 +420,38 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       expect(engine.deployments.get(`${code}/${key}@${result.ok ? result.value.id : ''}`)).toBe(
         code,
       );
+    });
+
+    it('answers a stale conflict to the second of two publishes of one table at once', async () => {
+      const key = `race_${code.replace('-', '_')}`;
+      const results = await Promise.allSettled(
+        [0, 1].map(() =>
+          bridge.publishDecision.execute(staff(tenant), {
+            decisionKey: key,
+            dmnXml: decisionTable(key),
+          }),
+        ),
+      );
+      const published = results.filter((r) => r.status === 'fulfilled' && r.value.ok);
+      const stale = results.filter(
+        (r) => r.status === 'rejected' && r.reason instanceof StaleAggregateError,
+      );
+      expect(published.length + stale.length).toBe(2);
+      const revisions = await rowsOf<{ revision: number }>(
+        tenant,
+        'SELECT revision FROM process.decision_revision WHERE decision_key = $1 ORDER BY revision',
+        [key],
+      );
+      expect(revisions.map((r) => r.revision)).toEqual(published.length === 2 ? [1, 2] : [1]);
+    });
+
+    it('never lets the application change or remove a published table', async () => {
+      for (const statement of [
+        "UPDATE process.decision_revision SET dmn_xml = 'x'",
+        'DELETE FROM process.decision_revision',
+      ]) {
+        await expect(rowsOf(tenant, statement)).rejects.toThrow(/permission denied/);
+      }
     });
 
     it("refuses a process naming a table the tenant never published, even another tenant's", async () => {
@@ -630,6 +694,37 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       expect(await incidentsAbout(command!.id)).toEqual([
         { kind: 'command-refused', instance_id: null },
       ]);
+    });
+
+    it('never deploys a stored revision whose decision table the tenant lacks (slice 2.7)', async () => {
+      const key = `orphaned-${code.replace('-', '_')}`;
+      const xml = decisionProcess(key, 'absent_table');
+      const revisionId = ids.next<'ProcessRevision'>();
+      await persistence.unitOfWork.run(tenant, async () => {
+        await bridge.repository.insertRevision(
+          tenant,
+          {
+            id: revisionId,
+            processKey: key,
+            revision: 1,
+            bpmnXml: xml,
+            contentHash: new NodeBridgeHashing().contentHash(xml),
+            taskSettings: {},
+          },
+          clock.now(),
+        );
+        await bridge.commands.deployRevision(system, { id: revisionId });
+        return { ok: true as const, value: undefined };
+      });
+      engine.calls.length = 0;
+      await drain();
+      expect(engine.calls).not.toContain('deployRevision');
+      const [command] = await rowsOf<{ last_error: string }>(
+        tenant,
+        "SELECT last_error FROM process.engine_command WHERE subject_id = $1 AND kind = 'deploy-revision'",
+        [revisionId],
+      );
+      expect(command!.last_error).toBe('engine.not-deployed');
     });
   });
 
