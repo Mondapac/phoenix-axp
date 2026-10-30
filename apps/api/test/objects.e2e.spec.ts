@@ -42,6 +42,7 @@ describe('the objects API (HTTP)', () => {
       ['get', `/objects/o/contracts/records/${ID}`, undefined],
       ['patch', `/objects/o/contracts/records/${ID}`, { version: 1, values: { title: 'y' } }],
       ['delete', `/objects/o/contracts/records/${ID}?version=1`, undefined],
+      ['post', '/objects/o/contracts/graphql', { query: '{ records { next } }' }],
     ] as const)('refuses an anonymous %s %s with 401', async (method, path, body) => {
       const response = await call(method, path).send(body);
       expect(response.status).toBe(401);
@@ -71,6 +72,23 @@ describe('the objects API (HTTP)', () => {
       expect(limit.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'limit' });
       const version = await call('delete', `/objects/o/contracts/records/${ID}`);
       expect(version.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'version' });
+    });
+
+    it('answers 400 request.invalid for a malformed GraphQL request, before the gate', async () => {
+      for (const body of [
+        [{ query: '{ records { next } }' }],
+        { query: '' },
+        { query: '{ a }', extensions: {} },
+        { query: 'x'.repeat(20_001) },
+      ]) {
+        const response = await call('post', '/objects/o/contracts/graphql').send(body);
+        expect(response.status).toBe(400);
+        expect(response.body).toMatchObject({ statusCode: 400, code: 'request.invalid' });
+      }
+      const site = await call('post', '/objects/o/contracts/graphql?site=1').send({
+        query: '{ a }',
+      });
+      expect(site.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'site' });
     });
 
     it('answers 404 for a path id or key that cannot exist', async () => {
