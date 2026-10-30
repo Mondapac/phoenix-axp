@@ -21,6 +21,8 @@ export interface SubmissionView {
   readonly erased: boolean;
   /** By field id; hidden fields are left out (ADR-0024 decision 6). */
   readonly answers: Readonly<Record<string, unknown>>;
+  /** For erasing it on request: the version the reader saw (`409 conflict.stale` otherwise). */
+  readonly version: number;
 }
 
 /** A visible field's id and its name in the revision the answer was written under. */
@@ -90,6 +92,7 @@ export function viewsOf(
       submittedAt: record.submittedAt,
       erased: plain === null,
       answers,
+      version: record.version,
     });
   }
   return { views, fields: [...fields.values()] };

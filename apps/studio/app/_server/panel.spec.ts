@@ -29,14 +29,24 @@ describe('studio relay allow-list', () => {
     `tenancy/organizations/${ID}`,
     `tenancy/organizations/${ID}/move`,
     'identity/roles',
+    'forms/forms',
+    `forms/forms/${ID}/revisions`,
+    `forms/forms/${ID}/publish`,
+    `forms/forms/${ID}/submissions`,
+    `forms/revisions/${ID}`,
+    `forms/submissions/${ID}/erase`,
   ])('relays %s', (route) => {
     expect(relays(route)).toBe(true);
   });
 
-  it.each(['tenancy/settings', 'tenancy/presentation', 'tenancy', 'process/definitions'])(
-    'refuses %s',
-    (route) => {
-      expect(relays(route)).toBe(false);
-    },
-  );
+  it.each([
+    'tenancy/settings',
+    'tenancy/presentation',
+    'tenancy',
+    'process/definitions',
+    'public/forms/x',
+    'forms',
+  ])('refuses %s', (route) => {
+    expect(relays(route)).toBe(false);
+  });
 });

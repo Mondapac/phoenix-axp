@@ -15,5 +15,6 @@ async function relay(request: Request, { params }: Context): Promise<Response> {
   });
 }
 
+export const GET = relay;
 export const POST = relay;
 export const dynamic = 'force-dynamic';

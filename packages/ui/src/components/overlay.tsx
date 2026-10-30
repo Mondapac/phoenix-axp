@@ -6,7 +6,7 @@ import { Tooltip as BaseTooltip } from '@base-ui/react/tooltip';
 import { X } from 'lucide-react';
 import type { ComponentProps, ReactElement, ReactNode } from 'react';
 import { cn } from '../lib/cn';
-import { buttonClasses } from './button';
+import { buttonClasses } from './button-classes';
 
 const POPUP = 'rounded-card border border-line bg-raised text-fg shadow-popup outline-none';
 const BACKDROP =

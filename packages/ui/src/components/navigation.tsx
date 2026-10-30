@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { formatNumber } from '../locale/locale';
-import { buttonClasses } from './button';
+import { buttonClasses } from './button-classes';
 import { DirectionalIcon } from './bidi';
 
 export interface Crumb {
