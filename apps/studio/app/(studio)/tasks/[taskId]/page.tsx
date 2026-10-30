@@ -12,12 +12,15 @@ import { FileText } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { isId } from '../../../_lib/structure';
+import { schemaFormTexts, type RevisionView } from '../../../_lib/forms';
 import { standingOf, type InboxTask } from '../../../_lib/process';
+import { readApi } from '../../../_server/panel';
 import { readForPage, studioSession } from '../../../_server/session';
 import { NoAccess, PageCrumbs } from '../../_components/page-parts';
 import { taskNames } from '../_parts/task-names';
 import { DueText, StandingBadge, taskLabel } from '../_parts/task-parts';
 import { AssignTaskDialog, TaskActions } from './task-actions';
+import { TaskForm } from './task-form';
 
 // One task of the inbox (GET process/tasks/:id): where it stands, its deadline and what the
 // member can do with it. Another site's or queue's task answers as not found.
@@ -45,6 +48,12 @@ export default async function TaskPage({ params }: { params: Promise<{ taskId: s
     calendar: tenant.calendar,
     timeZone: tenant.timeZone,
   };
+  // The step's form, for a member who may read forms; any other answer leaves the note.
+  const form =
+    task.formRevisionId !== null && held.has('forms.forms.view')
+      ? await readApi<RevisionView>(`forms/revisions/${task.formRevisionId}`)
+      : null;
+  const revision = form?.ok === true ? form.body : null;
   const standing = standingOf(task, accountId);
   const supervises = held.has('process.tasks.assign') && task.status === 'open';
   const people = [...names.people]
@@ -88,13 +97,31 @@ export default async function TaskPage({ params }: { params: Promise<{ taskId: s
               <CardTitle>{t['task.form']}</CardTitle>
             </CardHeader>
             <CardContent>
-              <EmptyState
-                icon={<FileText aria-hidden />}
-                title={task.formRevisionId === null ? t['task.form.none'] : t['task.form.later']}
-                description={
-                  task.formRevisionId === null ? t['task.form.noneHelp'] : t['task.form.laterHelp']
-                }
-              />
+              {revision !== null ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-fg-muted">{t['task.form.readOnly']}</p>
+                  <TaskForm
+                    jsonSchema={revision.jsonSchema}
+                    uiSchema={revision.uiSchema}
+                    locale={tenant.defaultLocale}
+                    calendar={tenant.calendar}
+                    timeZone={tenant.timeZone}
+                    texts={schemaFormTexts(t)}
+                  />
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<FileText aria-hidden />}
+                  title={
+                    task.formRevisionId === null ? t['task.form.none'] : t['task.form.unreadable']
+                  }
+                  description={
+                    task.formRevisionId === null
+                      ? t['task.form.noneHelp']
+                      : t['task.form.unreadableHelp']
+                  }
+                />
+              )}
             </CardContent>
           </Card>
         </div>
