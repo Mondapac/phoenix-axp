@@ -17,6 +17,9 @@ const BY_CODE: Readonly<Record<string, MessageKey>> = {
   'portal.unavailable': 'error.unavailable',
   'captcha.invalid': 'error.captcha',
   'rate-limit.exceeded': 'error.tooMany',
+  'forms.submission.invalid': 'form.invalid',
+  'forms.submission.unavailable': 'form.unavailable',
+  'forms.form.not-found': 'form.closed',
 };
 
 /** The message for a refused request. */

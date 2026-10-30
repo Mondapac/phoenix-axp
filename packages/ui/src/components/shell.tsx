@@ -5,7 +5,7 @@ import { ChevronDown, Menu as MenuIcon, PanelLeftClose, PanelLeftOpen } from 'lu
 import { useState, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Badge } from './badge';
-import { buttonClasses } from './button';
+import { buttonClasses } from './button-classes';
 import { DirectionalIcon } from './bidi';
 import { SheetContent, Tooltip } from './overlay';
 

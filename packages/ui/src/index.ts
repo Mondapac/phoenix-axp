@@ -18,8 +18,10 @@ export * from './locale/calendar';
 
 export { UiProvider } from './components/ui-provider';
 export { DirectionalIcon, Ltr } from './components/bidi';
-export { Button, buttonClasses } from './components/button';
-export type { ButtonProps, ButtonSize, ButtonVariant } from './components/button';
+export { Button } from './components/button';
+export type { ButtonProps } from './components/button';
+export { buttonClasses } from './components/button-classes';
+export type { ButtonSize, ButtonVariant } from './components/button-classes';
 export { Badge } from './components/badge';
 export type { BadgeProps, Tone } from './components/badge';
 export { Alert } from './components/alert';
@@ -70,3 +72,18 @@ export { Breadcrumb, Pagination, pageWindow } from './components/navigation';
 export type { Crumb } from './components/navigation';
 export { AppShell, PageContainer, PageHeader } from './components/shell';
 export type { AppShellProps, NavItem, NavSection, ShellLabels } from './components/shell';
+
+export { SchemaForm, rowSpans } from './form/schema-form';
+export type { SchemaFormProps, SchemaFormTexts } from './form/schema-form';
+export { CalendarDateField } from './form/calendar-date-field';
+export type { CalendarDateFieldProps, CalendarDateFieldTexts } from './form/calendar-date-field';
+export {
+  choiceLabel,
+  descriptionOf,
+  errorText,
+  labelOf,
+  nameOfScope,
+  textFor,
+} from './form/form-text';
+export type { FormError, FormErrorTexts } from './form/form-text';
+export { propertiesUnder, propertyOfError, stepOfErrors } from './form/form-layout';

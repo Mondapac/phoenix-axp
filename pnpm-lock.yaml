@@ -151,6 +151,9 @@ importers:
       '@phoenix/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      lucide-react:
+        specifier: 1.62.0
+        version: 1.62.0(@types/react@19.3.0)(react@19.3.1)
       next:
         specifier: 16.4.2
         version: 16.4.2(@babel/core@7.29.7)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

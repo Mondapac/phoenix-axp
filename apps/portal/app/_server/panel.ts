@@ -42,6 +42,7 @@ export const PORTAL_API_PREFIXES: readonly (readonly string[])[] = [
   ['identity', 'portal', 'code'],
   ['identity', 'portal', 'sign-in'],
   ['identity', 'portal', 'sign-out'],
+  ['public', 'forms'],
 ];
 
 /**
