@@ -313,6 +313,14 @@ module.exports = {
       to: { path: 'node_modules/@aws-sdk/' },
     },
     {
+      name: 'graphql-only-at-the-http-edge',
+      comment:
+        "graphql is used only by platform/graphql/ and a module's presentation/ (ADR-0017 decision 8); resolvers call use cases.",
+      severity: 'error',
+      from: { pathNot: ['^src/platform/graphql/', '^src/modules/[^/]+/presentation/'] },
+      to: { path: 'node_modules/graphql/' },
+    },
+    {
       name: 'no-circular',
       comment: 'Circular dependencies hide coupling between files and modules.',
       severity: 'error',
