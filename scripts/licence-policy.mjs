@@ -13,7 +13,11 @@
 //     MPL-2.0 and EPL-2.0 case by case), fails unless config/licence-exceptions.json lists that
 //     package under that exact licence, with a reason, the approver `cto` and a date
 //     (ADR-0009 decision 2 and its Consequences: "CI lists them as failures and `cto` approves each one explicitly").
-//   - A package with no or an unknown licence always fails (ADR-0009 decision 3).
+//   - A package with no or an unknown licence always fails (ADR-0009 decision 3), except where
+//     an exception pins the text of its licence file by SHA-256 (`licenceFileSha256`): every
+//     installed copy of the package must hold a LICENSE file with exactly that text, so a new
+//     version that changes its terms fails again. For a licence that npm cannot name, such as
+//     the bpmn.io licence of bpmn-js (ADR-0009 decision 6).
 //   - The whole dependency tree is checked, dev dependencies included (ADR-0009 decision 3).
 //     An exception whose reason is DEV_ONLY_REASON fails when that package ships (is in the
 //     production closure).
@@ -146,6 +150,8 @@ export function verdictOf(expression) {
 }
 
 const EXCEPTION_FIELDS = ['package', 'licence', 'reason', 'approver', 'date'];
+/** Optional: the SHA-256 of the licence text, required for a package with no SPDX licence. */
+const PINNED_TEXT_FIELD = 'licenceFileSha256';
 /** Who may approve an exception: `cto`, or the owner on a decision card (ADR-0009, amended). */
 const APPROVERS = ['cto', 'owner'];
 
@@ -165,7 +171,9 @@ export function validateExceptions(exceptions) {
         problems.push(`${at}: "${field}" is required`);
       }
     }
-    const extra = Object.keys(entry).filter((key) => !EXCEPTION_FIELDS.includes(key));
+    const extra = Object.keys(entry).filter(
+      (key) => !EXCEPTION_FIELDS.includes(key) && key !== PINNED_TEXT_FIELD,
+    );
     if (extra.length > 0) problems.push(`${at}: unknown field(s) ${extra.join(', ')}`);
     if (typeof entry.approver === 'string' && !APPROVERS.includes(entry.approver)) {
       problems.push(
@@ -179,6 +187,13 @@ export function validateExceptions(exceptions) {
       problems.push(`${at}: "date" must be a date (YYYY-MM-DD)`);
     }
     if (typeof entry.licence === 'string') {
+      const pinned = entry[PINNED_TEXT_FIELD];
+      if (pinned !== undefined && (typeof pinned !== 'string' || !/^[0-9a-f]{64}$/.test(pinned))) {
+        problems.push(`${at}: "${PINNED_TEXT_FIELD}" must be a lowercase hex SHA-256`);
+      }
+      if (UNKNOWN.has(entry.licence.trim()) && pinned === undefined) {
+        problems.push(`${at}: an unknown licence needs "${PINNED_TEXT_FIELD}" (the reviewed text)`);
+      }
       if (mentionsDenied(entry.licence)) {
         problems.push(`${at}: ${entry.licence} is forbidden by ADR-0009 and cannot be excepted`);
       } else if (isAllowed(entry.licence)) {
@@ -192,20 +207,24 @@ export function validateExceptions(exceptions) {
   return problems;
 }
 
-/** `{ licence: [{ name, versions }] }` (pnpm licenses list --json) to a list of packages. */
+/** `{ licence: [{ name, versions, paths }] }` (pnpm licenses list --json) to a list of packages. */
 function packagesOf(listing) {
   const found = [];
   for (const [licence, packages] of Object.entries(listing)) {
-    for (const pkg of packages) found.push({ name: pkg.name, versions: pkg.versions, licence });
+    for (const pkg of packages) {
+      found.push({ name: pkg.name, versions: pkg.versions, paths: pkg.paths ?? [], licence });
+    }
   }
   return found;
 }
 
 /**
  * Applies the policy. `all` is the listing of the whole tree, `production` that of the
- * production closure only (a subset). Answers the failures, the exceptions applied and counts.
+ * production closure only (a subset). `licenceFileHash(dir)` answers the SHA-256 of the
+ * licence file in an installed package directory, or null. Answers the failures, the
+ * exceptions applied and counts.
  */
-export function checkLicences({ all, production, exceptions }) {
+export function checkLicences({ all, production, exceptions, licenceFileHash = () => null }) {
   const failures = validateExceptions(exceptions);
   const valid = Array.isArray(exceptions) && failures.length === 0 ? exceptions : [];
   const shipped = new Set(packagesOf(production).map((pkg) => `${pkg.name}\u0000${pkg.licence}`));
@@ -230,7 +249,26 @@ export function checkLicences({ all, production, exceptions }) {
       continue;
     }
     if (verdict === 'unknown') {
-      failures.push(`${label}: no or unknown licence`);
+      const pinned = valid.find(
+        (entry) =>
+          entry.package === pkg.name &&
+          entry.licence === pkg.licence &&
+          entry[PINNED_TEXT_FIELD] !== undefined,
+      );
+      if (pinned === undefined) {
+        failures.push(`${label}: no or unknown licence`);
+        continue;
+      }
+      used.add(pinned);
+      const texts = pkg.paths.map((dir) => licenceFileHash(dir));
+      if (texts.length === 0 || texts.some((hash) => hash !== pinned[PINNED_TEXT_FIELD])) {
+        failures.push(
+          `${label}: its licence file is missing or differs from the reviewed text; review the ` +
+            'new text and update config/licence-exceptions.json',
+        );
+        continue;
+      }
+      applied.push(`${label}: ${pinned.reason} (${pinned.approver}, ${pinned.date})`);
       continue;
     }
     const exception = valid.find(

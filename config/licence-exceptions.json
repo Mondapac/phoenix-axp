@@ -33,5 +33,13 @@
     "reason": "dev-only, not shipped",
     "approver": "owner",
     "date": "2026-10-28"
+  },
+  {
+    "package": "bpmn-js",
+    "licence": "Unknown",
+    "reason": "The bpmn.io licence: MIT terms plus a bpmn.io watermark that must stay unchanged, fully visible and not overlapped (ADR-0005 decision 6, ADR-0009 decision 6). The studio process modeler (slice 2.10) keeps it visible; pinned to the reviewed LICENSE text.",
+    "approver": "cto",
+    "date": "2026-10-30",
+    "licenceFileSha256": "5788cf8bd61481776cee1c943595525499a1355c045e9244f92e6c8092c06770"
   }
 ]

@@ -10,7 +10,8 @@
 //          [--all-json <file>] [--prod-json <file>] [--exceptions <file>]
 // (the --*-json flags read saved listings instead of running pnpm; used by the tests)
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkLicences } from './licence-policy.mjs';
@@ -48,10 +49,20 @@ try {
   process.exit(1);
 }
 
+/** The SHA-256 of the licence file of an installed package, or null when it has none. */
+function licenceFileHash(dir) {
+  for (const name of ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENCE']) {
+    const file = path.join(dir, name);
+    if (existsSync(file)) return createHash('sha256').update(readFileSync(file)).digest('hex');
+  }
+  return null;
+}
+
 const result = checkLicences({
   all: listing(option('--all-json'), false),
   production: listing(option('--prod-json'), true),
   exceptions,
+  licenceFileHash,
 });
 
 for (const line of result.applied) console.log(`exception: ${line}`);

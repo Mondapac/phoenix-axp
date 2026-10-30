@@ -6,6 +6,7 @@ import {
   type InvalidTaskSetting,
   type TaskSettings,
 } from './task-settings';
+import { isScanFailure, localName, scanXml, type XmlStartTag } from './xml-scan';
 
 /**
  * The intake check of a BPMN model before it is stored and deployed (ADR-0005; security review
@@ -31,10 +32,14 @@ import {
  *   multiply tokens without a loop), and no start event definition: only the core starts
  *   instances (one tenant's model must not hold the shared engine);
  * - exactly one executable process, whose id is the published process key;
- * - the core's own user task settings (task-settings.ts) on user tasks only, each valid.
+ * - the core's own user task settings (task-settings.ts) on user tasks only, each valid;
+ * - one kind of service task only, the engine's decision table task (`flowable:type="dmn"`,
+ *   slice 2.7), whose fields are literals: the key of a decision table the tenant published
+ *   (dmn-guard.ts) and whether no hit is an error. The engine finds the table by key in the
+ *   instance's tenant only (never the default tenant), so another tenant's table never runs.
  *
- * It is a scanner of the XML grammar, not a parser: anything it cannot read is refused. Pure,
- * no I/O.
+ * It reads the XML through the scanner of xml-scan.ts: anything it cannot read is refused.
+ * Pure, no I/O.
  */
 
 /** The most a model may weigh, in UTF-8 bytes; the column CHECK repeats it. */
@@ -61,6 +66,12 @@ export interface FormReference {
   readonly formKey: string;
 }
 
+/** Where a model runs a decision table (slice 2.7): a decision task and the table's key. */
+export interface DecisionReference {
+  readonly elementId: string;
+  readonly decisionKey: string;
+}
+
 /**
  * What the check read of an accepted model: the core's settings of each user task, by id, and
  * the forms its start event and user tasks name (at most one start form).
@@ -68,11 +79,15 @@ export interface FormReference {
 export interface CheckedModel {
   readonly userTasks: ReadonlyMap<string, TaskSettings>;
   readonly forms: readonly FormReference[];
+  readonly decisions: readonly DecisionReference[];
 }
 
 const MALFORMED: BpmnRefusal = Object.freeze({ code: 'process.bpmn.malformed' });
-const forbidden = (field: string): Result<never, BpmnRefusal> =>
-  err({ code: 'process.bpmn.forbidden-construct', field: field.slice(0, 64) });
+const refusal = (field: string): BpmnRefusal => ({
+  code: 'process.bpmn.forbidden-construct',
+  field: field.slice(0, 64),
+});
+const forbidden = (field: string): Result<never, BpmnRefusal> => err(refusal(field));
 
 /** Elements of plain BPMN and its diagram interchange: no task that runs code. */
 const ALLOWED_ELEMENTS: ReadonlySet<string> = new Set([
@@ -88,6 +103,10 @@ const ALLOWED_ELEMENTS: ReadonlySet<string> = new Set([
   'endEvent',
   'userTask',
   'manualTask',
+  'serviceTask',
+  'extensionElements',
+  'field',
+  'string',
   'exclusiveGateway',
   'parallelGateway',
   'inclusiveGateway',
@@ -191,6 +210,47 @@ const ELEMENT_ID = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/;
 /** A form key: a literal reference the core resolves (slice 2.4). */
 const FORM_KEY = /^[A-Za-z0-9_.:-]{1,128}$/;
 
+/** A decision table's key: the DMN decision id, the engine's decision key (dmn-guard.ts). */
+export const DECISION_KEY = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
+/** The prefix of the core's own variables (engine-command.ts), never a decision key. */
+export const RESERVED_DECISION_PREFIX = 'phoenix';
+
+/**
+ * The most decision tables one model may name: each costs a deployment and a start up to two
+ * engine calls (engine-command.ts, MAX_CALLS_PER_COMMAND).
+ */
+export const MAX_DECISION_TABLES = 5;
+/** The most decision tasks one model may hold: each runs in the engine without a wait. */
+export const MAX_DECISION_TASKS = 20;
+
+const DECISION_KEY_FIELD = 'decisionTableReferenceKey';
+const THROW_ON_NO_HITS_FIELD = 'decisionTaskThrowErrorOnNoHits';
+/**
+ * The fields a decision task may set. Not `fallbackToDefaultTenant` (another tenant's table),
+ * `sameDeployment` (the core deploys tables on their own) or a decision service.
+ */
+const DECISION_FIELDS: ReadonlySet<string> = new Set([DECISION_KEY_FIELD, THROW_ON_NO_HITS_FIELD]);
+
+/** The elements a decision task may hold, by parent: its fields, as literal strings. */
+const DECISION_TASK_CHILDREN: Readonly<Record<string, ReadonlySet<string>>> = {
+  serviceTask: new Set(['extensionElements', 'incoming', 'outgoing', 'documentation']),
+  extensionElements: new Set(['field']),
+  field: new Set(['string']),
+  string: new Set(),
+};
+/** Where those elements may stand, and nowhere else. */
+const DECISION_TASK_PARENTS: Readonly<Record<string, string>> = {
+  extensionElements: 'serviceTask',
+  field: 'extensionElements',
+  string: 'field',
+};
+
+/** A service task the engine runs as a decision table task, by its own namespace's `type`. */
+const isDecisionTask = (tag: XmlStartTag): boolean =>
+  tag.attributes.some(
+    ([name, value]) => name.includes(':') && localName(name) === 'type' && value === 'dmn',
+  );
+
 /** The most flow nodes a model may hold. */
 export const MAX_FLOW_NODES = 500;
 
@@ -275,60 +335,13 @@ function textAllowed(element: string, text: string): boolean {
   return EXPRESSION_ELEMENTS.has(element) ? valueAllowed(text) : !HAS_EXPRESSION.test(text);
 }
 
-const PREDEFINED: Readonly<Record<string, string>> = {
-  lt: '<',
-  gt: '>',
-  amp: '&',
-  apos: "'",
-  quot: '"',
-};
-
-/** The text a parser sees: character and predefined references decoded; null if undefined. */
-function decode(raw: string): string | null {
-  let failed = false;
-  const text = raw.replace(/&(#x[0-9A-Fa-f]+|#[0-9]+|[A-Za-z][A-Za-z0-9]*);|&/g, (all, ref) => {
-    if (ref === undefined) {
-      failed = true;
-      return all;
-    }
-    const name = ref as string;
-    if (name.startsWith('#')) {
-      const code = name.startsWith('#x') ? parseInt(name.slice(2), 16) : parseInt(name.slice(1));
-      if (!Number.isInteger(code) || code < 1 || code > 0x10ffff) {
-        failed = true;
-        return all;
-      }
-      return String.fromCodePoint(code);
-    }
-    const value = PREDEFINED[name];
-    if (value === undefined) failed = true;
-    return value ?? all;
-  });
-  return failed ? null : text;
-}
-
-const localName = (name: string): string => name.slice(name.indexOf(':') + 1);
-
-const NAME = '[A-Za-z_][A-Za-z0-9_.-]*(?::[A-Za-z_][A-Za-z0-9_.-]*)?';
-const START_TAG = new RegExp(
-  `^<(${NAME})((?:\\s+${NAME}\\s*=\\s*(?:"[^"<]*"|'[^'<]*'))*)\\s*(/?)>`,
-);
-const END_TAG = new RegExp(`^</(${NAME})\\s*>`);
-const ATTRIBUTE = new RegExp(`\\s+(${NAME})\\s*=\\s*(?:"([^"<]*)"|'([^'<]*)')`, 'g');
-const XML_DECLARATION = /^<\?xml\s[^?]*\?>/;
-/** XML 1.0, in UTF-8 when an encoding is named: the bytes the core checked are the engine's. */
-const DECLARATION = new RegExp(
-  `^<\\?xml\\s+version\\s*=\\s*(["'])1\\.0\\1(?:\\s+encoding\\s*=\\s*(["'])UTF-8\\2)?` +
-    `(?:\\s+standalone\\s*=\\s*(["'])(?:yes|no)\\3)?\\s*\\?>$`,
-  'i',
-);
-
 /** The flow nodes the loop check reads; a user task waits for a person. */
 const FLOW_NODES: ReadonlySet<string> = new Set([
   'startEvent',
   'endEvent',
   'userTask',
   'manualTask',
+  'serviceTask',
   'exclusiveGateway',
   'parallelGateway',
   'inclusiveGateway',
@@ -393,6 +406,13 @@ interface ProcessSeen {
   readonly executable: boolean;
 }
 
+/** The decision task being read: its id and the fields its extension elements gave. */
+interface DecisionTaskSeen {
+  readonly id: string;
+  readonly fields: Map<string, string>;
+  field: string | null;
+}
+
 /** The model as the core stores and deploys it, or why it is refused. */
 export function checkBpmn(xml: string, processKey: string): Result<CheckedModel, BpmnRefusal> {
   if (new TextEncoder().encode(xml).length > MAX_BPMN_BYTES) {
@@ -400,111 +420,53 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
   }
   if (!PROCESS_KEY.test(processKey)) return err({ code: 'process.bpmn.process-key-mismatch' });
 
-  const open: { readonly name: string; readonly element: string; text: string }[] = [];
   const processes: ProcessSeen[] = [];
   const flow: Flow = { nodes: new Map(), edges: [], attached: [] };
   const userTasks = new Map<string, TaskSettings>();
   const forms: FormReference[] = [];
+  const decisions: DecisionReference[] = [];
   let formOutsideRun = false;
-  let rootSeen = false;
-  let at = 0;
-  const body = xml.replace(/^\uFEFF/, '');
-  const declaration = XML_DECLARATION.exec(body);
-  if (declaration !== null) {
-    if (!DECLARATION.test(declaration[0])) return forbidden('declaration');
-    at = declaration[0].length + (xml.startsWith('\uFEFF') ? 1 : 0);
-  }
+  let decisionOutsideRun = false;
+  let decisionTask: DecisionTaskSeen | null = null;
 
-  while (at < xml.length) {
-    const next = xml.indexOf('<', at);
-    const textEnd = next === -1 ? xml.length : next;
-    const text = decode(xml.slice(at, textEnd));
-    if (text === null) return err(MALFORMED);
-    if (open.length === 0) {
-      if (text.trim().length > 0) return err(MALFORMED);
-    } else {
-      open[open.length - 1]!.text += text;
-    }
-    if (next === -1) break;
-    at = next;
-    const rest = xml.slice(at);
-
-    // A comment is dropped and CDATA joins the text around it, as the engine reads them: the
-    // check judges the whole text of an element at its end tag, never one run.
-    if (rest.startsWith('<!--')) {
-      const end = rest.indexOf('-->', 4);
-      if (end === -1 || rest.slice(4, end).includes('--')) return err(MALFORMED);
-      at += end + 3;
-      continue;
-    }
-    if (rest.startsWith('<![CDATA[')) {
-      const end = rest.indexOf(']]>');
-      if (end === -1 || open.length === 0) return err(MALFORMED);
-      open[open.length - 1]!.text += rest.slice(9, end);
-      at += end + 3;
-      continue;
-    }
-    // A DOCTYPE, an entity declaration or a processing instruction: never accepted.
-    if (rest.startsWith('<!') || rest.startsWith('<?')) return forbidden('declaration');
-
-    const end = END_TAG.exec(rest);
-    if (end !== null) {
-      const closed = open.pop();
-      if (closed === undefined || closed.name !== end[1]) return err(MALFORMED);
-      if (!textAllowed(closed.element, closed.text)) {
-        return forbidden(closed.element === 'timeDuration' ? 'timeDuration' : 'expression');
-      }
-      at += end[0].length;
-      continue;
-    }
-    const start = START_TAG.exec(rest);
-    if (start === null) return err(MALFORMED);
-    const [whole, name, attributeText, selfClosing] = start as unknown as [
-      string,
-      string,
-      string,
-      string,
-    ];
-    if (open.length === 0 && rootSeen) return err(MALFORMED);
-    rootSeen = true;
-    const element = localName(name);
-    if (!ALLOWED_ELEMENTS.has(element)) return forbidden(element);
-    const parent = open[open.length - 1]?.element;
+  const start = (tag: XmlStartTag): BpmnRefusal | null => {
+    const { element, parent } = tag;
+    if (!ALLOWED_ELEMENTS.has(element)) return refusal(element);
     // Only the core starts an instance, by its business key: a timer start event would have the
     // engine start instances on its own, outside the relay and its checks.
     if (parent === 'startEvent' && element.endsWith('EventDefinition')) {
-      return forbidden('startEvent');
+      return refusal('startEvent');
     }
     // An expression is the element's text alone; the engine never reads one around a child.
-    if (parent !== undefined && EXPRESSION_ELEMENTS.has(parent)) return forbidden(element);
+    if (parent !== undefined && EXPRESSION_ELEMENTS.has(parent)) return refusal(element);
+    // The decision task's own children, and only there (slice 2.7).
+    const allowedChildren = DECISION_TASK_CHILDREN[parent ?? ''];
+    if (allowedChildren !== undefined && !allowedChildren.has(element)) return refusal(element);
+    const home = DECISION_TASK_PARENTS[element];
+    if (home !== undefined && parent !== home) return refusal(element);
+    // A service task runs what its type names: only the engine's decision table task is allowed.
+    if (element === 'serviceTask' && !isDecisionTask(tag)) return refusal('serviceTask');
 
     const attributes = new Map<string, string>();
-    for (const attribute of attributeText.matchAll(ATTRIBUTE)) {
-      const attributeName = attribute[1]!;
-      const value = decode(attribute[2] ?? attribute[3] ?? '');
-      if (value === null) return err(MALFORMED);
-      if (attributes.has(attributeName)) return err(MALFORMED);
-      if (attributeName === 'xmlns' || attributeName.startsWith('xmlns:')) {
-        attributes.set(attributeName, value);
-        continue;
-      }
+    for (const [attributeName, value] of tag.attributes) {
+      if (attributeName === 'xmlns' || attributeName.startsWith('xmlns:')) continue;
       const local = localName(attributeName);
-      if (!ALLOWED_ATTRIBUTES.has(local)) return forbidden(local);
-      if (attributes.has(local)) return err(MALFORMED);
+      if (!ALLOWED_ATTRIBUTES.has(local)) return refusal(local);
+      if (attributes.has(local)) return MALFORMED;
       attributes.set(local, value);
       const fixed = FIXED_VALUES[local];
-      if (fixed !== undefined && value !== fixed) return forbidden(local);
-      if (HAS_EXPRESSION.test(value)) return forbidden('expression');
-      if (local === 'id' && !ELEMENT_ID.test(value)) return forbidden('id');
-      if (local === 'formKey' && !FORM_KEY.test(value)) return forbidden('formKey');
+      if (fixed !== undefined && value !== fixed) return refusal(local);
+      if (HAS_EXPRESSION.test(value)) return refusal('expression');
+      if (local === 'id' && !ELEMENT_ID.test(value)) return refusal('id');
+      if (local === 'formKey' && !FORM_KEY.test(value)) return refusal('formKey');
       // The engine reads only its own namespace's formKey; an unprefixed one it ignores, and the
       // core would bind a form the engine never shows.
-      if (local === 'formKey' && !attributeName.includes(':')) return forbidden('formKey');
-      if (TASK_SETTING_ATTRIBUTES.has(local) && element !== 'userTask') return forbidden(local);
+      if (local === 'formKey' && !attributeName.includes(':')) return refusal('formKey');
+      if (TASK_SETTING_ATTRIBUTES.has(local) && element !== 'userTask') return refusal(local);
       // The BPMN schema admits a foreign attribute only in a namespace of its own: the engine
       // refuses an unprefixed one at deployment, so the publication refuses it first.
       if (TASK_SETTING_ATTRIBUTES.has(local) && !attributeName.includes(':')) {
-        return err({ code: 'process.bpmn.task-setting-invalid', field: local });
+        return { code: 'process.bpmn.task-setting-invalid', field: local };
       }
     }
     const id = attributes.get('id');
@@ -512,44 +474,105 @@ export function checkBpmn(xml: string, processKey: string): Result<CheckedModel,
       processes.push({ id: id ?? null, executable: attributes.get('isExecutable') === 'true' });
     }
     if (FLOW_NODES.has(element)) {
-      if (id === undefined || flow.nodes.has(id)) return err(MALFORMED);
+      if (id === undefined || flow.nodes.has(id)) return MALFORMED;
       flow.nodes.set(id, element);
       const host = attributes.get('attachedToRef');
       if (element === 'boundaryEvent' && host !== undefined) flow.attached.push([id, host]);
+      if (element === 'serviceTask' && processes.at(-1)?.executable !== true) {
+        decisionOutsideRun = true;
+      }
     }
     const formKey = attributes.get('formKey');
     if (formKey !== undefined) {
       // A form starts the process or shows on a task; anywhere else the core would not read it.
       const kind = element === 'startEvent' ? 'start' : element === 'userTask' ? 'task' : null;
-      if (kind === null) return forbidden('formKey');
+      if (kind === null) return refusal('formKey');
       if (kind === 'start' && forms.some((form) => form.kind === 'start')) {
-        return forbidden('formKey');
+        return refusal('formKey');
       }
       if (processes.at(-1)?.executable !== true) formOutsideRun = true;
       forms.push({ elementId: id!, kind, formKey });
     }
     if (element === 'userTask') {
       const settings = parseTaskSettings(attributes);
-      if (!settings.ok) return settings;
+      if (!settings.ok) return settings.error;
       userTasks.set(id!, settings.value);
+    }
+    if (element === 'serviceTask') decisionTask = { id: id!, fields: new Map(), field: null };
+    if (element === 'field') {
+      const name = attributes.get('name');
+      if (name === undefined || decisionTask === null) return MALFORMED;
+      if (!DECISION_FIELDS.has(name)) return refusal('field');
+      if (decisionTask.fields.has(name)) return MALFORMED;
+      decisionTask.field = name;
     }
     if (element === 'sequenceFlow') {
       const source = attributes.get('sourceRef');
       const target = attributes.get('targetRef');
-      if (source === undefined || target === undefined) return err(MALFORMED);
+      if (source === undefined || target === undefined) return MALFORMED;
       flow.edges.push([source, target]);
     }
-    if (selfClosing !== '/') open.push({ name, element, text: '' });
-    at += whole.length;
+    return null;
+  };
+
+  const end = (element: string, text: string): BpmnRefusal | null => {
+    if (!textAllowed(element, text)) {
+      return refusal(element === 'timeDuration' ? 'timeDuration' : 'expression');
+    }
+    if (element === 'string') {
+      // A field's literal value, once; anything else in a field the engine would not read.
+      const field = decisionTask?.field ?? null;
+      if (decisionTask === null || field === null || decisionTask.fields.has(field)) {
+        return MALFORMED;
+      }
+      decisionTask.fields.set(field, text.trim());
+    }
+    if (element === 'field' && decisionTask !== null) {
+      if (decisionTask.field === null || !decisionTask.fields.has(decisionTask.field)) {
+        return refusal('field');
+      }
+      decisionTask.field = null;
+    }
+    if (element === 'serviceTask' && decisionTask !== null) {
+      const { id, fields } = decisionTask;
+      decisionTask = null;
+      const decisionKey = fields.get(DECISION_KEY_FIELD);
+      // A decision key never names one of the core's variables: the engine may store a
+      // result under the key (security review of slice 2.7, L3).
+      if (
+        decisionKey === undefined ||
+        !DECISION_KEY.test(decisionKey) ||
+        decisionKey.startsWith(RESERVED_DECISION_PREFIX)
+      ) {
+        return refusal(DECISION_KEY_FIELD);
+      }
+      const onNoHits = fields.get(THROW_ON_NO_HITS_FIELD);
+      if (onNoHits !== undefined && onNoHits !== 'true' && onNoHits !== 'false') {
+        return refusal(THROW_ON_NO_HITS_FIELD);
+      }
+      decisions.push({ elementId: id, decisionKey });
+    }
+    return null;
+  };
+
+  const scanned = scanXml(xml, { start, end });
+  if (scanned !== null) {
+    if (!isScanFailure(scanned)) return err(scanned);
+    return scanned.kind === 'malformed' ? err(MALFORMED) : forbidden('declaration');
   }
-  if (!rootSeen || open.length > 0) return err(MALFORMED);
 
   const executable = processes.filter((process) => process.executable);
   if (executable.length !== 1 || executable[0]!.id !== processKey) {
     return err({ code: 'process.bpmn.process-key-mismatch' });
   }
-  // Only the executable process runs: a form in another process would bind for nothing.
+  // Only the executable process runs: a form or decision in another process would bind for
+  // nothing.
   if (formOutsideRun) return forbidden('formKey');
+  if (decisionOutsideRun) return forbidden('serviceTask');
+  const tables = new Set(decisions.map((decision) => decision.decisionKey));
+  if (decisions.length > MAX_DECISION_TASKS || tables.size > MAX_DECISION_TABLES) {
+    return forbidden('serviceTask');
+  }
   if (!flowBounded(flow)) return err({ code: 'process.bpmn.unbounded-flow' });
-  return ok({ userTasks, forms });
+  return ok({ userTasks, forms, decisions });
 }

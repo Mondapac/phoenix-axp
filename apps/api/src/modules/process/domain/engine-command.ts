@@ -1,5 +1,5 @@
 import type { Temporal } from '@phoenix/shared-kernel';
-import { timerDurationAllowed } from './bpmn-guard';
+import { MAX_DECISION_TABLES, timerDurationAllowed } from './bpmn-guard';
 
 /**
  * A command of the core to the engine (ADR-0005 decision 3; ADR-0020 decision 7). Written in
@@ -7,12 +7,14 @@ import { timerDurationAllowed } from './bpmn-guard';
  * the engine side by its own key:
  *
  * - `deploy-revision`: the deployment name `<processKey>@<revisionId>`;
+ * - `deploy-decision`: the deployment name `<decisionKey>@<revisionId>.dmn` (slice 2.7);
  * - `start-instance`: the core instance id as business key, found before started (R3);
  * - `complete-task`: the command id, stored on the engine task before it is completed (R4);
  * - `delete-orphan`: deleting an instance that is gone is not an error.
  */
 export const COMMAND_KINDS = [
   'deploy-revision',
+  'deploy-decision',
   'start-instance',
   'complete-task',
   'delete-orphan',
@@ -24,7 +26,8 @@ export type CommandKind = (typeof COMMAND_KINDS)[number];
  * {@link MAX_CALLS_PER_COMMAND} calls in a row.
  */
 export const ENGINE_CALL_TIMEOUT_MS = 5000;
-export const MAX_CALLS_PER_COMMAND = 6;
+/** Six for a start, and two for each decision table a deployment checks (slice 2.7). */
+export const MAX_CALLS_PER_COMMAND = 6 + 2 * MAX_DECISION_TABLES;
 
 /**
  * How long a claim holds a command: at least twice the longest delivery (ADR-0020 decision 7),

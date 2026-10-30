@@ -1,6 +1,6 @@
 # ADR-0009: Licence Policy and Proprietary Product
 
-**Status:** Accepted — 2026-10-26 (owner decision: proprietary product; no GPL or AGPL). Amended by ADR-0022 (allow-list); amended 2026-10-28 (an exception may also be approved by the owner)
+**Status:** Accepted — 2026-10-26 (owner decision: proprietary product; no GPL or AGPL). Amended by ADR-0022 (allow-list); amended 2026-10-28 (an exception may also be approved by the owner); amended 2026-10-30 (an unknown licence may pass only by an exception pinned to its licence text)
 **Relates to:** ADR-0005, ADR-0012, ADR-0014
 
 ## Context
@@ -37,3 +37,12 @@ An exception the owner approves on a decision card is recorded in
 `owner`. The first such entry is lightningcss (MPL-2.0) for Tailwind 4, approved by the owner on
 2026-10-28 for build-time, unmodified use.
 
+
+## Amendment (2026-10-30)
+A package whose licence npm cannot name (pnpm reports `Unknown`, e.g. "SEE LICENSE IN
+LICENSE") may pass only through an exception that carries `licenceFileSha256`, the SHA-256 of
+the reviewed LICENSE text; every installed copy must hold exactly that text, so a version that
+changes its terms fails the gate again. Any other unknown licence still fails. The first entry is
+bpmn-js (the bpmn.io licence: MIT terms plus a watermark that must stay unchanged, fully visible
+and not overlapped; decision 6), approved by `cto` on 2026-10-30 for the studio modeler of
+slice 2.10, pinned to an exact version and without bpmn-js-properties-panel.
