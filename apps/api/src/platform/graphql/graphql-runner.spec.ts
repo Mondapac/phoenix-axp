@@ -26,6 +26,10 @@ const node: GraphQLObjectType = new GraphQLObjectType({
   }),
 });
 const schema = new GraphQLSchema({
+  mutation: new GraphQLObjectType({
+    name: 'Mutation',
+    fields: { touch: { type: GraphQLString, resolve: () => 'touched' } },
+  }),
   query: new GraphQLObjectType({
     name: 'Query',
     fields: {
@@ -70,7 +74,7 @@ describe('runGraphql', () => {
   let reported: unknown[];
   const run = (query: string, extra: Partial<GraphqlLimits> = {}, variables?: object) =>
     runGraphql(
-      schema,
+      () => schema,
       { query, ...(variables ? { variables: { ...variables } } : {}) },
       'the-context',
       { ...limits, ...extra },
@@ -138,10 +142,60 @@ describe('runGraphql', () => {
     const answer = await run(fanOut);
     expect(answer.data).toBeUndefined();
     expect(answer.errors?.[0]?.message).toBe('The query selects more than 200 fields.');
-    const aliases = `{ ${Array.from({ length: 201 }, (_, i) => `a${i}: context`).join(' ')} }`;
-    expect((await run(aliases)).errors?.[0]?.extensions).toEqual({
+    const wide = `{ root { ${Array.from({ length: 201 }, (_, i) => `a${i}: name`).join(' ')} } }`;
+    expect((await run(wide)).errors?.[0]?.message).toBe('The query selects more than 200 fields.');
+  });
+
+  it('bounds the root fields, so aliases cannot repeat a use case call many times', async () => {
+    const roots = (n: number) =>
+      `{ ${Array.from({ length: n }, (_, i) => `a${i}: root { name }`).join(' ')} }`;
+    expect((await run(roots(3))).errors).toBeUndefined();
+    const over = await run(roots(4));
+    expect(over.data).toBeUndefined();
+    expect(over.errors?.[0]).toMatchObject({
+      message: 'The query selects more than 3 root fields.',
+      extensions: { code: 'graphql.too-complex' },
+    });
+    // Root fields reached through a fragment count the same.
+    const viaFragment = `{ ...R ...R } fragment R on Query { ${Array.from({ length: 2 }, (_, i) => `b${i}: context`).join(' ')} }`;
+    expect((await run(viaFragment)).errors?.[0]?.extensions).toEqual({
       code: 'graphql.too-complex',
     });
+  });
+
+  it('runs one mutation field per request, so writes cannot be batched by aliases', async () => {
+    expect(await run('mutation { touch }')).toEqual({ data: { touch: 'touched' } });
+    const two = await run('mutation { a: touch b: touch }');
+    expect(two.data).toBeUndefined();
+    expect(two.errors?.[0]).toMatchObject({
+      message: 'The mutation selects more than 1 root fields.',
+      extensions: { code: 'graphql.too-complex' },
+    });
+  });
+
+  it('builds no schema for a document refused by its size, and survives fragment cycles', async () => {
+    let built = 0;
+    const counted = (query: string) =>
+      runGraphql(
+        () => {
+          built += 1;
+          return schema;
+        },
+        { query },
+        null,
+        limits,
+        () => undefined,
+      );
+    await counted('{ a: context b: context c: context d: context }');
+    await counted('{ root { ');
+    expect(built).toBe(0);
+    const cycle = await counted(
+      '{ ...A } fragment A on Query { ...B } fragment B on Query { ...A }',
+    );
+    expect(cycle.errors?.[0]?.extensions).toEqual({ code: 'graphql.invalid' });
+    const missing = await counted('{ ...Nope }');
+    expect(missing.errors?.[0]?.extensions).toEqual({ code: 'graphql.invalid' });
+    expect(built).toBe(2);
   });
 
   it('keeps a resolver GraphQLError with its code and masks any other error', async () => {

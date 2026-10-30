@@ -12,6 +12,7 @@ import {
   type FragmentDefinitionNode,
   type GraphQLFormattedError,
   type GraphQLSchema,
+  type OperationDefinitionNode,
   type SelectionSetNode,
 } from 'graphql';
 import { z } from 'zod';
@@ -31,6 +32,13 @@ export interface GraphqlLimits {
   readonly maxDepth: number;
   /** Fields selected, `__typename` included, each fragment counted each time it is spread. */
   readonly maxFields: number;
+  /**
+   * Fields at the root of a query, each a use case call (aliases count apart): bounds the work
+   * one request can start, as a page of records costs one field.
+   */
+  readonly maxRootFields: number;
+  /** Fields at the root of a mutation: one write per request, so no batching (ADR-0017). */
+  readonly maxMutationRootFields: number;
   /** Whether `__schema` and `__type` may be queried; never in production. */
   readonly introspection: boolean;
 }
@@ -39,6 +47,8 @@ export const DEFAULT_GRAPHQL_LIMITS: Omit<GraphqlLimits, 'introspection'> = Obje
   maxTokens: 2_000,
   maxDepth: 6,
   maxFields: 200,
+  maxRootFields: 3,
+  maxMutationRootFields: 1,
 });
 
 /** The longest document accepted, in characters. */
@@ -75,12 +85,14 @@ export interface GraphqlAnswer {
 }
 
 /**
- * Runs `request` against `schema` with `contextValue` handed to every resolver. A resolver
+ * Runs `request` against the schema `schemaOf` builds, with `contextValue` handed to every
+ * resolver. The document is parsed and its size checked before `schemaOf` is called, so a
+ * refused document costs no schema work (and no database read behind it). A resolver
  * answers an expected failure by throwing a `GraphQLError` with `extensions.code`; any other
  * error is masked as `internal` and passed to `report`, so no exception text reaches the caller.
  */
 export async function runGraphql(
-  schema: GraphQLSchema,
+  schemaOf: () => GraphQLSchema | Promise<GraphQLSchema>,
   request: GraphqlRequest,
   contextValue: unknown,
   limits: GraphqlLimits,
@@ -93,13 +105,6 @@ export async function runGraphql(
     if (error instanceof GraphQLError) return refused(GRAPHQL_INVALID, error.message);
     throw error;
   }
-  const rules = limits.introspection
-    ? specifiedRules
-    : [...specifiedRules, NoSchemaIntrospectionCustomRule];
-  const invalid = validate(schema, document, rules, { maxErrors: 10 });
-  if (invalid.length > 0) {
-    return { errors: invalid.map((error) => withCode(error, GRAPHQL_INVALID).toJSON()) };
-  }
   const operation = getOperationAST(document, request.operationName ?? undefined);
   if (operation === null || operation === undefined) {
     return refused(GRAPHQL_INVALID, 'Name the operation to run.');
@@ -107,8 +112,16 @@ export async function runGraphql(
   if (operation.operation === 'subscription') {
     return refused(GRAPHQL_INVALID, 'Subscriptions are not served.');
   }
-  const tooComplex = complexityOf(document, operation.selectionSet, limits);
+  const tooComplex = complexityOf(document, operation, limits);
   if (tooComplex !== null) return refused(GRAPHQL_TOO_COMPLEX, tooComplex);
+  const schema = await schemaOf();
+  const rules = limits.introspection
+    ? specifiedRules
+    : [...specifiedRules, NoSchemaIntrospectionCustomRule];
+  const invalid = validate(schema, document, rules, { maxErrors: 10 });
+  if (invalid.length > 0) {
+    return { errors: invalid.map((error) => withCode(error, GRAPHQL_INVALID).toJSON()) };
+  }
   const result: ExecutionResult = await execute({
     schema,
     document,
@@ -159,15 +172,19 @@ function masked(error: GraphQLError, report: (error: unknown) => void): GraphQLE
 }
 
 /**
- * Why the operation is over the depth or field limit, or `null`. Runs after validation, so the
- * fragments exist and do not cycle; the walk stops at the first limit crossed, so a document
- * that spreads fragments into each other costs at most `maxFields` steps.
+ * Why the operation is over a depth or field limit, or `null`. Runs before validation: a spread
+ * of a missing fragment, or of one already being expanded (a cycle), is skipped here and refused
+ * by validation. The walk stops at the first limit crossed, so a document that spreads
+ * fragments into each other costs at most `maxFields` steps.
  */
 function complexityOf(
   document: DocumentNode,
-  root: SelectionSetNode,
+  operation: OperationDefinitionNode,
   limits: GraphqlLimits,
 ): string | null {
+  const maxRoot =
+    operation.operation === 'mutation' ? limits.maxMutationRootFields : limits.maxRootFields;
+  const expanding = new Set<string>();
   const fragments = new Map<string, FragmentDefinitionNode>();
   for (const definition of document.definitions) {
     if (definition.kind === Kind.FRAGMENT_DEFINITION) {
@@ -175,12 +192,16 @@ function complexityOf(
     }
   }
   let fields = 0;
+  let rootFields = 0;
   const walk = (set: SelectionSetNode, depth: number): string | null => {
     if (depth > limits.maxDepth) return `The query is deeper than ${limits.maxDepth} levels.`;
     for (const selection of set.selections) {
       switch (selection.kind) {
         case Kind.FIELD: {
           fields += 1;
+          if (depth === 1 && ++rootFields > maxRoot) {
+            return `The ${operation.operation} selects more than ${maxRoot} root fields.`;
+          }
           if (fields > limits.maxFields) {
             return `The query selects more than ${limits.maxFields} fields.`;
           }
@@ -196,10 +217,12 @@ function complexityOf(
           break;
         }
         case Kind.FRAGMENT_SPREAD: {
-          const fragment = fragments.get(selection.name.value);
-          if (fragment === undefined)
-            throw new Error('graphql: a validated spread has no fragment');
+          const name = selection.name.value;
+          const fragment = fragments.get(name);
+          if (fragment === undefined || expanding.has(name)) break;
+          expanding.add(name);
           const over = walk(fragment.selectionSet, depth);
+          expanding.delete(name);
           if (over !== null) return over;
           break;
         }
@@ -207,5 +230,5 @@ function complexityOf(
     }
     return null;
   };
-  return walk(root, 1);
+  return walk(operation.selectionSet, 1);
 }
