@@ -6,7 +6,7 @@ import { UnconfiguredEngine } from '../src/modules/process/infrastructure/unconf
 import { createTestApp } from './support/test-app';
 import { TEST_TENANTS } from './support/test-config';
 
-// The HTTP edge of the process module (slices 2.2 and 2.3), without a database: every request is
+// The HTTP edge of the process module (slices 2.2, 2.3 and 2.10), without a database: every request is
 // anonymous, so each route is refused by the gate before any unit of work opens. The bridge
 // itself is in test/db/process.db-spec.ts.
 
@@ -42,6 +42,9 @@ describe('the process studio API (HTTP)', () => {
 
     it.each([
       ['post', '/process/revisions', { processKey: 'leave', bpmnXml: '<definitions/>' }],
+      ['get', '/process/definitions', undefined],
+      ['get', '/process/definitions/leave', undefined],
+      ['put', '/process/definitions/leave/draft', { bpmnXml: '<definitions/>', version: 0 }],
       ['get', '/process/incidents', undefined],
       ['get', '/process/tasks', undefined],
       ['get', '/process/tasks/supervised', undefined],
@@ -76,6 +79,19 @@ describe('the process studio API (HTTP)', () => {
       expect(complete.status).toBe(400);
       const assign = await call('post', `/process/tasks/${TASK}/assign`).send({ accountId: 'x' });
       expect(assign.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'accountId' });
+      const draft = await call('put', '/process/definitions/leave/draft').send({
+        bpmnXml: '<definitions/>',
+        version: -1,
+      });
+      expect(draft.body).toEqual({ statusCode: 400, code: 'request.invalid', field: 'version' });
+    });
+
+    it('answers 404 for a process key that cannot be one', async () => {
+      for (const path of ['/process/definitions/1-leave', '/process/definitions/%D9%81']) {
+        const response = await call('get', path);
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual({ statusCode: 404, code: 'process.definition.not-found' });
+      }
     });
 
     it('answers 404 for a task id that is not a UUIDv7', async () => {

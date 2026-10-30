@@ -30,12 +30,78 @@ const APPROVAL = `
     <!-- a comment with <scriptTask> inside is not an element -->
     <endEvent id="end"/>`;
 
+// A model as the studio modeler (bpmn-js, slice 2.10) writes it: `bpmn:` prefixes, the core's
+// settings and the engine's form key as moddle extensions, a condition on the picked outcome,
+// a default flow, a timer boundary event and the diagram's marker attribute. The diagram part is
+// the modeler's own output; the condition and the timer are written as moddle serialises them.
+const STUDIO_MODEL = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:phoenix="urn:phoenix:bpmn" xmlns:flowable="http://flowable.org/bpmn" id="definitions" targetNamespace="urn:phoenix:bpmn">
+  <bpmn:process id="leave-request" name="درخواست مرخصی" isExecutable="true">
+    <bpmn:startEvent id="start">
+      <bpmn:outgoing>flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="task_1" name="بررسی درخواست" phoenix:phoenixRole="0190a000-0000-7000-8000-000000045078" phoenix:phoenixDue="P2D" phoenix:phoenixDueDays="working" phoenix:phoenixOutcomes="approve,reject" flowable:formKey="manager-review">
+      <bpmn:incoming>flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_0cd0emz</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="flow_1" sourceRef="start" targetRef="task_1" />
+    <bpmn:exclusiveGateway id="Gateway_1sgzmm0" default="Flow_0pgntte">
+      <bpmn:incoming>Flow_0cd0emz</bpmn:incoming>
+      <bpmn:outgoing>Flow_187sgwq</bpmn:outgoing>
+      <bpmn:outgoing>Flow_0pgntte</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_0cd0emz" sourceRef="task_1" targetRef="Gateway_1sgzmm0" />
+    <bpmn:endEvent id="Event_0hzqedt">
+      <bpmn:incoming>Flow_187sgwq</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_187sgwq" sourceRef="Gateway_1sgzmm0" targetRef="Event_0hzqedt">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${phoenixOutcome == 'approve'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:userTask id="Activity_1gyii8y" phoenix:phoenixAssignee="0190a000-0000-7000-8000-000000045079">
+      <bpmn:incoming>Flow_0pgntte</bpmn:incoming>
+      <bpmn:outgoing>Flow_1ebdn8v</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_0pgntte" sourceRef="Gateway_1sgzmm0" targetRef="Activity_1gyii8y" />
+    <bpmn:endEvent id="Event_0b3uq1b">
+      <bpmn:incoming>Flow_1ebdn8v</bpmn:incoming>
+      <bpmn:incoming>Flow_1t0q2m4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1ebdn8v" sourceRef="Activity_1gyii8y" targetRef="Event_0b3uq1b" />
+    <bpmn:boundaryEvent id="Event_1k3w9ze" attachedToRef="Activity_1gyii8y">
+      <bpmn:outgoing>Flow_1t0q2m4</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerEventDefinition_0x1yq2v">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT4H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="Flow_1t0q2m4" sourceRef="Event_1k3w9ze" targetRef="Event_0b3uq1b" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="leave-request">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <dc:Bounds x="152" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1sgzmm0_di" bpmnElement="Gateway_1sgzmm0" isMarkerVisible="true">
+        <dc:Bounds x="395" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_0pgntte_di" bpmnElement="Flow_0pgntte">
+        <di:waypoint x="420" y="145" />
+        <di:waypoint x="420" y="230" />
+        <di:waypoint x="510" y="230" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+
 const refusal = (xml: string, key = 'leave-approval') => {
   const result = checkBpmn(xml, key);
   return result.ok ? null : result.error;
 };
 
 describe('checkBpmn (slice 2.2 security: only plain BPMN reaches the shared engine)', () => {
+  it('accepts a model as the studio modeler writes it', () => {
+    expect(refusal(STUDIO_MODEL, 'leave-request')).toBeNull();
+  });
+
   it('accepts a plain approval model with timers, gateways and safe conditions', () => {
     expect(refusal(model(APPROVAL))).toBeNull();
   });

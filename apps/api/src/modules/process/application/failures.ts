@@ -60,3 +60,9 @@ export const INELIGIBLE_ASSIGNEE: IneligibleAssignee = Object.freeze({
   code: 'process.task.assignee-ineligible',
   field: 'accountId',
 });
+
+/** No draft and no published revision of the process key. */
+export type DefinitionNotFound = { readonly code: 'process.definition.not-found' };
+export const DEFINITION_NOT_FOUND: DefinitionNotFound = Object.freeze({
+  code: 'process.definition.not-found',
+});

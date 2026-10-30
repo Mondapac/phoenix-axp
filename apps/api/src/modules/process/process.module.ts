@@ -35,6 +35,9 @@ import { ListMyTasks } from './application/use-cases/list-my-tasks.use-case';
 import { ListProcessIncidents } from './application/use-cases/list-process-incidents.use-case';
 import { ListSiteTasks } from './application/use-cases/list-site-tasks.use-case';
 import { PublishProcessRevision } from './application/use-cases/publish-process-revision.use-case';
+import { ListProcessDefinitions } from './application/use-cases/list-process-definitions.use-case';
+import { SaveProcessDraft } from './application/use-cases/save-process-draft.use-case';
+import { ViewProcessDefinition } from './application/use-cases/view-process-definition.use-case';
 import { RelayEngineCommands } from './application/use-cases/relay-engine-commands.use-case';
 import { ReleaseTask } from './application/use-cases/release-task.use-case';
 import { ReplaceWorkingCalendar } from './application/use-cases/replace-working-calendar.use-case';
@@ -55,6 +58,7 @@ import { syncEngineJob } from './presentation/jobs/sync-engine.job';
 import { startFromSubmissionSubscriber } from './presentation/subscribers/start-from-submission.subscriber';
 import { ProcessIncidentsController } from './presentation/process-incidents.controller';
 import { ProcessRevisionsController } from './presentation/process-revisions.controller';
+import { ProcessDefinitionsController } from './presentation/process-definitions.controller';
 import { ProcessTasksController } from './presentation/process-tasks.controller';
 import { WorkingCalendarController } from './presentation/working-calendar.controller';
 
@@ -82,6 +86,7 @@ const REPOSITORY = PROCESS_REPOSITORY;
 @Module({
   imports: [FormsModule],
   controllers: [
+    ProcessDefinitionsController,
     ProcessRevisionsController,
     ProcessIncidentsController,
     ProcessTasksController,
@@ -172,6 +177,9 @@ const REPOSITORY = PROCESS_REPOSITORY;
       CLOCK,
       ID_GENERATOR,
     ]),
+    useCase(SaveProcessDraft, [UNIT_OF_WORK, REPOSITORY, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
+    useCase(ListProcessDefinitions, [UNIT_OF_WORK, REPOSITORY]),
+    useCase(ViewProcessDefinition, [UNIT_OF_WORK, REPOSITORY]),
     useCase(StartProcessFromSubmission, [
       UNIT_OF_WORK,
       REPOSITORY,
