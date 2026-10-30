@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -11,7 +12,7 @@ import path from 'node:path';
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const GATE = path.join(REPO_ROOT, 'scripts/check-licences.mjs');
 
-type Listing = Record<string, { name: string; versions: string[] }[]>;
+type Listing = Record<string, { name: string; versions: string[]; paths?: string[] }[]>;
 interface Exception {
   package: string;
   licence: string;
@@ -277,5 +278,47 @@ describe('the licence gate (scripts/check-licences.mjs, ADR-0009)', () => {
     expect(gate({ MIT: [pkg('a')] }, { elkjs: 'EPL-2.0' }).problems).toEqual([
       'the exceptions file must hold a JSON array',
     ]);
+  });
+
+  it('passes an unknown licence only by an exception pinned to the text of its licence file', () => {
+    const text = 'MIT terms, and the watermark must stay visible.\n';
+    const hash = createHash('sha256').update(text).digest('hex');
+    const installed = (name: string, licence: string) => {
+      const at = path.join(dir, name);
+      mkdirSync(at, { recursive: true });
+      writeFileSync(path.join(at, 'LICENSE'), licence);
+      return { ...pkg('bpmn-js'), paths: [at] };
+    };
+    const pinned = {
+      ...approved('bpmn-js', 'Unknown', 'bpmn.io licence'),
+      licenceFileSha256: hash,
+    };
+
+    const same = gate({ Unknown: [installed('same', text)] }, [pinned]);
+    expect(same).toMatchObject({ status: 0, problems: [] });
+    expect(same.out).toContain('bpmn-js@1.0.0 (Unknown): bpmn.io licence (cto, 2026-10-27)');
+    // A new version that changes its terms fails again.
+    expect(
+      gate({ Unknown: [installed('changed', `${text}No SaaS use.\n`)] }, [pinned]).problems,
+    ).toEqual([
+      'bpmn-js@1.0.0 (Unknown): its licence file is missing or differs from the reviewed text; ' +
+        'review the new text and update config/licence-exceptions.json',
+    ]);
+    // A copy without a licence file fails too.
+    const bare = path.join(dir, 'bare');
+    mkdirSync(bare, { recursive: true });
+    expect(gate({ Unknown: [{ ...pkg('bpmn-js'), paths: [bare] }] }, [pinned]).status).toBe(1);
+    // A plain exception, without the pinned text, excuses nothing.
+    const plain = gate({ Unknown: [installed('plain', text)] }, [approved('bpmn-js', 'Unknown')]);
+    expect(plain.problems).toEqual(
+      expect.arrayContaining([
+        'exception #1 (bpmn-js): an unknown licence needs "licenceFileSha256" (the reviewed text)',
+        'bpmn-js@1.0.0 (Unknown): no or unknown licence',
+      ]),
+    );
+    expect(
+      gate({ Unknown: [installed('bad', text)] }, [{ ...pinned, licenceFileSha256: 'abc' }])
+        .problems,
+    ).toContain('exception #1 (bpmn-js): "licenceFileSha256" must be a lowercase hex SHA-256');
   });
 });
