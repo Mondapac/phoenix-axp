@@ -48,7 +48,7 @@ change one only through a new ADR or an "Amended by" note.
   internals. Every facade call carries a `CallContext` (TenantContext + ActorContext + correlation id).
 - `platform/` holds cross-cutting runtime (authz, call-context, tenant-context, clock, ids,
   unit-of-work, persistence, events, scheduler, worker, audit, subject-keys, i18n, mail,
-  sms, storage, rate-limit, http, health, ai, extensions). `platform` never imports a module.
+  sms, storage, rate-limit, http, graphql, health, ai, extensions). `platform` never imports a module.
 - Deferral with triggers (ADR-0010): a platform piece lands no later than its first consumer,
   or at phase start when the phase review lists it (ADR-0020). Unbuilt facades bind to a
   `@FailClosedPlaceholder` that always refuses (allowed for a permission check too);

@@ -129,6 +129,7 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
         'contexts-are-built-by-platform',
         'database-driver-only-in-infrastructure',
         'domain-is-pure',
+        'graphql-only-at-the-http-edge',
         'kernel-only-through-package-entries',
         'kernel-testing-only-in-tests',
         'module-internals-are-private',
@@ -164,6 +165,8 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
         'database-driver-only-in-infrastructure: src/platform/uses-database-driver.ts',
         'domain-is-pure: src/modules/alpha/domain/does-io.ts',
         'domain-is-pure: src/modules/alpha/domain/imports-application.ts',
+        'graphql-only-at-the-http-edge: src/modules/alpha/application/uses-graphql.ts',
+        'graphql-only-at-the-http-edge: src/platform/uses-graphql.ts',
         'kernel-only-through-package-entries: src/modules/alpha/infrastructure/reaches-kernel-by-path.ts',
         'kernel-only-through-package-entries: src/platform/binds-built-test-fake.ts',
         'kernel-only-through-package-entries: src/platform/reaches-kernel-dist-by-path.ts',
@@ -249,6 +252,9 @@ describe('architecture boundaries (ADR-0001, ADR-0002)', () => {
       'src/modules/alpha/alpha.module.ts',
       'src/modules/alpha/application/use-cases/find-thing.use-case.ts',
       'src/modules/alpha/infrastructure/prisma-thing.repository.ts',
+      // platform/graphql runs requests; a module's presentation builds its schema.
+      'src/platform/graphql/graphql-runner.ts',
+      'src/modules/alpha/presentation/graphql-schema.ts',
       // The S3 adapter is the one user of the AWS SDK.
       'src/platform/storage/s3-object-store.ts',
     ])('accepts the allowed file %s', (file) => {
