@@ -14,6 +14,7 @@ import {
   runGraphql,
   type GraphqlLimits,
 } from './graphql-runner';
+import { StaleAggregateError, TransactionConflictError } from '../unit-of-work/errors';
 
 // A small schema with a recursive type, so depth and field count can be pushed past the limits.
 const node: GraphQLObjectType = new GraphQLObjectType({
@@ -40,6 +41,18 @@ const schema = new GraphQLSchema({
         type: GraphQLString,
         resolve: () => {
           throw new Error('secret connection string');
+        },
+      },
+      stale: {
+        type: GraphQLString,
+        resolve: () => {
+          throw new StaleAggregateError('Thing', 'id');
+        },
+      },
+      busy: {
+        type: GraphQLString,
+        resolve: () => {
+          throw new TransactionConflictError('40001');
         },
       },
       count: {
@@ -140,6 +153,15 @@ describe('runGraphql', () => {
     ]);
     expect(JSON.stringify(answer)).not.toContain('secret');
     expect(reported).toEqual([new Error('secret connection string')]);
+  });
+
+  it('answers unit-of-work conflicts with the 409 codes of REST', async () => {
+    const answer = await run('{ stale busy }');
+    expect(answer.errors?.map((e) => e.extensions?.code)).toEqual([
+      'conflict.stale',
+      'conflict.retry',
+    ]);
+    expect(reported).toEqual([]);
   });
 
   it('answers a variable that does not coerce as graphql.invalid', async () => {

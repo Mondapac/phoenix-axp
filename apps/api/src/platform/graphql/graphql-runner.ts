@@ -15,6 +15,8 @@ import {
   type SelectionSetNode,
 } from 'graphql';
 import { z } from 'zod';
+import { CONFLICT_CODES } from '../http/conflict-filter';
+import { StaleAggregateError, TransactionConflictError } from '../unit-of-work/errors';
 
 // The one GraphQL runtime of the API (ADR-0017 decision 8): a module's presentation layer
 // builds a schema whose resolvers call its use cases, and runs a request through here. Every
@@ -142,6 +144,12 @@ function masked(error: GraphQLError, report: (error: unknown) => void): GraphQLE
   }
   if (original instanceof GraphQLError && typeof original.extensions.code === 'string') {
     return error;
+  }
+  // The conflicts of a unit of work answer as REST's 409 codes (ConflictFilter), not as errors.
+  if (original instanceof StaleAggregateError || original instanceof TransactionConflictError) {
+    const code =
+      original instanceof StaleAggregateError ? CONFLICT_CODES.stale : CONFLICT_CODES.retry;
+    return new GraphQLError(code, { path: error.path, extensions: { code } });
   }
   report(original);
   return new GraphQLError('Internal error.', {
