@@ -5,7 +5,13 @@ import type { Messages } from '../../../_i18n/messages';
 
 // The inbox's two views for a supervisor: its own tasks, or every open task at its sites.
 
-export function ViewSwitch({ t, view }: { readonly t: Messages; readonly view: 'mine' | 'supervised' }) {
+export function ViewSwitch({
+  t,
+  view,
+}: {
+  readonly t: Messages;
+  readonly view: 'mine' | 'supervised';
+}) {
   return (
     <nav aria-label={t['tasks.views']} className="flex flex-wrap gap-2">
       <Link

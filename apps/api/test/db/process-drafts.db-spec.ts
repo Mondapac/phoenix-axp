@@ -68,14 +68,19 @@ describe.each(TEST_TENANTS)('process drafts in tenant %s (database integration)'
   let keys = 0;
   const nextKey = () => `draft_${code.replace(/-/g, '_')}_${++keys}`;
 
-  function build(p: Persistence) {
+  function build(p: Persistence, allowed = true) {
     const declared = new Map<string, PermissionDeclaration>(
       PROCESS_PERMISSIONS.declarations.map((d) => [d.key, d]),
     );
     const gate = createUseCaseGate(
       testTenantRegistry(),
       { get: (key) => declared.get(key) },
-      { check: () => Promise.resolve({ allowed: true }) },
+      {
+        check: () =>
+          Promise.resolve(
+            allowed ? { allowed: true } : { allowed: false, denial: { code: 'access.denied' } },
+          ),
+      },
     );
     const repository = new PrismaProcessRepository(p.service);
     const commands = new EngineCommands(repository, ids, clock);
@@ -181,6 +186,52 @@ describe.each(TEST_TENANTS)('process drafts in tenant %s (database integration)'
       ok: false,
       error: { code: 'process.definition.not-found' },
     });
+  });
+
+  it('refuses a model the guard stopped early when it is of another key or holds a DOCTYPE', async () => {
+    const key = nextKey();
+    const script = '<scriptTask id="review" scriptFormat="groovy"><script>x</script></scriptTask>';
+    expect(
+      await use.save.execute(staff(tenant), {
+        processKey: key,
+        bpmnXml: model('other', script),
+        version: 0,
+      }),
+    ).toEqual({ ok: false, error: { code: 'process.bpmn.process-key-mismatch' } });
+    expect(
+      await use.save.execute(staff(tenant), {
+        processKey: key,
+        bpmnXml: model(key).replace('<definitions', '<!DOCTYPE x>\n<definitions'),
+        version: 0,
+      }),
+    ).toEqual({ ok: false, error: { code: 'process.bpmn.malformed' } });
+    // The same refused construct in a model of this key is an unfinished draft.
+    const kept = await use.save.execute(staff(tenant), {
+      processKey: key,
+      bpmnXml: model(key, script),
+      version: 0,
+    });
+    expect(kept).toEqual({
+      ok: true,
+      value: {
+        version: 1,
+        problem: { code: 'process.bpmn.forbidden-construct', field: 'scriptTask' },
+      },
+    });
+  });
+
+  it('refuses staff without process.definitions.design on every draft use case', async () => {
+    const denied = build(persistence, false);
+    const refusal = { ok: false, error: { code: 'access.denied' } };
+    expect(
+      await denied.save.execute(staff(tenant), {
+        processKey: nextKey(),
+        bpmnXml: model('x'),
+        version: 0,
+      }),
+    ).toEqual(refusal);
+    expect(await denied.list.execute(staff(tenant), undefined)).toEqual(refusal);
+    expect(await denied.view.execute(staff(tenant), { processKey: 'x' })).toEqual(refusal);
   });
 
   it('lists drafts and published keys in key order, with the latest revision', async () => {

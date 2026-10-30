@@ -12,7 +12,7 @@ import {
 } from '@phoenix/ui';
 import { Inbox } from 'lucide-react';
 import Link from 'next/link';
-import { standingOf, type InboxTask } from '../../_lib/process';
+import { INBOX_LIMIT, inboxPath, standingOf, type InboxTask } from '../../_lib/process';
 import { readForPage, studioSession } from '../../_server/session';
 import { NoAccess, PageCrumbs } from '../_components/page-parts';
 import { taskNames } from './_parts/task-names';
@@ -24,7 +24,6 @@ import { ViewSwitch } from './_parts/view-switch';
 // open task at its sites (GET process/tasks/supervised). The API reads at most 500 tasks.
 
 const COLUMNS = ['38%', '22%', '22%', '18%'];
-const LIMIT = 200;
 
 export default async function TasksPage({
   searchParams,
@@ -36,11 +35,7 @@ export default async function TasksPage({
   const supervises = held.has('process.tasks.assign');
   const view = supervises && (await searchParams).view === 'supervised' ? 'supervised' : 'mine';
   const [listed, names] = await Promise.all([
-    readForPage<{ items: InboxTask[] }>(
-      view === 'supervised'
-        ? `process/tasks/supervised?limit=${LIMIT}`
-        : `process/tasks?limit=${LIMIT}`,
-    ),
+    readForPage<{ items: InboxTask[] }>(inboxPath(view === 'supervised')),
     taskNames(session),
   ]);
   const dates = {
@@ -143,7 +138,7 @@ export default async function TasksPage({
                 </TableBody>
               </Table>
             </div>
-            {tasks.length >= LIMIT ? (
+            {tasks.length >= INBOX_LIMIT ? (
               <p className="border-t border-line px-4 py-3 text-sm text-fg-muted">
                 {t['tasks.truncated']}
               </p>

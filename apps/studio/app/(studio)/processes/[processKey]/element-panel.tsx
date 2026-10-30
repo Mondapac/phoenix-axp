@@ -334,6 +334,7 @@ function TaskSettings(props: {
             description={t['modeler.escalation.help']}
             options={roles}
             value={settings.escalationRoleId}
+            invalid={problems.includes('escalation-invalid')}
             optional
             onChange={(escalationRoleId) => update({ escalationRoleId })}
           />

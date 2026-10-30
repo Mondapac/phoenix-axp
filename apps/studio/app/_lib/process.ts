@@ -165,6 +165,7 @@ export type SettingsProblem =
   | 'role-missing'
   | 'person-missing'
   | 'deadline-invalid'
+  | 'escalation-invalid'
   | 'outcome-invalid'
   | 'outcome-repeated'
   | 'outcomes-too-many';
@@ -183,6 +184,9 @@ export function settingsProblems(settings: TaskSettingsForm): SettingsProblem[] 
       (deadline.unit === 'hours' && deadline.count === 'working'))
   ) {
     problems.push('deadline-invalid');
+  }
+  if (deadline !== null && settings.escalationRoleId !== null && !isId(settings.escalationRoleId)) {
+    problems.push('escalation-invalid');
   }
   if (outcomes.some((code) => !OUTCOME.test(code))) problems.push('outcome-invalid');
   if (new Set(outcomes).size !== outcomes.length) problems.push('outcome-repeated');
@@ -276,6 +280,17 @@ export function starterModel(key: string, name: string, taskName: string): strin
 `;
 }
 
-/** The size of a model as the API weighs a request (UTF-8 bytes); its JSON body limit is 64 KiB. */
-export const modelBytes = (xml: string): number => new TextEncoder().encode(xml).length;
-export const MAX_REQUEST_MODEL_BYTES = 60 * 1024;
+/** The API's most tasks for one inbox read (MAX_INBOX_TASKS): a larger limit answers 400. */
+export const INBOX_LIMIT = 100;
+
+/** The inbox read of the member's own tasks, or of the sites it supervises. */
+export const inboxPath = (supervised: boolean): string =>
+  `${supervised ? 'process/tasks/supervised' : 'process/tasks'}?limit=${INBOX_LIMIT}`;
+
+/**
+ * The size of the request that saves or publishes a model, as the API weighs it: the UTF-8
+ * bytes of its JSON body (escaped quotes and line breaks included), whose limit is 64 KiB.
+ */
+export const modelBytes = (xml: string): number =>
+  new TextEncoder().encode(JSON.stringify({ bpmnXml: xml, version: 2_147_483_647 })).length;
+export const MAX_REQUEST_MODEL_BYTES = 63 * 1024;

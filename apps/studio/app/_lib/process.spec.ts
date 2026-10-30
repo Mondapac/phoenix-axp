@@ -2,7 +2,10 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import {
   attributesOf,
+  inboxPath,
   isProcessKey,
+  MAX_REQUEST_MODEL_BYTES,
+  modelBytes,
   outcomeCondition,
   outcomeOfCondition,
   parseDeadline,
@@ -84,6 +87,27 @@ describe('task settings (mirror of modules/process/domain/task-settings.ts)', ()
     expect(
       settingsProblems({ ...base, outcomes: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] }),
     ).toEqual(['outcomes-too-many']);
+    const due = { amount: 2, unit: 'days', count: 'calendar' } as const;
+    expect(settingsProblems({ ...base, deadline: due, escalationRoleId: 'managers' })).toEqual([
+      'escalation-invalid',
+    ]);
+    expect(settingsProblems({ ...base, deadline: due, escalationRoleId: ROLE })).toEqual([]);
+  });
+});
+
+describe('what the API takes in one request', () => {
+  it('reads the inbox within the API limit (MAX_INBOX_TASKS = 100; more answers 400)', () => {
+    expect(inboxPath(false)).toBe('process/tasks?limit=100');
+    expect(inboxPath(true)).toBe('process/tasks/supervised?limit=100');
+  });
+
+  it('weighs a model as its JSON body, escapes included, under the 64 KiB body limit', () => {
+    const quoted = '"\n'.repeat(1000);
+    expect(modelBytes(quoted)).toBeGreaterThan(new TextEncoder().encode(quoted).length * 1.5);
+    expect(MAX_REQUEST_MODEL_BYTES).toBeLessThan(64 * 1024);
+    expect(modelBytes(starterModel('leave', 'Leave', 'Review'))).toBeLessThan(
+      MAX_REQUEST_MODEL_BYTES,
+    );
   });
 });
 
