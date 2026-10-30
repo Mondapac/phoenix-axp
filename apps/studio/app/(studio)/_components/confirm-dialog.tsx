@@ -15,6 +15,8 @@ export function ConfirmDialog(props: {
   readonly confirmLabel: string;
   readonly onConfirm: () => Promise<ApiAnswer<unknown>>;
   readonly onDone: () => void;
+  /** Called on a stale version (409 `conflict.stale`), so the page reads the current one. */
+  readonly onStale?: () => void;
   /** `primary` for a change that takes nothing away; `danger` by default. */
   readonly confirmVariant?: 'danger' | 'primary';
 }) {
@@ -33,6 +35,7 @@ export function ConfirmDialog(props: {
       props.onDone();
     } else {
       setProblem(t[failureMessage(answer)]);
+      if (answer.code === 'conflict.stale') props.onStale?.();
     }
   }
 

@@ -53,7 +53,7 @@ export default async function ObjectFieldsPage({ params }: Props) {
             ]}
           />
         }
-        title={fill(t['fieldsEdit.title'], { name: `⁨${definition.name}⁩` })}
+        title={fill(t['fieldsEdit.title'], { name: `\u2068${definition.name}\u2069` })}
         description={t['fieldsEdit.description']}
       />
       <FieldsEditor

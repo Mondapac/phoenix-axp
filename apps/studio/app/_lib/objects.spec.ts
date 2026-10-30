@@ -128,6 +128,17 @@ describe.each(TENANTS)('record values for $locale', (ctx) => {
     expect(valueOf(described('integer'), '۱۲۳', ctx)).toBe(123);
     expect(valueOf(described('integer'), '1.5', ctx)).toBeUndefined();
     expect(valueOf(described('decimal'), '۱٫۵', ctx)).toBe('1.5');
+    for (const [typed, stored] of [
+      ['01.50', '1.5'],
+      ['-0.0', '0'],
+      ['7.', undefined],
+    ] as const) {
+      expect([typed, valueOf(described('decimal'), typed, ctx)]).toEqual([typed, stored]);
+    }
+    expect(valueOf(described('text'), '  ', ctx)).toBe('  ');
+    expect(valueOf(described('text'), '', ctx)).toBeNull();
+    expect(valueOf(described('text'), 'a\u0007b', ctx)).toBeUndefined();
+    expect(valueOf(described('long-text'), 'a\nb', ctx)).toBe('a\nb');
     expect(valueOf(described('integer'), '  ', ctx)).toBeNull();
     expect(valueOf(described('text', { maxLength: 3 }), 'abcd', ctx)).toBeUndefined();
     expect(valueOf(described('boolean'), 'false', ctx)).toBe(false);
@@ -142,6 +153,7 @@ describe.each(TENANTS)('record values for $locale', (ctx) => {
     expect(text).toBe(ctx.calendar === 'persian' ? '1405/08/08' : '2026/10/30');
     expect(valueOf(date, text, ctx)).toBe('2026-10-30');
     expect(valueOf(date, '1405/13/01', ctx)).toBeUndefined();
+    expect(valueOf(described('date-time'), '1405/13/40 10:00', ctx)).toBeUndefined();
   });
 
   it('round-trips an instant through the tenant’s time zone', () => {

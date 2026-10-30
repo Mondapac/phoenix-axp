@@ -288,6 +288,7 @@ export function PublishRevisionButton(props: {
         })
       }
       onDone={() => router.refresh()}
+      onStale={() => router.refresh()}
     />
   );
 }
@@ -312,7 +313,7 @@ export function RetireObjectButton(props: {
           }
         />
       }
-      title={fill(t['retire.title'], { name: `⁨${definition.name}⁩` })}
+      title={fill(t['retire.title'], { name: `\u2068${definition.name}\u2069` })}
       description={t['retire.description']}
       confirmLabel={t['retire.confirm']}
       onConfirm={() =>
@@ -321,6 +322,7 @@ export function RetireObjectButton(props: {
         })
       }
       onDone={() => router.refresh()}
+      onStale={() => router.refresh()}
     />
   );
 }

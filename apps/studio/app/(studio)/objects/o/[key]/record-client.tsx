@@ -142,11 +142,13 @@ export function RecordForm(props: {
   const shown = props.fields.filter((field) =>
     creating ? field.create : field.read || field.update,
   );
-  const start = () =>
-    Object.fromEntries(
-      shown.map((field) => [field.key, inputText(field, record?.values[field.key], ctx)]),
-    );
-  const [texts, setTexts] = useState<Record<string, string>>(start);
+  // Only what the member typed is kept: every other input shows the record as last read, so a
+  // refresh after a stale answer brings in another editor's changes instead of reverting them.
+  const shownText = (field: DescribedField) => inputText(field, record?.values[field.key], ctx);
+  const [edits, setEdits] = useState<Readonly<Record<string, string>>>({});
+  const textOf = (field: DescribedField) => edits[field.key] ?? shownText(field);
+  const touched = (field: DescribedField) =>
+    Object.hasOwn(edits, field.key) && edits[field.key] !== shownText(field);
   const [invalid, setInvalid] = useState<{ key: string; required: boolean } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -159,8 +161,10 @@ export function RecordForm(props: {
     setProblem(null);
     setNotice(null);
     const sent: Record<string, StoredValue | null> = {};
-    for (const field of shown.filter(editable)) {
-      const value = valueOf(field, texts[field.key] ?? '', ctx);
+    // On create every settable field counts; on update only the ones the member changed, so
+    // a field it cannot read (or one whose text rounds its value) is never sent unasked.
+    for (const field of shown.filter((f) => editable(f) && (creating || touched(f)))) {
+      const value = valueOf(field, textOf(field), ctx);
       if (value === undefined) return setInvalid({ key: field.key, required: false });
       if (value === null && field.required) return setInvalid({ key: field.key, required: true });
       sent[field.key] = value;
@@ -188,6 +192,7 @@ export function RecordForm(props: {
         router.push(`${base}/${(answer.body as { id: string }).id}`);
       } else {
         setNotice(t['record.saved']);
+        setEdits({});
         router.refresh();
       }
       return;
@@ -198,7 +203,8 @@ export function RecordForm(props: {
       }
     }
     setProblem(t[failureMessage(answer)]);
-    // A stale version: read the current one, so the next try carries it.
+    // A stale version: read the current one, so the next try carries it with only the
+    // member's own changes.
     if (answer.code === 'conflict.stale') router.refresh();
   }
 
@@ -274,9 +280,9 @@ export function RecordForm(props: {
                 <ValueInput
                   t={t}
                   field={field}
-                  text={texts[field.key] ?? ''}
+                  text={textOf(field)}
                   onChange={(text) => {
-                    setTexts((current) => ({ ...current, [field.key]: text }));
+                    setEdits((current) => ({ ...current, [field.key]: text }));
                     if (isInvalid) setInvalid(null);
                   }}
                 />
@@ -318,6 +324,7 @@ export function RecordForm(props: {
                 router.push(base);
                 router.refresh();
               }}
+              onStale={() => router.refresh()}
             />
           ) : (
             <span />

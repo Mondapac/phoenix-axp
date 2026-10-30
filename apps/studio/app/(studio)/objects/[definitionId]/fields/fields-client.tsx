@@ -61,7 +61,7 @@ function OptionsEditor(props: {
       <legend className="mb-1.5 text-sm font-medium text-fg">{t['fieldsEdit.options']}</legend>
       {draft.options.map((option, at) => (
         <div key={at} className="flex min-w-0 items-end gap-2">
-          <Field label={t['fieldsEdit.optionLabel']} className="flex-1">
+          <Field label={t['fieldsEdit.optionLabel']} className="flex-1" invalid={props.invalid}>
             <TextInput
               autoComplete="off"
               normalise="text"
@@ -70,7 +70,7 @@ function OptionsEditor(props: {
               onChange={(event) => set(at, 'label', event.currentTarget.value)}
             />
           </Field>
-          <Field label={t['fieldsEdit.optionKey']} className="flex-1">
+          <Field label={t['fieldsEdit.optionKey']} className="flex-1" invalid={props.invalid}>
             <TextInput
               dir="ltr"
               autoComplete="off"

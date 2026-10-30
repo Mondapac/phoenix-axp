@@ -330,6 +330,26 @@ export function zonedEpochMs(isoDate: string, hour: number, minute: number, time
   return wall - offsetAt(first);
 }
 
+/** Control characters are refused; a long text may hold line breaks and tabs (as the API). */
+function fitsCharacters(text: string, type: 'text' | 'long-text'): boolean {
+  for (const character of text) {
+    const code = character.charCodeAt(0);
+    const allowed = type === 'long-text' && (code === 0x0a || code === 0x09 || code === 0x0d);
+    if ((code < 0x20 || code === 0x7f) && !allowed) return false;
+  }
+  return true;
+}
+
+/** The API's one stored form of a decimal: no leading or trailing zeros, no "-0". */
+export function canonicalDecimal(text: string): string | undefined {
+  const match = /^(-?)(\d{1,20})(?:\.(\d{1,10}))?$/.exec(text);
+  if (match === null) return undefined;
+  const whole = match[2]!.replace(/^0+(?=\d)/, '');
+  const fraction = (match[3] ?? '').replace(/0+$/, '');
+  const zero = whole === '0' && fraction === '';
+  return `${match[1] === '-' && !zero ? '-' : ''}${whole}${fraction === '' ? '' : `.${fraction}`}`;
+}
+
 /** The text an input shows for a stored value (ASCII digits; dates in the tenant's calendar). */
 export function inputText(
   field: DescribedField,
@@ -360,13 +380,15 @@ export function valueOf(
   text: string,
   ctx: ValueContext,
 ): StoredValue | null | undefined {
-  const trimmed = field.type === 'long-text' || field.type === 'text' ? text : text.trim();
-  if (trimmed.trim() === '') return null;
+  const isText = field.type === 'text' || field.type === 'long-text';
+  // A text is sent as typed (the API keeps spaces); only an empty box clears it.
+  const trimmed = isText ? text : text.trim();
+  if (trimmed === '') return null;
   switch (field.type) {
     case 'text':
     case 'long-text': {
       const limit = field.maxLength ?? TEXT_LIMITS[field.type];
-      return [...text].length <= limit ? text : undefined;
+      return [...text].length <= limit && fitsCharacters(text, field.type) ? text : undefined;
     }
     case 'integer': {
       const digits = latinDigits(trimmed);
@@ -374,10 +396,8 @@ export function valueOf(
       const number = Number(digits);
       return Number.isSafeInteger(number) && !Object.is(number, -0) ? number : undefined;
     }
-    case 'decimal': {
-      const digits = latinDigits(trimmed).replace('٫', '.');
-      return /^-?\d{1,20}(?:\.\d{1,10})?$/.test(digits) ? digits : undefined;
-    }
+    case 'decimal':
+      return canonicalDecimal(latinDigits(trimmed).replace('٫', '.'));
     case 'boolean':
       return trimmed === 'true' ? true : trimmed === 'false' ? false : undefined;
     case 'date':
