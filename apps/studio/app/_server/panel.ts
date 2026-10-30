@@ -35,6 +35,9 @@ export const STUDIO_API_PREFIXES: readonly (readonly string[])[] = [
   ['forms', 'forms'],
   ['forms', 'revisions'],
   ['forms', 'submissions'],
+  ['objects', 'definitions'],
+  ['objects', 'revisions'],
+  ['objects', 'o'],
 ];
 
 /** Where sign-in sends the browser. */

@@ -13,7 +13,7 @@ import {
   Select,
   type NavItem,
 } from '@phoenix/ui';
-import { Building2, ClipboardList, House, LogOut, Network, Users } from 'lucide-react';
+import { Boxes, Building2, ClipboardList, House, LogOut, Network, Users } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { indentedSiteName } from '../../_lib/people';
@@ -54,6 +54,7 @@ const ICONS: Readonly<Record<string, ReactNode>> = {
   people: <Users aria-hidden />,
   structure: <Network aria-hidden />,
   forms: <ClipboardList aria-hidden />,
+  objects: <Boxes aria-hidden />,
 };
 
 function isCurrent(href: string, pathname: string): boolean {
