@@ -86,8 +86,9 @@ both REST and GraphQL are served in Phase 2 (D6). The studio screens are slice 2
    stale write as `conflict.stale`.
    *Clarified 2026-10-30 (objects part 2 PR), write-only callers:* describing an Object shows its
    fields (labels, types, options), which is reading, so DescribeObject, and with it GraphQL,
-   keep `objects.record.read` as their rule. A caller holding only `create` or `update` gets the
-   same 404 as for an unknown Object there, and writes over REST, whose writes answer only
+   keep `objects.record.read` as their rule. A caller holding only `create` or `update` is
+   refused there (403 `access.denied` from the gate when it holds the read key nowhere; the
+   404 of an unknown Object when it holds it only elsewhere), and writes over REST, whose writes answer only
    `{ id, version }` and never a value. Opening describe or GraphQL to write-only callers would
    need an "any of" access rule, which ADR-0004's gate does not have; it needs its own ADR.
 9. **Portal users** read and write records only through `own-resources` use cases with

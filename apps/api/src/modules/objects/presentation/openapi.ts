@@ -41,13 +41,14 @@ const REFUSALS: Readonly<Record<number, string>> = {
   404: 'Unknown, or outside the caller’s grants: both answer the same',
   409: 'Another version (`conflict.stale`) or a state that refuses the change',
   422: 'A record that breaks its fields’ rules (`objects.record.invalid`)',
+  503: 'The access check is unavailable (`access.unavailable`)',
 };
 
-/** The refusals an operation can answer, each with the error body. */
-export const ApiRefusals = (...statuses: (keyof typeof REFUSALS)[]) =>
+/** The refusals an operation can answer, each with the error body; every one can answer 503. */
+export const ApiRefusals = (...statuses: Exclude<keyof typeof REFUSALS, 503>[]) =>
   applyDecorators(
     ApiExtraModels(ErrorBody),
-    ...statuses.map((status) =>
+    ...[...statuses, 503].map((status) =>
       ApiResponse({ status, description: REFUSALS[status], type: ErrorBody }),
     ),
   );

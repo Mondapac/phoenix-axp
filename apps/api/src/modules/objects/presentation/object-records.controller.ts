@@ -73,8 +73,9 @@ export class ObjectRecordsController {
   @ApiOperation({
     summary: 'Describe an Object: the fields the caller may read, create or update at a site',
     description:
-      'Needs `objects.record.read`: a caller with only create or update rights gets 404, as ' +
-      'for an unknown Object, and writes through the record operations (ADR-0017 decision 8).',
+      'Needs `objects.record.read`: a caller with only create or update rights is refused ' +
+      '(403, or 404 as for an unknown Object when it may read elsewhere) and writes through ' +
+      'the record operations (ADR-0017 decision 8).',
   })
   @ApiQuery({ name: 'site', required: false, description: 'The definition’s site when absent.' })
   @ApiOkResponse({ type: ObjectDescriptionBody })

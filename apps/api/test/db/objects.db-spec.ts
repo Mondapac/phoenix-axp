@@ -735,8 +735,10 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
 
   it('refuses describe and GraphQL to a write-only member, who writes over REST', async () => {
     // ADR-0017 decision 8, clarified 2026-10-30: describing an Object shows its fields, which is
-    // reading, so DescribeObject and GraphQL need the read key; without it the Object answers
-    // as unknown. REST writes need only their own key and answer just { id, version }.
+    // reading, so DescribeObject and GraphQL need the read key. This gate admits every key, so
+    // the use case's own check answers here, as for an unknown Object; the production gate
+    // answers 403 access.denied first when the key is held nowhere (held-keys.spec.ts).
+    // REST writes need only their own key and answer just { id, version }.
     const siteId = await newSite();
     const object = await published(siteId);
     const creator = staffWith({ keys: [OBJECTS_RECORD_CREATE.key] });

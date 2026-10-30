@@ -61,7 +61,7 @@ export class ObjectGraphqlController {
     summary: 'The generated GraphQL API of an Object',
     description:
       'The schema is built for the caller from the Object’s description at `site`, so it has ' +
-      'the same 401 and 404 as describing it; that needs `objects.record.read`, and a caller ' +
+      'the same refusals as describing it; that needs `objects.record.read`, and a caller ' +
       'with only create or update rights writes over REST. Every GraphQL answer is 200.',
   })
   @ApiQuery({ name: 'site', required: false, description: 'The definition’s site when absent.' })
