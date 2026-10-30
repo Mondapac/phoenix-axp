@@ -28,4 +28,10 @@ export const STUDIO_MENU: readonly MenuEntry[] = [
       },
     ],
   },
+  {
+    href: '/objects',
+    label: 'menu.objects',
+    icon: 'objects',
+    anyOf: ['objects.definitions.view'],
+  },
 ];
