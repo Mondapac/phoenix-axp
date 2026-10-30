@@ -266,6 +266,26 @@ model ProcessInbox {
   @@schema("process")
 }
 
+/// Mutable working copy of one process key (slice 2.10, owner decision D7): what a designer
+/// saves in the modeler before a publisher publishes it as a revision. Its history is the
+/// published revisions; the draft itself is overwritten under `version` (409 conflict.stale).
+/// Never deployed or executed: only `process_revision` reaches the engine.
+model ProcessDraft {
+  /// UUIDv7 from the IdGenerator.
+  id         String   @id @db.Uuid
+  tenantId   String   @map("tenant_id") @db.VarChar(32)
+  /// The BPMN process id the model carries.
+  processKey String   @map("process_key") @db.VarChar(64)
+  bpmnXml    String   @map("bpmn_xml")
+  version    Int
+  updatedAt  DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, id], map: "process_draft_tenant_id_id_key")
+  @@unique([tenantId, processKey], map: "process_draft_tenant_id_process_key_key")
+  @@map("process_draft")
+  @@schema("process")
+}
+
 /// V1 immutable revision: a DMN decision table as the tenant published it (slice 2.7). Never
 /// updated; deployed to the engine under the tenant, one deployment per revision. A process's
 /// decision task runs the latest revision of its key in the instance's tenant (the engine finds

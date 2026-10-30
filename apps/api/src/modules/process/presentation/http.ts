@@ -28,6 +28,7 @@ const FAILURE_STATUS: Readonly<Record<string, number>> = Object.freeze({
   'process.task.outcome-invalid': 422,
   'process.task.assignee-ineligible': 422,
   'process.calendar.invalid': 422,
+  'process.definition.not-found': 404,
   ...ACCESS_DENIED_STATUS,
 });
 

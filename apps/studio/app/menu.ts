@@ -5,6 +5,18 @@ import type { MenuEntry } from '@phoenix/panel-server';
 export const STUDIO_MENU: readonly MenuEntry[] = [
   { href: '/', label: 'menu.home', icon: 'home', anyOf: [] },
   {
+    href: '/tasks',
+    label: 'menu.tasks',
+    icon: 'tasks',
+    anyOf: ['process.tasks.work', 'process.tasks.assign'],
+  },
+  {
+    href: '/processes',
+    label: 'menu.processes',
+    icon: 'processes',
+    anyOf: ['process.definitions.design'],
+  },
+  {
     href: '/people',
     label: 'menu.people',
     icon: 'people',

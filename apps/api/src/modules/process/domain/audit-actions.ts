@@ -77,6 +77,14 @@ export const PROCESS_CALENDAR_CHANGED = defineAuditAction({
   after: { weekendDays: auditField.integer(), holidays: auditField.integer() },
 });
 
+/** A designer saved the draft of a process key (slice 2.10, D7): its new version. */
+export const PROCESS_DRAFT_SAVED = defineAuditAction({
+  action: 'process.draft.saved',
+  targetType: 'process.draft',
+  actors: ['authenticated'],
+  after: { version: auditField.integer() },
+});
+
 export const PROCESS_AUDIT_ACTIONS = [
   PROCESS_REVISION_PUBLISHED,
   PROCESS_DECISION_PUBLISHED,
@@ -87,4 +95,5 @@ export const PROCESS_AUDIT_ACTIONS = [
   PROCESS_TASK_ESCALATED,
   PROCESS_TASK_COMPLETION_SUPERSEDED,
   PROCESS_CALENDAR_CHANGED,
+  PROCESS_DRAFT_SAVED,
 ] as const;

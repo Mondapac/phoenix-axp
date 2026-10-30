@@ -7,8 +7,11 @@ import type {
   CalendarRecord,
   CommandRecord,
   DecisionRecord,
+  DefinitionSummary,
+  DraftRecord,
   FormBinding,
   IncidentRecord,
+  LatestRevision,
   InstanceRecord,
   NewCommand,
   NewTask,
@@ -785,6 +788,104 @@ export class PrismaProcessRepository implements ProcessRepository {
       data: { ...values, version: { increment: 1 } },
     });
     return count === 1;
+  }
+
+  async findDraft(tenant: TenantContext, processKey: string): Promise<DraftRecord | null> {
+    const row = await this.prisma.tx(tenant).processDraft.findUnique({
+      where: {
+        tenantId_processKey: { tenantId: tenant.tenantId, processKey },
+        tenantId: tenant.tenantId,
+      },
+      select: { id: true, processKey: true, bpmnXml: true, version: true, updatedAt: true },
+    });
+    return row === null
+      ? null
+      : { ...row, id: row.id as Id<'ProcessDraft'>, updatedAt: instantOf(row.updatedAt) };
+  }
+
+  async saveDraft(
+    tenant: TenantContext,
+    draft: Pick<DraftRecord, 'id' | 'processKey' | 'bpmnXml'>,
+    expectedVersion: number,
+    at: Temporal.Instant,
+  ): Promise<boolean> {
+    const tx = this.prisma.tx(tenant);
+    if (expectedVersion === 0) {
+      // Two first saves of one key: the unique (tenant, key) lets one insert win.
+      const { count } = await tx.processDraft.createMany({
+        data: [
+          {
+            id: draft.id,
+            tenantId: tenant.tenantId,
+            processKey: draft.processKey,
+            bpmnXml: draft.bpmnXml,
+            version: 1,
+            updatedAt: dateOf(at),
+          },
+        ],
+        skipDuplicates: true,
+      });
+      return count === 1;
+    }
+    const { count } = await tx.processDraft.updateMany({
+      where: { tenantId: tenant.tenantId, processKey: draft.processKey, version: expectedVersion },
+      data: { bpmnXml: draft.bpmnXml, version: { increment: 1 }, updatedAt: dateOf(at) },
+    });
+    return count === 1;
+  }
+
+  async latestRevision(tenant: TenantContext, processKey: string): Promise<LatestRevision | null> {
+    const row = await this.prisma.tx(tenant).processRevision.findFirst({
+      where: { tenantId: tenant.tenantId, processKey },
+      orderBy: { revision: 'desc' },
+      select: { id: true, revision: true, publishedAt: true, bpmnXml: true },
+    });
+    return row === null
+      ? null
+      : {
+          ...row,
+          id: row.id as Id<'ProcessRevision'>,
+          publishedAt: instantOf(row.publishedAt),
+        };
+  }
+
+  async listDefinitions(tenant: TenantContext, limit: number): Promise<DefinitionSummary[]> {
+    const tx = this.prisma.tx(tenant);
+    const [drafts, published] = await Promise.all([
+      tx.processDraft.findMany({
+        where: { tenantId: tenant.tenantId },
+        orderBy: { processKey: 'asc' },
+        take: limit,
+        select: { processKey: true, version: true, updatedAt: true },
+      }),
+      // Revisions only grow, so the newest publication belongs to the highest revision.
+      tx.processRevision.groupBy({
+        by: ['processKey'],
+        where: { tenantId: tenant.tenantId },
+        orderBy: { processKey: 'asc' },
+        take: limit,
+        _max: { revision: true, publishedAt: true },
+      }),
+    ]);
+    const byKey = new Map<string, DefinitionSummary>();
+    for (const row of drafts) {
+      byKey.set(row.processKey, {
+        processKey: row.processKey,
+        draft: { version: row.version, updatedAt: instantOf(row.updatedAt) },
+        published: null,
+      });
+    }
+    for (const row of published) {
+      if (row._max.revision === null || row._max.publishedAt === null) continue;
+      byKey.set(row.processKey, {
+        processKey: row.processKey,
+        draft: byKey.get(row.processKey)?.draft ?? null,
+        published: { revision: row._max.revision, publishedAt: instantOf(row._max.publishedAt) },
+      });
+    }
+    return [...byKey.values()]
+      .sort((a, b) => (a.processKey < b.processKey ? -1 : a.processKey > b.processKey ? 1 : 0))
+      .slice(0, limit);
   }
 
   async recordIncident(tenant: TenantContext, incident: IncidentRecord): Promise<void> {

@@ -13,7 +13,17 @@ import {
   Select,
   type NavItem,
 } from '@phoenix/ui';
-import { Boxes, Building2, ClipboardList, House, LogOut, Network, Users } from 'lucide-react';
+import {
+  Boxes,
+  Building2,
+  ClipboardList,
+  House,
+  Inbox,
+  LogOut,
+  Network,
+  Users,
+  Workflow,
+} from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { indentedSiteName } from '../../_lib/people';
@@ -53,6 +63,8 @@ const ICONS: Readonly<Record<string, ReactNode>> = {
   home: <House aria-hidden />,
   people: <Users aria-hidden />,
   structure: <Network aria-hidden />,
+  tasks: <Inbox aria-hidden />,
+  processes: <Workflow aria-hidden />,
   forms: <ClipboardList aria-hidden />,
   objects: <Boxes aria-hidden />,
 };

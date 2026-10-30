@@ -15,6 +15,30 @@ export interface RevisionRecord {
   readonly bpmnXml: string;
 }
 
+/** The working copy of a process key (slice 2.10): saved by designers, never deployed. */
+export interface DraftRecord {
+  readonly id: Id<'ProcessDraft'>;
+  readonly processKey: string;
+  readonly bpmnXml: string;
+  readonly version: number;
+  readonly updatedAt: Temporal.Instant;
+}
+
+/** One process key of the tenant: its draft and its latest published revision, either may lack. */
+export interface DefinitionSummary {
+  readonly processKey: string;
+  readonly draft: { readonly version: number; readonly updatedAt: Temporal.Instant } | null;
+  readonly published: { readonly revision: number; readonly publishedAt: Temporal.Instant } | null;
+}
+
+/** The latest published revision of a key, with its model. */
+export interface LatestRevision {
+  readonly id: Id<'ProcessRevision'>;
+  readonly revision: number;
+  readonly publishedAt: Temporal.Instant;
+  readonly bpmnXml: string;
+}
+
 /** A published decision table (slice 2.7). */
 export interface DecisionRecord {
   readonly id: Id<'DecisionRevision'>;
@@ -325,6 +349,21 @@ export interface ProcessRepository {
     expectedVersion: number,
     at: Temporal.Instant,
   ): Promise<boolean>;
+
+  findDraft(tenant: TenantContext, processKey: string): Promise<DraftRecord | null>;
+  /**
+   * Inserts the first draft of a key (`expectedVersion` 0) or overwrites it if `expectedVersion`
+   * still holds; false when another save came first.
+   */
+  saveDraft(
+    tenant: TenantContext,
+    draft: Pick<DraftRecord, 'id' | 'processKey' | 'bpmnXml'>,
+    expectedVersion: number,
+    at: Temporal.Instant,
+  ): Promise<boolean>;
+  latestRevision(tenant: TenantContext, processKey: string): Promise<LatestRevision | null>;
+  /** The tenant's process keys in key order, drafts and published ones, at most `limit`. */
+  listDefinitions(tenant: TenantContext, limit: number): Promise<DefinitionSummary[]>;
 
   /** Records an incident once per kind and engine object; a repeat changes nothing. */
   recordIncident(tenant: TenantContext, incident: IncidentRecord): Promise<void>;

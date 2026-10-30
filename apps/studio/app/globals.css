@@ -1,2 +1,45 @@
 @import '@phoenix/ui/styles.css';
 @source '../app';
+
+/* The process modeler (bpmn-js, slice 2.10): its theme variables mapped to the panel tokens, so
+   the canvas, palette and menus follow light and dark. bpmn-js declares its theme on its own
+   containers (`.bio-theme-parent`), so the mapping goes there. The bpmn.io watermark
+   is bpmn-js's own and is never restyled or covered (its licence; ADR-0009 decision 6). */
+.phoenix-modeler,
+.phoenix-modeler .bio-theme-parent {
+  --bio-surface: var(--px-color-surface);
+  --bio-surface-subtle: var(--px-color-raised);
+  --bio-surface-medium: var(--px-color-subtle);
+  --bio-surface-overlay: var(--px-color-raised);
+  --bio-text: var(--px-color-fg);
+  --bio-text-subtle: var(--px-color-fg-muted);
+  --bio-text-subtlest: var(--px-color-fg-muted);
+  --bio-primary: var(--px-color-accent);
+  --bio-canvas-accent: var(--px-color-accent);
+  --bio-border: var(--px-color-line);
+  --bio-border-disabled: var(--px-color-line);
+  --bio-focus: var(--px-color-focus);
+  --bio-focus-surface: var(--px-color-accent-subtle);
+  --bio-selected-surface: var(--px-color-accent-subtle);
+  --bio-selected-text: var(--px-color-accent-fg);
+  --popup-font-family: inherit;
+  --palette-tooltip-font-family: inherit;
+  background-color: var(--px-color-surface);
+}
+
+/* The canvas takes focus on every click (diagram-js keyboard): the ring shows for the keyboard
+   only, in the panel's focus token. */
+.phoenix-modeler svg:focus:not(:focus-visible) {
+  outline: none;
+}
+.phoenix-modeler svg:focus-visible {
+  outline: 2px solid var(--px-color-focus);
+  outline-offset: -2px;
+}
+
+/* bpmn-js writes the label editor's white background inline; the theme's surface replaces it so
+   the text being typed stays readable in dark. */
+.phoenix-modeler .djs-direct-editing-parent {
+  background-color: var(--px-color-surface) !important;
+  color: var(--px-color-fg);
+}
