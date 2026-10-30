@@ -1,5 +1,13 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { CallContext } from '@phoenix/shared-kernel';
 import { z } from 'zod';
 import { Call } from '../../../platform/call-context/call-context.decorator';
@@ -11,6 +19,15 @@ import { UpdateRecord } from '../application/use-cases/update-record.use-case';
 import { ViewRecord } from '../application/use-cases/view-record.use-case';
 import { MAX_FIELDS } from '../domain/fields';
 import { answer, idField, idParam, parseRequest } from './http';
+import {
+  ApiRefusals,
+  CreateRecordRequest,
+  ObjectDescriptionBody,
+  RecordBody,
+  RecordPageBody,
+  UpdateRecordRequest,
+  WrittenRecordBody,
+} from './openapi';
 
 const RECORD_NOT_FOUND = 'objects.record.not-found';
 
@@ -53,6 +70,15 @@ export class ObjectRecordsController {
 
   /** The fields the caller may read, create or update at a site. */
   @Get(':key')
+  @ApiOperation({
+    summary: 'Describe an Object: the fields the caller may read, create or update at a site',
+    description:
+      'Needs `objects.record.read`: a caller with only create or update rights gets 404, as ' +
+      'for an unknown Object, and writes through the record operations (ADR-0017 decision 8).',
+  })
+  @ApiQuery({ name: 'site', required: false, description: 'The definition’s site when absent.' })
+  @ApiOkResponse({ type: ObjectDescriptionBody })
+  @ApiRefusals(400, 401, 403, 404)
   async describe(@Call() context: CallContext, @Param('key') key: string, @Query() query: unknown) {
     const { site } = parseRequest(describeQuery, query);
     return answer(
@@ -65,6 +91,16 @@ export class ObjectRecordsController {
 
   /** Newest first; `before` is the `next` of the previous page. */
   @Get(':key/records')
+  @ApiOperation({ summary: 'List records, newest first, in the sites the caller may read' })
+  @ApiQuery({ name: 'site', required: false, description: 'Only the records of this site.' })
+  @ApiQuery({ name: 'before', required: false, description: 'The `next` of the previous page.' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
+  })
+  @ApiOkResponse({ type: RecordPageBody })
+  @ApiRefusals(400, 401, 403, 404)
   async list(@Call() context: CallContext, @Param('key') key: string, @Query() query: unknown) {
     const { site, before, limit } = parseRequest(listQuery, query);
     return answer(
@@ -78,6 +114,10 @@ export class ObjectRecordsController {
   }
 
   @Post(':key/records')
+  @ApiOperation({ summary: 'Create a record under the published revision' })
+  @ApiBody({ type: CreateRecordRequest })
+  @ApiCreatedResponse({ type: WrittenRecordBody })
+  @ApiRefusals(400, 401, 403, 404, 409, 422)
   async create(@Call() context: CallContext, @Param('key') key: string, @Body() body: unknown) {
     const parsed = parseRequest(createBody, body);
     return answer(
@@ -90,6 +130,9 @@ export class ObjectRecordsController {
   }
 
   @Get(':key/records/:recordId')
+  @ApiOperation({ summary: 'View a record: the fields the caller may read' })
+  @ApiOkResponse({ type: RecordBody })
+  @ApiRefusals(401, 403, 404)
   async view(
     @Call() context: CallContext,
     @Param('key') key: string,
@@ -106,6 +149,10 @@ export class ObjectRecordsController {
    * on another version; 422 `objects.record.invalid` without `field` for an empty `values`.
    */
   @Patch(':key/records/:recordId')
+  @ApiOperation({ summary: 'Change fields of a record at the version it was read' })
+  @ApiBody({ type: UpdateRecordRequest })
+  @ApiOkResponse({ type: WrittenRecordBody })
+  @ApiRefusals(400, 401, 403, 404, 409, 422)
   async update(
     @Call() context: CallContext,
     @Param('key') key: string,
@@ -124,6 +171,10 @@ export class ObjectRecordsController {
 
   @Delete(':key/records/:recordId')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Delete a record at a version; its subject key is destroyed' })
+  @ApiQuery({ name: 'version', required: true, schema: { type: 'integer', minimum: 1 } })
+  @ApiNoContentResponse({ description: 'Deleted' })
+  @ApiRefusals(400, 401, 403, 404, 409)
   async remove(
     @Call() context: CallContext,
     @Param('key') key: string,

@@ -733,6 +733,47 @@ describe.each(TEST_TENANTS)('the objects module in tenant %s (database integrati
     ]);
   });
 
+  it('refuses describe and GraphQL to a write-only member, who writes over REST', async () => {
+    // ADR-0017 decision 8, clarified 2026-10-30: describing an Object shows its fields, which is
+    // reading, so DescribeObject and GraphQL need the read key; without it the Object answers
+    // as unknown. REST writes need only their own key and answer just { id, version }.
+    const siteId = await newSite();
+    const object = await published(siteId);
+    const creator = staffWith({ keys: [OBJECTS_RECORD_CREATE.key] });
+    const updater = staffWith({ keys: [OBJECTS_RECORD_UPDATE.key] });
+    const create = `mutation { createRecord(values: { title: "x" }) { id } }`;
+    for (const writer of [creator, updater]) {
+      expect(
+        await useCases.describe.execute(writer, { definitionKey: object.key, siteId: null }),
+      ).toEqual({ ok: false, error: { code: 'objects.definition.not-found' } });
+      expect(await graphql(writer, object.key, create)).toEqual({
+        refused: 'objects.definition.not-found',
+      });
+    }
+
+    const added = await useCases.add.execute(creator, {
+      definitionKey: object.key,
+      siteId: null,
+      values: { title: 'قرارداد ۳' },
+    });
+    if (!added.ok) throw new Error(`create-only: ${added.error.code}`);
+    expect(added.value.version).toBe(1);
+    expect(
+      await useCases.record.execute(creator, {
+        definitionKey: object.key,
+        recordId: added.value.id,
+      }),
+    ).toEqual({ ok: false, error: { code: 'objects.definition.not-found' } });
+    expect(
+      await useCases.change.execute(updater, {
+        definitionKey: object.key,
+        recordId: added.value.id,
+        version: 1,
+        values: { title: 'قرارداد ۴' },
+      }),
+    ).toEqual({ ok: true, value: { id: added.value.id, version: 2 } });
+  });
+
   it('never mixes read and write across grants, and refuses writes to fields not edit', async () => {
     const siteId = await newSite();
     const object = await published(siteId);

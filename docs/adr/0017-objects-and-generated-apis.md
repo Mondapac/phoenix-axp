@@ -84,6 +84,12 @@ both REST and GraphQL are served in Phase 2 (D6). The studio screens are slice 2
    `{ id, version }`. Field names map `-` to `_` (and a leading digit gets `_`); integers use the
    `Long` scalar. Use-case failures come back as errors with their code in `extensions.code`, a
    stale write as `conflict.stale`.
+   *Clarified 2026-10-30 (objects part 2 PR), write-only callers:* describing an Object shows its
+   fields (labels, types, options), which is reading, so DescribeObject, and with it GraphQL,
+   keep `objects.record.read` as their rule. A caller holding only `create` or `update` gets the
+   same 404 as for an unknown Object there, and writes over REST, whose writes answer only
+   `{ id, version }` and never a value. Opening describe or GraphQL to write-only callers would
+   need an "any of" access rule, which ADR-0004's gate does not have; it needs its own ADR.
 9. **Portal users** read and write records only through `own-resources` use cases with
    `FieldPolicy.forPortal`, in a later slice; slice 2.8 serves staff only.
 10. **Events.** `objects.record-*.v1` events land with their first consumer (ADR-0010).

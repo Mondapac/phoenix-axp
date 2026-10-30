@@ -1,5 +1,5 @@
 import { Body, Controller, HttpCode, Inject, Logger, Param, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { CallContext } from '@phoenix/shared-kernel';
 import { z } from 'zod';
 import { Call } from '../../../platform/call-context/call-context.decorator';
@@ -21,6 +21,7 @@ import { UpdateRecord } from '../application/use-cases/update-record.use-case';
 import { ViewRecord } from '../application/use-cases/view-record.use-case';
 import { recordOperationsOf, recordSchema } from './graphql/record-schema';
 import { answer, idField, parseRequest } from './http';
+import { ApiRefusals, GraphqlAnswerBody, GraphqlRequestBody } from './openapi';
 
 const describeQuery = z.strictObject({ site: idField<'Site'>().optional() });
 
@@ -56,6 +57,17 @@ export class ObjectGraphqlController {
 
   @Post(':key/graphql')
   @HttpCode(200)
+  @ApiOperation({
+    summary: 'The generated GraphQL API of an Object',
+    description:
+      'The schema is built for the caller from the Object’s description at `site`, so it has ' +
+      'the same 401 and 404 as describing it; that needs `objects.record.read`, and a caller ' +
+      'with only create or update rights writes over REST. Every GraphQL answer is 200.',
+  })
+  @ApiQuery({ name: 'site', required: false, description: 'The definition’s site when absent.' })
+  @ApiBody({ type: GraphqlRequestBody })
+  @ApiOkResponse({ type: GraphqlAnswerBody })
+  @ApiRefusals(400, 401, 403, 404)
   async graphql(
     @Call() context: CallContext,
     @Param('key') key: string,
