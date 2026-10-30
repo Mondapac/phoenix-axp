@@ -10,6 +10,7 @@ const unavailable = (): Promise<never> =>
  */
 export class UnconfiguredEngine implements ProcessEngine {
   deployRevision = unavailable;
+  deployDecision = unavailable;
   findInstancesByBusinessKey = unavailable;
   startInstance = unavailable;
   deleteInstance = unavailable;

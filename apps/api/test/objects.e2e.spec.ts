@@ -1,5 +1,6 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
+import { buildOpenApiDocument } from '../src/openapi';
 import { createTestApp } from './support/test-app';
 import { TEST_TENANTS } from './support/test-config';
 
@@ -19,6 +20,40 @@ describe('the objects API (HTTP)', () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  it('describes every objects operation in the OpenAPI document', () => {
+    type Operation = {
+      summary?: string;
+      requestBody?: unknown;
+      responses: Record<string, { content?: unknown }>;
+    };
+    const objects = Object.entries(buildOpenApiDocument(app).paths)
+      .filter(([path]) => path.startsWith('/objects/'))
+      .flatMap(([path, item]) =>
+        Object.entries(item as Record<string, Operation>).map(
+          ([method, operation]) => [`${method.toUpperCase()} ${path}`, operation] as const,
+        ),
+      );
+    expect(objects).toHaveLength(15);
+    for (const [name, operation] of objects) {
+      const method = name.split(' ')[0]!;
+      const success = Object.keys(operation.responses).filter((status) => status.startsWith('2'));
+      expect({ name, summary: typeof operation.summary }).toEqual({ name, summary: 'string' });
+      expect({ name, body: operation.requestBody !== undefined }).toEqual({
+        name,
+        body: method === 'POST' || method === 'PATCH',
+      });
+      expect({ name, success: success.length }).toEqual({ name, success: 1 });
+      expect({ name, described: operation.responses[success[0]!]!.content !== undefined }).toEqual({
+        name,
+        described: success[0] !== '204',
+      });
+      expect({ name, refusal: operation.responses['401']?.content !== undefined }).toEqual({
+        name,
+        refusal: true,
+      });
+    }
   });
 
   describe.each(TEST_TENANTS)('in tenant %s', (tenant) => {

@@ -1,7 +1,12 @@
 import type { CallContext, Clock, Id, IdGenerator, TenantContext } from '@phoenix/shared-kernel';
 import type { EngineVariables } from '../domain/engine-command';
 import { canRequestCompletion } from '../domain/task';
-import type { ProcessRepository, RevisionRecord, TaskRecord } from './process.repository';
+import type {
+  DecisionRecord,
+  ProcessRepository,
+  RevisionRecord,
+  TaskRecord,
+} from './process.repository';
 
 /**
  * Writes the core's commands to the engine (ADR-0005 decision 3), each in the open unit of the
@@ -21,6 +26,15 @@ export class EngineCommands {
       kind: 'deploy-revision',
       subjectId: revision.id,
       payload: { revisionId: revision.id },
+    });
+  }
+
+  /** Deploys a published decision table to the tenant (slice 2.7). */
+  deployDecision(context: CallContext, decision: Pick<DecisionRecord, 'id'>): Promise<void> {
+    return this.write(context.tenant, context.correlationId, {
+      kind: 'deploy-decision',
+      subjectId: decision.id,
+      payload: { decisionId: decision.id },
     });
   }
 

@@ -11,6 +11,7 @@ import { MAX_FORM_REFERENCES, type FormReferences } from '../../../forms';
 import type { EngineCommands } from '../engine-commands';
 import type {
   BpmnRefusal,
+  DecisionNotFound,
   FormNotFound,
   FormStartsAnotherProcess,
   StartFormChanged,
@@ -18,7 +19,8 @@ import type {
 import type { BridgeHashing } from '../ports/bridge-hashing';
 import type { FormBinding, ProcessRepository } from '../process.repository';
 
-type PublishFailure = BpmnRefusal | FormNotFound | FormStartsAnotherProcess | StartFormChanged;
+type PublishFailure =
+  BpmnRefusal | DecisionNotFound | FormNotFound | FormStartsAnotherProcess | StartFormChanged;
 
 export interface PublishProcessRevisionInput {
   /** The BPMN process id of the model. */
@@ -98,6 +100,20 @@ export class PublishProcessRevision extends UseCase<
         this.clock.now(),
       );
       await this.repository.insertFormBindings(tenant, id, bindings);
+      // Each decision task names a table the tenant published (slice 2.7): the engine runs its
+      // latest revision when the step runs, and the deployment carries it.
+      const decisions = checked.value.decisions;
+      const published = new Set(
+        (
+          await this.repository.latestDecisions(tenant, [
+            ...new Set(decisions.map((decision) => decision.decisionKey)),
+          ])
+        ).map((decision) => decision.decisionKey),
+      );
+      const missing = decisions.find((decision) => !published.has(decision.decisionKey));
+      if (missing !== undefined) {
+        return err({ code: 'process.decision.not-found', field: missing.elementId });
+      }
       // A key keeps the start form it claimed: without it, submissions would start nothing.
       const claimed = await this.repository.startFormOf(tenant, input.processKey);
       if (claimed !== null && claimed !== start?.formId) {

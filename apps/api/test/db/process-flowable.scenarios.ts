@@ -11,7 +11,12 @@ import { checkBpmn } from '../../src/modules/process/domain/bpmn-guard';
 import { FlowableRestEngine } from '../../src/modules/process/infrastructure/flowable/flowable-rest-engine';
 import { NodeBridgeHashing } from '../../src/modules/process/infrastructure/node-bridge-hashing';
 import { PrismaProcessRepository } from '../../src/modules/process/infrastructure/prisma-process.repository';
-import { RecordingAuditWriter, testTenantRegistry } from '../support/process-test-support';
+import {
+  decisionProcess,
+  decisionTable,
+  RecordingAuditWriter,
+  testTenantRegistry,
+} from '../support/process-test-support';
 import { TEST_TENANTS } from '../support/test-config';
 import {
   createPersistence,
@@ -65,6 +70,9 @@ const model = (key: string) => `<?xml version="1.0" encoding="UTF-8"?>
     <endEvent id="end"/>
   </process>
 </definitions>`;
+
+/** One decision key for both tenant fixtures of a run: each publishes its own table under it. */
+const RUN_TABLE_KEY = `routing_${randomUUID().slice(0, 8)}`;
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -207,7 +215,12 @@ export function realFlowableScenarios(): void {
       });
 
       it('deploys once: a repeated deployment is a no-op', async () => {
-        await engine.deployRevision(tenant, { processKey: key, revisionId, bpmnXml: model(key) });
+        await engine.deployRevision(tenant, {
+          processKey: key,
+          revisionId,
+          bpmnXml: model(key),
+          decisions: [],
+        });
         await unit(() => commands.deployRevision(system, { id: revisionId }));
         expect(await relay.runOnce(system)).toMatchObject({ delivered: 1 });
       });
@@ -282,6 +295,62 @@ export function realFlowableScenarios(): void {
             (t) => t.engineInstanceId === orphan.engineInstanceId,
           )?.engineTaskId,
         );
+      });
+
+      it("runs the tenant's own decision table from a process step (slice 2.7)", async () => {
+        // The same key in both tenants, with another fallback lane: the engine must pick this
+        // tenant's table.
+        const fallback = TEST_TENANTS.indexOf(code) === 0 ? 'clerk' : 'other';
+        const decisionId = ids.next<'DecisionRevision'>();
+        const dmnXml = decisionTable(RUN_TABLE_KEY, fallback);
+        const routedKey = `${key}_routed`;
+        const routedRevision = ids.next<'ProcessRevision'>();
+        await unit(async () => {
+          await repository.insertDecisionRevision(
+            tenant,
+            {
+              id: decisionId,
+              decisionKey: RUN_TABLE_KEY,
+              revision: 1,
+              dmnXml,
+              contentHash: new NodeBridgeHashing().contentHash(dmnXml),
+            },
+            clock.now(),
+          );
+          await commands.deployDecision(system, { id: decisionId });
+          const bpmnXml = decisionProcess(routedKey, RUN_TABLE_KEY);
+          await repository.insertRevision(
+            tenant,
+            {
+              id: routedRevision,
+              processKey: routedKey,
+              revision: 1,
+              bpmnXml,
+              contentHash: new NodeBridgeHashing().contentHash(bpmnXml),
+              taskSettings: {},
+            },
+            clock.now(),
+          );
+          await commands.deployRevision(system, { id: routedRevision });
+        });
+        expect(await relay.runOnce(system)).toMatchObject({ delivered: 2, refused: 0 });
+
+        const routed = async (variables: { days: number; kind: string }) => {
+          const id = ids.next<'ProcessInstance'>();
+          await unit(async () => {
+            await repository.insertInstance(
+              tenant,
+              { id, revisionId: routedRevision, siteId: null },
+              clock.now(),
+            );
+            await commands.startInstance(system, id, routedRevision, variables);
+          });
+          expect(await relay.runOnce(system)).toMatchObject({ delivered: 1 });
+          await sync.runOnce(system);
+          return (await tasksOf(id)).map((task) => task.task_key);
+        };
+        expect(await routed({ days: 7, kind: 'sick' })).toEqual(['long']);
+        expect(await routed({ days: 1, kind: 'annual' })).toEqual([fallback]);
       });
 
       it("never reads or completes the other tenant's task", async () => {

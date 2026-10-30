@@ -15,6 +15,14 @@ export interface RevisionRecord {
   readonly bpmnXml: string;
 }
 
+/** A published decision table (slice 2.7). */
+export interface DecisionRecord {
+  readonly id: Id<'DecisionRevision'>;
+  readonly decisionKey: string;
+  readonly revision: number;
+  readonly dmnXml: string;
+}
+
 export interface InstanceRecord {
   readonly id: Id<'ProcessInstance'>;
   readonly revisionId: Id<'ProcessRevision'>;
@@ -124,6 +132,16 @@ export interface ProcessRepository {
     at: Temporal.Instant,
   ): Promise<void>;
   findRevision(tenant: TenantContext, id: string): Promise<RevisionRecord | null>;
+  latestDecisionRevisionNumber(tenant: TenantContext, decisionKey: string): Promise<number>;
+  /** Inserts a decision revision; a concurrent one of the same number is a stale write. */
+  insertDecisionRevision(
+    tenant: TenantContext,
+    decision: DecisionRecord & { readonly contentHash: string },
+    at: Temporal.Instant,
+  ): Promise<void>;
+  findDecisionRevision(tenant: TenantContext, id: string): Promise<DecisionRecord | null>;
+  /** The latest revision of each of `keys` the tenant published; a key never published is left out. */
+  latestDecisions(tenant: TenantContext, keys: readonly string[]): Promise<DecisionRecord[]>;
   /** The task settings of a revision; null when the revision does not exist. */
   findTaskSettings(tenant: TenantContext, revisionId: string): Promise<StoredTaskSettings | null>;
 

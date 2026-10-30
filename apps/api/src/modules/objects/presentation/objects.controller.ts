@@ -1,5 +1,13 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { CallContext } from '@phoenix/shared-kernel';
 import { z } from 'zod';
 import { Call } from '../../../platform/call-context/call-context.decorator';
@@ -14,6 +22,19 @@ import { ViewRevision } from '../application/use-cases/view-revision.use-case';
 import { FIELD_TYPES, MAX_FIELDS, MAX_OPTIONS, PORTAL_MODES } from '../domain/fields';
 import { DEFINITION_STATUSES } from '../domain/lifecycle';
 import { answer, idField, idParam, parseRequest } from './http';
+import {
+  ApiRefusals,
+  CreatedIdBody,
+  CreateDefinitionRequest,
+  DefinitionDetailBody,
+  DefinitionListBody,
+  PublishDefinitionRequest,
+  RenameDefinitionRequest,
+  RetireDefinitionRequest,
+  RevisionBody,
+  SavedRevisionBody,
+  SaveRevisionRequest,
+} from './openapi';
 
 const DEFINITION_NOT_FOUND = 'objects.definition.not-found';
 
@@ -68,6 +89,11 @@ export class ObjectDefinitionsController {
   ) {}
 
   @Get('definitions')
+  @ApiOperation({ summary: 'List the definitions the caller may view, by name' })
+  @ApiQuery({ name: 'site', required: false, description: 'Only the definitions of this site.' })
+  @ApiQuery({ name: 'status', required: false, enum: DEFINITION_STATUSES })
+  @ApiOkResponse({ type: DefinitionListBody })
+  @ApiRefusals(400, 401, 403)
   async list(@Call() context: CallContext, @Query() query: unknown) {
     const { site, status } = parseRequest(listQuery, query);
     return {
@@ -81,11 +107,18 @@ export class ObjectDefinitionsController {
   }
 
   @Post('definitions')
+  @ApiOperation({ summary: 'Create a definition (a draft, with no revision yet)' })
+  @ApiBody({ type: CreateDefinitionRequest })
+  @ApiCreatedResponse({ type: CreatedIdBody })
+  @ApiRefusals(400, 401, 403, 404, 409)
   async create(@Call() context: CallContext, @Body() body: unknown) {
     return answer(await this.createDefinition.execute(context, parseRequest(createBody, body)));
   }
 
   @Get('definitions/:definitionId')
+  @ApiOperation({ summary: 'View a definition and its revisions' })
+  @ApiOkResponse({ type: DefinitionDetailBody })
+  @ApiRefusals(401, 403, 404)
   async view(@Call() context: CallContext, @Param('definitionId') definitionId: string) {
     const id = idParam<'ObjectDefinition'>(definitionId, DEFINITION_NOT_FOUND);
     return answer(await this.viewDefinition.execute(context, { definitionId: id }));
@@ -93,6 +126,10 @@ export class ObjectDefinitionsController {
 
   @Patch('definitions/:definitionId')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Rename a definition' })
+  @ApiBody({ type: RenameDefinitionRequest })
+  @ApiNoContentResponse({ description: 'Renamed' })
+  @ApiRefusals(400, 401, 403, 404, 409)
   async rename(
     @Call() context: CallContext,
     @Param('definitionId') definitionId: string,
@@ -108,6 +145,10 @@ export class ObjectDefinitionsController {
   }
 
   @Post('definitions/:definitionId/revisions')
+  @ApiOperation({ summary: 'Save the next revision of a definition (does not publish it)' })
+  @ApiBody({ type: SaveRevisionRequest })
+  @ApiCreatedResponse({ type: SavedRevisionBody })
+  @ApiRefusals(400, 401, 403, 404, 409)
   async saveRevisionOf(
     @Call() context: CallContext,
     @Param('definitionId') definitionId: string,
@@ -123,6 +164,9 @@ export class ObjectDefinitionsController {
   }
 
   @Get('revisions/:revisionId')
+  @ApiOperation({ summary: 'View a revision and its fields' })
+  @ApiOkResponse({ type: RevisionBody })
+  @ApiRefusals(401, 403, 404)
   async viewRevisionOf(@Call() context: CallContext, @Param('revisionId') revisionId: string) {
     const id = idParam<'ObjectRevision'>(revisionId, 'objects.revision.not-found');
     return answer(await this.viewRevision.execute(context, { revisionId: id }));
@@ -130,6 +174,10 @@ export class ObjectDefinitionsController {
 
   @Post('definitions/:definitionId/publish')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Publish a revision: new records and every later change use it' })
+  @ApiBody({ type: PublishDefinitionRequest })
+  @ApiNoContentResponse({ description: 'Published' })
+  @ApiRefusals(400, 401, 403, 404, 409)
   async publish(
     @Call() context: CallContext,
     @Param('definitionId') definitionId: string,
@@ -146,6 +194,10 @@ export class ObjectDefinitionsController {
 
   @Post('definitions/:definitionId/retire')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Retire a definition: its records stay readable, none is written' })
+  @ApiBody({ type: RetireDefinitionRequest })
+  @ApiNoContentResponse({ description: 'Retired' })
+  @ApiRefusals(400, 401, 403, 404, 409)
   async retire(
     @Call() context: CallContext,
     @Param('definitionId') definitionId: string,
