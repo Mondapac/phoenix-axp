@@ -457,6 +457,16 @@
     }
   },
   {
+    "action": "process.decision.published",
+    "targetType": "process.decision",
+    "targetId": "id",
+    "actors": ["authenticated"],
+    "before": null,
+    "after": {
+      "revision": "integer"
+    }
+  },
+  {
     "action": "process.task.assigned",
     "targetType": "process.task",
     "targetId": "id",

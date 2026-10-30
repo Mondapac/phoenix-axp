@@ -12,6 +12,14 @@ export const PROCESS_REVISION_PUBLISHED = defineAuditAction({
   after: { revision: auditField.integer() },
 });
 
+/** A decision table revision was published and queued for deployment to the engine (2.7). */
+export const PROCESS_DECISION_PUBLISHED = defineAuditAction({
+  action: 'process.decision.published',
+  targetType: 'process.decision',
+  actors: ['authenticated'],
+  after: { revision: auditField.integer() },
+});
+
 /** A staff member took a task from its queue (ADR-0025, owner decision D3). */
 export const PROCESS_TASK_CLAIMED = defineAuditAction({
   action: 'process.task.claimed',
@@ -71,6 +79,7 @@ export const PROCESS_CALENDAR_CHANGED = defineAuditAction({
 
 export const PROCESS_AUDIT_ACTIONS = [
   PROCESS_REVISION_PUBLISHED,
+  PROCESS_DECISION_PUBLISHED,
   PROCESS_TASK_CLAIMED,
   PROCESS_TASK_RELEASED,
   PROCESS_TASK_ASSIGNED,

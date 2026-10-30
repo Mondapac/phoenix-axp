@@ -120,8 +120,10 @@ const envSchema = z.object({
     .default('phoenix-core-admin'),
   KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().min(1).optional(),
   // Flowable (ADR-0005; ADR-0020 decision 6): its REST base URL and the core's credential,
-  // together, or none.
-  FLOWABLE_URL: httpUrl.optional(),
+  // together, or none. The URL is the process API, `…/service`; the DMN API is its sibling.
+  FLOWABLE_URL: httpUrl
+    .refine((url) => /\/service\/?$/.test(url), 'must end with /service (Flowable REST)')
+    .optional(),
   FLOWABLE_USER: z.string().min(1).optional(),
   FLOWABLE_PASSWORD: z.string().min(1).optional(),
 });

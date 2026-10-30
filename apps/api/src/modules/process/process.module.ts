@@ -34,6 +34,7 @@ import { EscalateOverdueTasks } from './application/use-cases/escalate-overdue-t
 import { ListMyTasks } from './application/use-cases/list-my-tasks.use-case';
 import { ListProcessIncidents } from './application/use-cases/list-process-incidents.use-case';
 import { ListSiteTasks } from './application/use-cases/list-site-tasks.use-case';
+import { PublishDecisionRevision } from './application/use-cases/publish-decision-revision.use-case';
 import { PublishProcessRevision } from './application/use-cases/publish-process-revision.use-case';
 import { RelayEngineCommands } from './application/use-cases/relay-engine-commands.use-case';
 import { ReleaseTask } from './application/use-cases/release-task.use-case';
@@ -54,7 +55,10 @@ import { relayEngineCommandsJob } from './presentation/jobs/relay-engine-command
 import { syncEngineJob } from './presentation/jobs/sync-engine.job';
 import { startFromSubmissionSubscriber } from './presentation/subscribers/start-from-submission.subscriber';
 import { ProcessIncidentsController } from './presentation/process-incidents.controller';
-import { ProcessRevisionsController } from './presentation/process-revisions.controller';
+import {
+  ProcessDecisionsController,
+  ProcessRevisionsController,
+} from './presentation/process-revisions.controller';
 import { ProcessTasksController } from './presentation/process-tasks.controller';
 import { WorkingCalendarController } from './presentation/working-calendar.controller';
 
@@ -83,6 +87,7 @@ const REPOSITORY = PROCESS_REPOSITORY;
   imports: [FormsModule],
   controllers: [
     ProcessRevisionsController,
+    ProcessDecisionsController,
     ProcessIncidentsController,
     ProcessTasksController,
     WorkingCalendarController,
@@ -169,6 +174,15 @@ const REPOSITORY = PROCESS_REPOSITORY;
       BRIDGE_HASHING,
       AUDIT_WRITER,
       FORM_REFERENCES,
+      CLOCK,
+      ID_GENERATOR,
+    ]),
+    useCase(PublishDecisionRevision, [
+      UNIT_OF_WORK,
+      REPOSITORY,
+      EngineCommands,
+      BRIDGE_HASHING,
+      AUDIT_WRITER,
       CLOCK,
       ID_GENERATOR,
     ]),

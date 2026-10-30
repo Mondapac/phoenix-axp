@@ -15,6 +15,12 @@ import type { EngineTaskEnd } from '../../domain/task';
 export interface ProcessEngine {
   /** Deploys a revision to the tenant once, named `<processKey>@<revisionId>`; a repeat is a no-op. */
   deployRevision(tenant: TenantContext, deployment: EngineDeployment): Promise<void>;
+  /**
+   * Makes a decision table the one the tenant's decision tasks run (slice 2.7): the engine runs
+   * the highest deployed version of a key, so the table, named `<decisionKey>@<revisionId>.dmn`,
+   * is deployed unless it already is that version; a repeat is a no-op.
+   */
+  deployDecision(tenant: TenantContext, decision: EngineDecision): Promise<void>;
   /** Every instance with this business key, running or ended, oldest first. */
   findInstancesByBusinessKey(tenant: TenantContext, businessKey: string): Promise<EngineInstance[]>;
   /** Starts exactly the deployment of the revision, never "the latest" (ADR-0007 V3). */
@@ -53,6 +59,17 @@ export interface EngineDeployment {
   readonly processKey: string;
   readonly revisionId: string;
   readonly bpmnXml: string;
+  /**
+   * The latest revision of each decision table its decision tasks name, deployed (once) before
+   * the process, so its first instance finds them (slice 2.7).
+   */
+  readonly decisions: readonly EngineDecision[];
+}
+
+export interface EngineDecision {
+  readonly decisionKey: string;
+  readonly revisionId: string;
+  readonly dmnXml: string;
 }
 
 export interface StartCommand {
