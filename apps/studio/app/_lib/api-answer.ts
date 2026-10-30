@@ -6,7 +6,13 @@ import type { MessageKey } from '../_i18n/messages';
 
 export type ApiAnswer<T> =
   | { readonly ok: true; readonly body: T }
-  | { readonly ok: false; readonly status: number; readonly code: string | null };
+  | {
+      readonly ok: false;
+      readonly status: number;
+      readonly code: string | null;
+      /** The field or request path of an invalid value, when the API names one. */
+      readonly field?: string;
+    };
 
 const BY_CODE: Readonly<Record<string, MessageKey>> = {
   'identity.account.username-taken': 'error.usernameTaken',
@@ -32,6 +38,19 @@ const BY_CODE: Readonly<Record<string, MessageKey>> = {
   'member.outranks-actor': 'error.notGrantable',
   'member.self': 'error.self',
   'member.last-holder': 'error.lastHolder',
+  'objects.definition.not-found': 'error.notFound',
+  'objects.revision.not-found': 'error.notFound',
+  'objects.record.not-found': 'error.notFound',
+  'objects.site.not-found': 'error.notFound',
+  'objects.definition.key-taken': 'error.objectKeyTaken',
+  'objects.definition.already-published': 'error.alreadyPublished',
+  'objects.definition.not-published': 'error.notPublished',
+  'objects.definition.not-accepting': 'error.notAccepting',
+  'objects.revision.outdated': 'error.revisionOutdated',
+  'objects.revision.lowering-denied': 'error.loweringDenied',
+  'objects.value.invalid': 'error.invalid',
+  'objects.record.invalid': 'error.recordInvalid',
+  'access.field-denied': 'error.denied',
   'conflict.stale': 'error.stale',
   'conflict.retry': 'error.retry',
   'access.denied': 'error.denied',

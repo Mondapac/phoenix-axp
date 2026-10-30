@@ -32,6 +32,9 @@ export const STUDIO_API_PREFIXES: readonly (readonly string[])[] = [
   ['tenancy', 'sites'],
   ['tenancy', 'site-domains'],
   ['tenancy', 'organizations'],
+  ['objects', 'definitions'],
+  ['objects', 'revisions'],
+  ['objects', 'o'],
 ];
 
 /** Where sign-in sends the browser. */

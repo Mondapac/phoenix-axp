@@ -4,8 +4,8 @@ import { useState, type ReactNode } from 'react';
 import { failureMessage, type ApiAnswer } from '../../_lib/api-answer';
 import type { Messages } from '../../_i18n/messages';
 
-// A confirmation before a change that ends someone's access (disable, revoke): the trigger,
-// the question, and the API's refusal shown in place.
+// A confirmation before a change that ends someone's access (disable, revoke) or that others
+// will feel (publish): the trigger, the question, and the API's refusal shown in place.
 
 export function ConfirmDialog(props: {
   readonly t: Messages;
@@ -15,6 +15,8 @@ export function ConfirmDialog(props: {
   readonly confirmLabel: string;
   readonly onConfirm: () => Promise<ApiAnswer<unknown>>;
   readonly onDone: () => void;
+  /** `primary` for a change that takes nothing away; `danger` by default. */
+  readonly confirmVariant?: 'danger' | 'primary';
 }) {
   const { t, title, description, confirmLabel } = props;
   const [open, setOpen] = useState(false);
@@ -49,7 +51,11 @@ export function ConfirmDialog(props: {
         footer={
           <>
             <DialogClose render={<Button variant="outline">{t['common.cancel']}</Button>} />
-            <Button variant="danger" disabled={busy} onClick={() => void confirm()}>
+            <Button
+              variant={props.confirmVariant ?? 'danger'}
+              disabled={busy}
+              onClick={() => void confirm()}
+            >
               {busy ? t['common.saving'] : confirmLabel}
             </Button>
           </>
