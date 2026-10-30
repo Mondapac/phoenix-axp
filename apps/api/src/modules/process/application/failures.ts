@@ -1,4 +1,5 @@
 import type { BpmnRefusal } from '../domain/bpmn-guard';
+import type { DmnRefusal } from '../domain/dmn-guard';
 
 // The expected failures of the process use cases: codes and a field name, never values. The
 // controllers map each code to its HTTP status.
@@ -7,7 +8,16 @@ export type RevisionNotFound = { readonly code: 'process.revision.not-found' };
 /** A variable the engine must not receive (ADR-0005 decision 7); `field` is its name. */
 export type InvalidVariable = { readonly code: 'process.variable.invalid'; readonly field: string };
 
-export type { BpmnRefusal };
+export type { BpmnRefusal, DmnRefusal };
+
+/**
+ * A decision task names a table the tenant never published (slice 2.7); `field` is the BPMN
+ * element, never the key.
+ */
+export type DecisionNotFound = {
+  readonly code: 'process.decision.not-found';
+  readonly field: string;
+};
 
 /**
  * A form the model names is not a published form the publisher may view (slice 2.6); `field`

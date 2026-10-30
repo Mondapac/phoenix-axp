@@ -19,7 +19,7 @@ export function formatInstantDate(instant: string, { locale, calendar, timeZone 
   }).format(epochMs);
 }
 
-/** An ISO-8601 instant as a date and time for reading (a deadline), in the tenant's zone. */
+/** An ISO-8601 instant as a date and time for reading (the inbox), or the text itself. */
 export function formatInstantDateTime(
   instant: string,
   { locale, calendar, timeZone }: DateContext,
@@ -29,7 +29,7 @@ export function formatInstantDateTime(
   return new Intl.DateTimeFormat(`${locale}-u-ca-${calendar}`, {
     timeZone,
     year: 'numeric',
-    month: 'long',
+    month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',

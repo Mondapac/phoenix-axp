@@ -181,3 +181,17 @@ export function parseEditableText(text: string, calendar: string): string | null
     calendar,
   );
 }
+
+/**
+ * Today's ISO date in an IANA zone, from the browser's clock. Display only: the month a date
+ * picker opens on. Nothing stored or decided reads it; the core takes time from its Clock.
+ */
+export function todayIn(timeZone: string): string {
+  // en-CA formats as YYYY-MM-DD; with no date, format() reads the current time.
+  return new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format();
+}

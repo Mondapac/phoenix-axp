@@ -34,6 +34,7 @@ import { EscalateOverdueTasks } from './application/use-cases/escalate-overdue-t
 import { ListMyTasks } from './application/use-cases/list-my-tasks.use-case';
 import { ListProcessIncidents } from './application/use-cases/list-process-incidents.use-case';
 import { ListSiteTasks } from './application/use-cases/list-site-tasks.use-case';
+import { PublishDecisionRevision } from './application/use-cases/publish-decision-revision.use-case';
 import { PublishProcessRevision } from './application/use-cases/publish-process-revision.use-case';
 import { ListProcessDefinitions } from './application/use-cases/list-process-definitions.use-case';
 import { SaveProcessDraft } from './application/use-cases/save-process-draft.use-case';
@@ -57,8 +58,11 @@ import { relayEngineCommandsJob } from './presentation/jobs/relay-engine-command
 import { syncEngineJob } from './presentation/jobs/sync-engine.job';
 import { startFromSubmissionSubscriber } from './presentation/subscribers/start-from-submission.subscriber';
 import { ProcessIncidentsController } from './presentation/process-incidents.controller';
-import { ProcessRevisionsController } from './presentation/process-revisions.controller';
 import { ProcessDefinitionsController } from './presentation/process-definitions.controller';
+import {
+  ProcessDecisionsController,
+  ProcessRevisionsController,
+} from './presentation/process-revisions.controller';
 import { ProcessTasksController } from './presentation/process-tasks.controller';
 import { WorkingCalendarController } from './presentation/working-calendar.controller';
 
@@ -88,6 +92,7 @@ const REPOSITORY = PROCESS_REPOSITORY;
   controllers: [
     ProcessDefinitionsController,
     ProcessRevisionsController,
+    ProcessDecisionsController,
     ProcessIncidentsController,
     ProcessTasksController,
     WorkingCalendarController,
@@ -180,6 +185,15 @@ const REPOSITORY = PROCESS_REPOSITORY;
     useCase(SaveProcessDraft, [UNIT_OF_WORK, REPOSITORY, AUDIT_WRITER, CLOCK, ID_GENERATOR]),
     useCase(ListProcessDefinitions, [UNIT_OF_WORK, REPOSITORY]),
     useCase(ViewProcessDefinition, [UNIT_OF_WORK, REPOSITORY]),
+    useCase(PublishDecisionRevision, [
+      UNIT_OF_WORK,
+      REPOSITORY,
+      EngineCommands,
+      BRIDGE_HASHING,
+      AUDIT_WRITER,
+      CLOCK,
+      ID_GENERATOR,
+    ]),
     useCase(StartProcessFromSubmission, [
       UNIT_OF_WORK,
       REPOSITORY,

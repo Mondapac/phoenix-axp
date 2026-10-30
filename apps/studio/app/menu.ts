@@ -40,4 +40,16 @@ export const STUDIO_MENU: readonly MenuEntry[] = [
       },
     ],
   },
+  {
+    href: '/forms',
+    label: 'menu.forms',
+    icon: 'forms',
+    anyOf: ['forms.forms.view'],
+  },
+  {
+    href: '/objects',
+    label: 'menu.objects',
+    icon: 'objects',
+    anyOf: ['objects.definitions.view'],
+  },
 ];

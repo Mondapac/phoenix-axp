@@ -124,9 +124,9 @@ model EngineCommand {
   /// UUIDv7 from the IdGenerator; also the completion key of a `complete-task`.
   id            String    @id @db.Uuid
   tenantId      String    @map("tenant_id") @db.VarChar(32)
-  /// deploy-revision | start-instance | complete-task | delete-orphan
+  /// deploy-revision | deploy-decision | start-instance | complete-task | delete-orphan
   kind          String    @db.VarChar(32)
-  /// The revision, instance or task the command is about.
+  /// The revision, decision revision, instance or task the command is about.
   subjectId     String    @map("subject_id") @db.Uuid
   /// Ids, codes and numbers only (ADR-0005 decision 7): never personal data.
   payload       Json
@@ -283,5 +283,29 @@ model ProcessDraft {
   @@unique([tenantId, id], map: "process_draft_tenant_id_id_key")
   @@unique([tenantId, processKey], map: "process_draft_tenant_id_process_key_key")
   @@map("process_draft")
+  @@schema("process")
+}
+
+/// V1 immutable revision: a DMN decision table as the tenant published it (slice 2.7). Never
+/// updated; deployed to the engine under the tenant, one deployment per revision. A process's
+/// decision task runs the latest revision of its key in the instance's tenant (the engine finds
+/// it by key at the step): a table is the tenant's living rule, changed without republishing the
+/// processes that use it.
+model DecisionRevision {
+  /// UUIDv7 from the IdGenerator.
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.VarChar(32)
+  /// The DMN decision id, which is the engine's decision key.
+  decisionKey String   @map("decision_key") @db.VarChar(64)
+  /// 1, 2, ... per decision key.
+  revision    Int
+  dmnXml      String   @map("dmn_xml")
+  /// `sha256:` and the hex SHA-256 of the XML.
+  contentHash String   @map("content_hash") @db.VarChar(71)
+  publishedAt DateTime @map("published_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, id], map: "decision_revision_tenant_id_id_key")
+  @@unique([tenantId, decisionKey, revision], map: "decision_revision_tenant_id_decision_key_revision_key")
+  @@map("decision_revision")
   @@schema("process")
 }

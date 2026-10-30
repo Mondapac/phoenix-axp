@@ -6,7 +6,13 @@ import type { MessageKey } from '../_i18n/messages';
 
 export type ApiAnswer<T> =
   | { readonly ok: true; readonly body: T }
-  | { readonly ok: false; readonly status: number; readonly code: string | null };
+  | {
+      readonly ok: false;
+      readonly status: number;
+      readonly code: string | null;
+      /** The field or request path of an invalid value, when the API names one. */
+      readonly field?: string;
+    };
 
 const BY_CODE: Readonly<Record<string, MessageKey>> = {
   'identity.account.username-taken': 'error.usernameTaken',
@@ -28,6 +34,18 @@ const BY_CODE: Readonly<Record<string, MessageKey>> = {
   'tenancy.site-domain.taken': 'error.domainTaken',
   'tenancy.tree.depth-exceeded': 'error.depthExceeded',
   'tenancy.tree.move-into-own-subtree': 'error.moveIntoSubtree',
+  'forms.form.not-found': 'error.notFound',
+  'forms.form-revision.not-found': 'error.notFound',
+  'forms.site.not-found': 'error.notFound',
+  'forms.submission.not-found': 'error.notFound',
+  'forms.form.key-taken': 'error.formKeyTaken',
+  'forms.schema.invalid': 'error.schemaInvalid',
+  'forms.form-revision.lowering-denied': 'error.loweringDenied',
+  'forms.form.not-published': 'error.formNotPublished',
+  'forms.form.already-published': 'error.formRevisionOutdated',
+  'forms.form-revision.outdated': 'error.formRevisionOutdated',
+  'forms.form.settings-need-publisher': 'error.settingsNeedPublisher',
+  'forms.submission.already-erased': 'error.alreadyErased',
   'role.not-grantable': 'error.notGrantable',
   'member.outranks-actor': 'error.notGrantable',
   'member.self': 'error.self',
@@ -37,6 +55,19 @@ const BY_CODE: Readonly<Record<string, MessageKey>> = {
   'process.task.outcome-invalid': 'error.invalid',
   'process.task.assignee-ineligible': 'error.assigneeIneligible',
   'process.definition.not-found': 'error.notFound',
+  'objects.definition.not-found': 'error.notFound',
+  'objects.revision.not-found': 'error.notFound',
+  'objects.record.not-found': 'error.notFound',
+  'objects.site.not-found': 'error.notFound',
+  'objects.definition.key-taken': 'error.objectKeyTaken',
+  'objects.definition.already-published': 'error.alreadyPublished',
+  'objects.definition.not-published': 'error.notPublished',
+  'objects.definition.not-accepting': 'error.notAccepting',
+  'objects.revision.outdated': 'error.revisionOutdated',
+  'objects.revision.lowering-denied': 'error.loweringDenied',
+  'objects.value.invalid': 'error.invalid',
+  'objects.record.invalid': 'error.recordInvalid',
+  'access.field-denied': 'error.denied',
   'conflict.stale': 'error.stale',
   'conflict.retry': 'error.retry',
   'access.denied': 'error.denied',

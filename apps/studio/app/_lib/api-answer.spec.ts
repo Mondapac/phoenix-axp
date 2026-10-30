@@ -2,6 +2,22 @@ import { messagesFor } from '../_i18n/messages';
 import { failureMessage } from './api-answer';
 
 describe('failureMessage', () => {
+  it('maps the objects refusals to their texts', () => {
+    expect(failureMessage({ status: 409, code: 'objects.definition.key-taken' })).toBe(
+      'error.objectKeyTaken',
+    );
+    expect(failureMessage({ status: 403, code: 'objects.revision.lowering-denied' })).toBe(
+      'error.loweringDenied',
+    );
+    expect(failureMessage({ status: 422, code: 'objects.record.invalid' })).toBe(
+      'error.recordInvalid',
+    );
+    expect(failureMessage({ status: 403, code: 'access.field-denied' })).toBe('error.denied');
+    expect(failureMessage({ status: 404, code: 'objects.record.not-found' })).toBe(
+      'error.notFound',
+    );
+  });
+
   it('maps the identity refusals to their texts', () => {
     expect(failureMessage({ status: 409, code: 'identity.account.username-taken' })).toBe(
       'error.usernameTaken',

@@ -14,6 +14,9 @@ module.exports = {
   },
   moduleNameMapper: {
     '^@phoenix/shared-kernel$': '<rootDir>/../../packages/shared-kernel/src/index.ts',
+    // `@phoenix/ui` re-exports its inputs, which normalise Persian text through this entry.
+    '^@phoenix/shared-kernel/persian-text$':
+      '<rootDir>/../../packages/shared-kernel/src/persian-text.ts',
   },
   reporters: process.env.GITHUB_ACTIONS ? ['default', 'github-actions'] : ['default'],
   ...(process.env.GITHUB_ACTIONS ? { testTimeout: 30_000 } : {}),

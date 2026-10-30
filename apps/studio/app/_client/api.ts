@@ -27,12 +27,8 @@ export async function callApi<T = unknown>(
     // A body that is not JSON carries no code.
   }
   if (response.ok) return { ok: true, body: parsed as T };
-  const code =
-    typeof parsed === 'object' &&
-    parsed !== null &&
-    'code' in parsed &&
-    typeof parsed.code === 'string'
-      ? parsed.code
-      : null;
-  return { ok: false, status: response.status, code };
+  const error = typeof parsed === 'object' && parsed !== null ? parsed : {};
+  const code = 'code' in error && typeof error.code === 'string' ? error.code : null;
+  const field = 'field' in error && typeof error.field === 'string' ? error.field : undefined;
+  return { ok: false, status: response.status, code, ...(field === undefined ? {} : { field }) };
 }

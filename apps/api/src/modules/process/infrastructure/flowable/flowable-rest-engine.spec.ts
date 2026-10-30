@@ -134,14 +134,102 @@ describe.each(['demo-fa', 'demo-en'])('FlowableRestEngine in tenant %s', (tenant
         on('GET', '/repository/deployments', () => page([])),
         on('POST', '/repository/deployments', () => ({ status: 201, json: deployment })),
       ]);
-      await deployed.engine.deployRevision(tenant, { ...command, bpmnXml: '<definitions/>' });
+      await deployed.engine.deployRevision(tenant, {
+        ...command,
+        bpmnXml: '<definitions/>',
+        decisions: [],
+      });
       const post = deployed.calls.find((call) => call.method === 'POST')!;
       expect(post.query.get('tenantId')).toBe(tenantId);
       expect(post.query.get('deploymentName')).toBe('leave@rev-1');
 
       const repeat = scripted([on('GET', '/repository/deployments', () => page([deployment]))]);
-      await repeat.engine.deployRevision(tenant, { ...command, bpmnXml: '<definitions/>' });
+      await repeat.engine.deployRevision(tenant, {
+        ...command,
+        bpmnXml: '<definitions/>',
+        decisions: [],
+      });
       expect(repeat.calls.map((call) => call.method)).toEqual(['GET']);
+    });
+
+    describe('decision tables (slice 2.7)', () => {
+      const DMN = '/flowable-rest/dmn-api/dmn-repository/deployments';
+      const DECISIONS = '/flowable-rest/dmn-api/dmn-repository/decisions';
+      const decision = { decisionKey: 'route', revisionId: 'dec-2', dmnXml: '<definitions/>' };
+      const name = 'route@dec-2.dmn';
+      const version = (resourceName: string, n: number, of = tenantId, key = 'route') => ({
+        key,
+        tenantId: of,
+        version: n,
+        resourceName,
+      });
+
+      it('deploys a table through the DMN API, named by its file, under the tenant', async () => {
+        const deployed = scripted([
+          on('GET', DECISIONS, () => page([])),
+          on('POST', DMN, () => ({ status: 201, json: { name, tenantId } })),
+        ]);
+        await deployed.engine.deployDecision(tenant, decision);
+        expect(deployed.calls.map((call) => [call.method, call.path])).toEqual([
+          ['GET', DECISIONS],
+          ['POST', DMN],
+        ]);
+        expect(deployed.calls[0]!.query.get('key')).toBe('route');
+        expect(deployed.calls[0]!.query.get('tenantId')).toBe(tenantId);
+        expect(deployed.calls[1]!.query.get('tenantId')).toBe(tenantId);
+        const file = (deployed.calls[1]!.body as FormData).get('file') as File;
+        expect(file.name).toBe(name);
+      });
+
+      it('does nothing when the table is the version the engine runs', async () => {
+        const { engine, calls } = scripted([
+          on('GET', DECISIONS, () => page([version('route@dec-1.dmn', 1), version(name, 2)])),
+        ]);
+        await engine.deployDecision(tenant, decision);
+        expect(calls.map((call) => call.method)).toEqual(['GET']);
+      });
+
+      it('deploys it again when an older revision was deployed after it (M1)', async () => {
+        const { engine, calls } = scripted([
+          on('GET', DECISIONS, () => page([version(name, 2), version('route@dec-1.dmn', 3)])),
+          on('POST', DMN, () => ({ status: 201, json: { name, tenantId } })),
+        ]);
+        await engine.deployDecision(tenant, decision);
+        expect(calls.map((call) => call.method)).toEqual(['GET', 'POST']);
+      });
+
+      it.each([
+        ['a decision of another tenant', [version(name, 1, other)]],
+        ['a decision of another key', [version(name, 1, tenantId, 'other')]],
+      ])('refuses %s', async (_label, found) => {
+        const { engine } = scripted([on('GET', DECISIONS, () => page(found))]);
+        await expect(engine.deployDecision(tenant, decision)).rejects.toBeInstanceOf(
+          EngineTenantMismatchError,
+        );
+      });
+
+      it('refuses a created deployment of another tenant', async () => {
+        const { engine } = scripted([
+          on('GET', DECISIONS, () => page([])),
+          on('POST', DMN, () => ({ status: 201, json: { name, tenantId: other } })),
+        ]);
+        await expect(engine.deployDecision(tenant, decision)).rejects.toBeInstanceOf(
+          EngineTenantMismatchError,
+        );
+      });
+
+      it('deploys the tables a revision names before the revision', async () => {
+        const { engine, calls } = scripted([
+          on('GET', DECISIONS, () => page([version(name, 1)])),
+          on('GET', '/repository/deployments', () => page([deployment])),
+        ]);
+        await engine.deployRevision(tenant, {
+          ...command,
+          bpmnXml: '<definitions/>',
+          decisions: [decision],
+        });
+        expect(calls.map((call) => call.path)).toEqual([DECISIONS, '/repository/deployments']);
+      });
     });
 
     it.each([

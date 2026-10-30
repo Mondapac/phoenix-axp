@@ -34,6 +34,18 @@ describe('studio relay allow-list', () => {
     'process/revisions',
     'process/tasks',
     `process/tasks/${ID}/complete`,
+    'forms/forms',
+    `forms/forms/${ID}/revisions`,
+    `forms/forms/${ID}/publish`,
+    `forms/forms/${ID}/submissions`,
+    `forms/revisions/${ID}`,
+    `forms/submissions/${ID}/erase`,
+    'objects/definitions',
+    `objects/definitions/${ID}/revisions`,
+    `objects/definitions/${ID}/publish`,
+    `objects/revisions/${ID}`,
+    'objects/o/contracts',
+    `objects/o/contracts/records/${ID}`,
   ])('relays %s', (route) => {
     expect(relays(route)).toBe(true);
   });
@@ -45,6 +57,9 @@ describe('studio relay allow-list', () => {
     'process',
     'process/incidents',
     'process/working-calendar',
+    'public/forms/x',
+    'forms',
+    'objects',
   ])('refuses %s', (route) => {
     expect(relays(route)).toBe(false);
   });

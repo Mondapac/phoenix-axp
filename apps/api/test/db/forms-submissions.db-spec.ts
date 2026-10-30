@@ -877,11 +877,18 @@ describe.each(TEST_TENANTS)('form submissions in tenant %s (database integration
       useCases.erase.execute(eraser, { submissionId: done.submissionId, version: 7 }),
     ).rejects.toBeInstanceOf(StaleAggregateError);
 
+    // The inbox hands the reader the version to erase with.
+    const before = await useCases.view.execute(reader, { submissionId: done.submissionId });
+    expect(before.ok && before.value.submission.version).toBe(1);
     expect(
       await useCases.erase.execute(eraser, { submissionId: done.submissionId, version: 1 }),
     ).toEqual({ ok: true, value: undefined });
     const viewed = await useCases.view.execute(reader, { submissionId: done.submissionId });
-    expect(viewed.ok && viewed.value.submission).toMatchObject({ erased: true, answers: {} });
+    expect(viewed.ok && viewed.value.submission).toMatchObject({
+      erased: true,
+      answers: {},
+      version: 2,
+    });
     const [key] = await asApplication<{ wrapped: boolean; destroyed: boolean }>(
       `SELECT wrapped_key IS NOT NULL AS wrapped, destroyed_at IS NOT NULL AS destroyed
          FROM platform.subject_key WHERE subject_id = $1`,
