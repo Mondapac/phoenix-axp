@@ -449,3 +449,130 @@ describe('checkBpmn and the core user task settings (slice 2.3, ADR-0025)', () =
     });
   });
 });
+
+describe('checkBpmn: decision tasks (slice 2.7)', () => {
+  const field = (name: string, value: string) =>
+    `<flowable:field name="${name}"><flowable:string>${value}</flowable:string></flowable:field>`;
+  const decisionTask = (extension: string, attributes = 'flowable:type="dmn"') => `
+    <startEvent id="start"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="rate"/>
+    <serviceTask id="rate" name="Rate" ${attributes}>
+      <extensionElements>${extension}</extensionElements>
+    </serviceTask>
+    <sequenceFlow id="f2" sourceRef="rate" targetRef="approve"/>
+    <userTask id="approve"/>
+    <sequenceFlow id="f3" sourceRef="approve" targetRef="end"/>
+    <endEvent id="end"/>`;
+  const KEY_FIELD = field('decisionTableReferenceKey', 'leave-route');
+
+  it('accepts a decision task naming a table, and reports where it runs it', () => {
+    const result = checkBpmn(
+      model(decisionTask(KEY_FIELD + field('decisionTaskThrowErrorOnNoHits', 'true'))),
+      'leave-approval',
+    );
+    expect(result.ok && result.value.decisions).toEqual([
+      { elementId: 'rate', decisionKey: 'leave-route' },
+    ]);
+  });
+
+  it('accepts the key as CDATA, as modelers write it', () => {
+    const cdata = field('decisionTableReferenceKey', '<![CDATA[leave-route]]>');
+    expect(refusal(model(decisionTask(cdata)))).toBeNull();
+  });
+
+  it.each([
+    ['another service task type', decisionTask(KEY_FIELD, 'flowable:type="http"'), 'serviceTask'],
+    ['an unprefixed type the engine ignores', decisionTask(KEY_FIELD, 'type="dmn"'), 'serviceTask'],
+    [
+      'a class next to the type',
+      decisionTask(KEY_FIELD, 'flowable:type="dmn" flowable:class="com.Evil"'),
+      'class',
+    ],
+    [
+      'async execution',
+      decisionTask(KEY_FIELD, 'flowable:type="dmn" flowable:async="true"'),
+      'async',
+    ],
+    ['no table key', decisionTask(''), 'decisionTableReferenceKey'],
+    [
+      'an expression as the key',
+      decisionTask(field('decisionTableReferenceKey', '${tableKey}')),
+      'expression',
+    ],
+    [
+      'a key that is not a decision key',
+      decisionTask(field('decisionTableReferenceKey', 'a b')),
+      'decisionTableReferenceKey',
+    ],
+    [
+      'the fallback to the default tenant',
+      decisionTask(KEY_FIELD + field('fallbackToDefaultTenant', 'true')),
+      'field',
+    ],
+    [
+      'a same-deployment lookup',
+      decisionTask(KEY_FIELD + field('sameDeployment', 'true')),
+      'field',
+    ],
+    [
+      'an expression field',
+      decisionTask(
+        '<flowable:field name="decisionTableReferenceKey"><flowable:expression>x</flowable:expression></flowable:field>',
+      ),
+      'expression',
+    ],
+    [
+      'a string value attribute',
+      decisionTask('<flowable:field name="decisionTableReferenceKey" stringValue="leave-route"/>'),
+      'stringValue',
+    ],
+    [
+      'a flag that is not true or false',
+      decisionTask(KEY_FIELD + field('decisionTaskThrowErrorOnNoHits', 'yes')),
+      'decisionTaskThrowErrorOnNoHits',
+    ],
+    [
+      'a listener in its extension elements',
+      decisionTask(KEY_FIELD + '<flowable:executionListener event="start" class="com.Evil"/>'),
+      'executionListener',
+    ],
+    [
+      'extension elements on a user task',
+      `<startEvent id="start"/><userTask id="u"><extensionElements>${KEY_FIELD}</extensionElements></userTask>`,
+      'extensionElements',
+    ],
+    ['a field outside a decision task', `<startEvent id="start"/>${KEY_FIELD}`, 'field'],
+  ])('refuses %s', (_label, process, field) => {
+    expect(refusal(model(process))).toEqual({ code: 'process.bpmn.forbidden-construct', field });
+  });
+
+  it('refuses a field set twice', () => {
+    expect(refusal(model(decisionTask(KEY_FIELD + KEY_FIELD)))).toEqual({
+      code: 'process.bpmn.malformed',
+    });
+  });
+
+  it('refuses a decision task in a process the engine does not run', () => {
+    const xml = model(`<startEvent id="start"/>`).replace(
+      '</process>',
+      `</process><process id="other" isExecutable="false"><serviceTask id="r" flowable:type="dmn"><extensionElements>${KEY_FIELD}</extensionElements></serviceTask></process>`,
+    );
+    expect(refusal(xml)).toEqual({
+      code: 'process.bpmn.forbidden-construct',
+      field: 'serviceTask',
+    });
+  });
+
+  it('refuses a loop through decision tasks that no person breaks', () => {
+    const loop = `
+    <startEvent id="start"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="rate"/>
+    <serviceTask id="rate" flowable:type="dmn"><extensionElements>${KEY_FIELD}</extensionElements></serviceTask>
+    <sequenceFlow id="f2" sourceRef="rate" targetRef="again"/>
+    <exclusiveGateway id="again"/>
+    <sequenceFlow id="f3" sourceRef="again" targetRef="rate"/>
+    <sequenceFlow id="f4" sourceRef="again" targetRef="end"/>
+    <endEvent id="end"/>`;
+    expect(refusal(model(loop))).toEqual({ code: 'process.bpmn.unbounded-flow' });
+  });
+});

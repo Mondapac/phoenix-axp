@@ -7,6 +7,7 @@ import {
   EngineRefusedError,
   EngineTenantMismatchError,
   EngineUnavailableError,
+  type EngineDecision,
   type EngineDeployment,
   type EngineInstance,
   type EngineOpenTask,
@@ -18,7 +19,10 @@ import { ENGINE_CALL_TIMEOUT_MS, type EngineVariables } from '../../domain/engin
 import type { EngineTaskEnd } from '../../domain/task';
 
 export interface FlowableRestOptions {
-  /** `http://flowable:8080/flowable-rest/service`: reachable from the core's network only. */
+  /**
+   * `http://flowable:8080/flowable-rest/service`: reachable from the core's network only. The
+   * DMN API is its sibling, `…/flowable-rest/dmn-api`.
+   */
   readonly url: string;
   /** A credential: never logged. */
   readonly user: string;
@@ -83,6 +87,8 @@ export function instantOfEngine(text: string): Temporal.Instant {
  */
 export class FlowableRestEngine implements ProcessEngine {
   readonly #authorization: string;
+  /** The DMN REST API: Flowable deploys decision tables only through it (slice 2.7). */
+  readonly #dmnUrl: string;
 
   constructor(
     private readonly options: FlowableRestOptions,
@@ -90,9 +96,11 @@ export class FlowableRestEngine implements ProcessEngine {
   ) {
     this.#authorization =
       'Basic ' + Buffer.from(`${options.user}:${options.password}`).toString('base64');
+    this.#dmnUrl = options.url.replace(/\/service\/?$/, '/dmn-api');
   }
 
   async deployRevision(tenant: TenantContext, deployment: EngineDeployment): Promise<void> {
+    for (const decision of deployment.decisions) await this.deployDecision(tenant, decision);
     if ((await this.deploymentOf(tenant, deployment)) !== null) return;
     const form = new FormData();
     form.append(
@@ -109,6 +117,32 @@ export class FlowableRestEngine implements ProcessEngine {
     })) as {
       tenantId: string;
     };
+    this.checkTenant(tenant, created.tenantId);
+  }
+
+  /**
+   * Flowable's DMN API names a deployment after its file and ignores a deployment name, so the
+   * file carries the core's name; it finds a decision by key in the instance's tenant only.
+   */
+  async deployDecision(tenant: TenantContext, decision: EngineDecision): Promise<void> {
+    const name = `${decision.decisionKey}@${decision.revisionId}.dmn`;
+    const query = new URLSearchParams({ name, tenantId: tenant.tenantId });
+    const page = (await this.call('GET', `/dmn-repository/deployments?${query.toString()}`, {
+      dmn: true,
+    })) as Page<{ name: string; tenantId: string }>;
+    for (const entry of page.data) {
+      if (entry.name !== name) throw new EngineTenantMismatchError();
+      this.checkTenant(tenant, entry.tenantId);
+    }
+    if (page.data.length > 0) return;
+    const form = new FormData();
+    form.append('file', new Blob([decision.dmnXml], { type: 'text/xml' }), name);
+    const created = (await this.call(
+      'POST',
+      `/dmn-repository/deployments?${new URLSearchParams({ tenantId: tenant.tenantId }).toString()}`,
+      { multipart: form, dmn: true },
+    )) as { name: string; tenantId: string };
+    if (created.name !== name) throw new EngineTenantMismatchError();
     this.checkTenant(tenant, created.tenantId);
   }
 
@@ -366,21 +400,24 @@ export class FlowableRestEngine implements ProcessEngine {
   private async call(
     method: 'GET' | 'POST' | 'DELETE',
     path: string,
-    body: { json?: unknown; multipart?: FormData; allowNotFound?: boolean } = {},
+    body: { json?: unknown; multipart?: FormData; allowNotFound?: boolean; dmn?: boolean } = {},
   ): Promise<unknown> {
     let response: Response;
     try {
-      response = await this.fetchFn(`${this.options.url}${path}`, {
-        method,
-        headers: {
-          authorization: this.#authorization,
-          accept: 'application/json',
-          ...(body.json === undefined ? {} : { 'content-type': 'application/json' }),
+      response = await this.fetchFn(
+        `${body.dmn === true ? this.#dmnUrl : this.options.url}${path}`,
+        {
+          method,
+          headers: {
+            authorization: this.#authorization,
+            accept: 'application/json',
+            ...(body.json === undefined ? {} : { 'content-type': 'application/json' }),
+          },
+          body: body.multipart ?? (body.json === undefined ? undefined : JSON.stringify(body.json)),
+          signal: AbortSignal.timeout(ENGINE_CALL_TIMEOUT_MS),
+          redirect: 'error',
         },
-        body: body.multipart ?? (body.json === undefined ? undefined : JSON.stringify(body.json)),
-        signal: AbortSignal.timeout(ENGINE_CALL_TIMEOUT_MS),
-        redirect: 'error',
-      });
+      );
     } catch (error) {
       const name = (error as { name?: string }).name;
       throw new EngineUnavailableError(name === 'TimeoutError' ? 'timeout' : 'unreachable');

@@ -7,12 +7,14 @@ import { timerDurationAllowed } from './bpmn-guard';
  * the engine side by its own key:
  *
  * - `deploy-revision`: the deployment name `<processKey>@<revisionId>`;
+ * - `deploy-decision`: the deployment name `<decisionKey>@<revisionId>.dmn` (slice 2.7);
  * - `start-instance`: the core instance id as business key, found before started (R3);
  * - `complete-task`: the command id, stored on the engine task before it is completed (R4);
  * - `delete-orphan`: deleting an instance that is gone is not an error.
  */
 export const COMMAND_KINDS = [
   'deploy-revision',
+  'deploy-decision',
   'start-instance',
   'complete-task',
   'delete-orphan',

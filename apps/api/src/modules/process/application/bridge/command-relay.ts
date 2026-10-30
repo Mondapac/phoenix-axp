@@ -19,6 +19,7 @@ import {
   type EngineVariables,
 } from '../../domain/engine-command';
 import { checkBpmn } from '../../domain/bpmn-guard';
+import { checkDmn } from '../../domain/dmn-guard';
 import type { IncidentKind } from '../../domain/incident';
 import { adoptionOf } from '../../domain/instance';
 import { statusOnEngineEnd, type EngineTaskEnd } from '../../domain/task';
@@ -29,11 +30,17 @@ import {
   EngineRefusedError,
   EngineTenantMismatchError,
   EngineUnavailableError,
+  type EngineDecision,
   type EngineDeployment,
   type EngineInstance,
   type ProcessEngine,
 } from '../ports/process-engine';
-import type { CommandRecord, ProcessRepository, RevisionRecord } from '../process.repository';
+import type {
+  CommandRecord,
+  DecisionRecord,
+  ProcessRepository,
+  RevisionRecord,
+} from '../process.repository';
 
 export interface RelayPass {
   readonly claimed: number;
@@ -128,6 +135,8 @@ export class CommandRelay {
     switch (command.kind) {
       case 'deploy-revision':
         return this.deployRevision(context.tenant, command);
+      case 'deploy-decision':
+        return this.deployDecision(context.tenant, command);
       case 'start-instance':
         return this.startInstance(context, command);
       case 'complete-task':
@@ -142,8 +151,50 @@ export class CommandRelay {
       this.repository.findRevision(tenant, command.subjectId),
     );
     if (revision === null) throw new EngineRefusedError('not-deployed');
-    await this.engine.deployRevision(tenant, deploymentOf(revision));
+    await this.engine.deployRevision(tenant, await this.deploymentOf(tenant, revision));
     await this.ack(tenant, command);
+  }
+
+  /**
+   * Deploys a decision table (slice 2.7). The engine runs the latest deployed revision of a key,
+   * so a revision a later one replaced before it was delivered is never deployed: it would
+   * become the engine's latest.
+   */
+  private async deployDecision(tenant: TenantContext, command: CommandRecord): Promise<void> {
+    const found = await this.read(tenant, async () => {
+      const decision = await this.repository.findDecisionRevision(tenant, command.subjectId);
+      if (decision === null) return null;
+      const latest = await this.repository.latestDecisionRevisionNumber(
+        tenant,
+        decision.decisionKey,
+      );
+      return { decision, superseded: decision.revision < latest };
+    });
+    if (found === null) throw new EngineRefusedError('not-deployed');
+    if (!found.superseded) await this.engine.deployDecision(tenant, decisionOf(found.decision));
+    await this.ack(tenant, command);
+  }
+
+  /**
+   * What the engine deploys, checked again: a revision stored under an earlier, weaker intake
+   * check never reaches the shared engine (security review of slice 2.2). With it, the latest
+   * revision of each decision table its decision tasks name.
+   */
+  private async deploymentOf(
+    tenant: TenantContext,
+    revision: RevisionRecord,
+  ): Promise<EngineDeployment> {
+    const checked = checkBpmn(revision.bpmnXml, revision.processKey);
+    if (!checked.ok) throw new EngineRefusedError('model-refused');
+    const keys = [...new Set(checked.value.decisions.map((decision) => decision.decisionKey))];
+    const decisions = await this.read(tenant, () => this.repository.latestDecisions(tenant, keys));
+    if (decisions.length !== keys.length) throw new EngineRefusedError('not-deployed');
+    return {
+      processKey: revision.processKey,
+      revisionId: revision.id,
+      bpmnXml: revision.bpmnXml,
+      decisions: decisions.map(decisionOf),
+    };
   }
 
   /**
@@ -164,7 +215,7 @@ export class CommandRelay {
 
     let engineInstances: EngineInstance[] = [];
     if (instance.status === 'starting') {
-      await this.engine.deployRevision(tenant, deploymentOf(revision));
+      await this.engine.deployRevision(tenant, await this.deploymentOf(tenant, revision));
       engineInstances = await this.engine.findInstancesByBusinessKey(tenant, instance.id);
       if (engineInstances.length === 0) {
         engineInstances = [
@@ -387,12 +438,16 @@ function variablesOf(payload: JsonObject): EngineVariables {
 }
 
 /**
- * What the engine deploys, checked again: a revision stored under an earlier, weaker intake
- * check never reaches the shared engine (security review of slice 2.2).
+ * A decision table as the engine receives it, checked again: a table stored under an earlier,
+ * weaker intake check never reaches the shared engine (as revisions, security review of 2.2).
  */
-function deploymentOf(revision: RevisionRecord): EngineDeployment {
-  if (!checkBpmn(revision.bpmnXml, revision.processKey).ok) {
+function decisionOf(decision: DecisionRecord): EngineDecision {
+  if (!checkDmn(decision.dmnXml, decision.decisionKey).ok) {
     throw new EngineRefusedError('model-refused');
   }
-  return { processKey: revision.processKey, revisionId: revision.id, bpmnXml: revision.bpmnXml };
+  return {
+    decisionKey: decision.decisionKey,
+    revisionId: decision.id,
+    dmnXml: decision.dmnXml,
+  };
 }

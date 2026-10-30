@@ -14,6 +14,7 @@ import { EngineSync } from '../../src/modules/process/application/bridge/engine-
 import { EngineCommands } from '../../src/modules/process/application/engine-commands';
 import type { TaskRecord } from '../../src/modules/process/application/process.repository';
 import { ListProcessIncidents } from '../../src/modules/process/application/use-cases/list-process-incidents.use-case';
+import { PublishDecisionRevision } from '../../src/modules/process/application/use-cases/publish-decision-revision.use-case';
 import { PublishProcessRevision } from '../../src/modules/process/application/use-cases/publish-process-revision.use-case';
 import { StartProcessInstance } from '../../src/modules/process/application/use-cases/start-process-instance.use-case';
 import { PROCESS_PERMISSIONS } from '../../src/modules/process/contracts/permissions';
@@ -24,6 +25,8 @@ import { StaleAggregateError } from '../../src/platform/unit-of-work/errors';
 import { CallLostError, FakeProcessEngine } from '../support/fake-process-engine';
 import {
   ANY_FORMS,
+  decisionProcess,
+  decisionTable,
   RecordingAuditWriter,
   testTenantRegistry,
 } from '../support/process-test-support';
@@ -110,6 +113,16 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
         hashing,
         audit,
         ANY_FORMS,
+        clock,
+        ids,
+      ),
+      publishDecision: new PublishDecisionRevision(
+        gate,
+        uow,
+        repository,
+        commands,
+        hashing,
+        audit,
         clock,
         ids,
       ),
@@ -320,6 +333,79 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
       expect(
         await bridge.start.execute(system, { revisionId, variables: { note: 'free text here' } }),
       ).toEqual({ ok: false, error: { code: 'process.variable.invalid', field: 'note' } });
+    });
+  });
+
+  describe('decision tables (slice 2.7)', () => {
+    const tableKey = `route_${code.replace('-', '_')}`;
+
+    it('stores numbered revisions, audits them, and deploys only the latest under the tenant', async () => {
+      const first = await bridge.publishDecision.execute(staff(tenant), {
+        decisionKey: tableKey,
+        dmnXml: decisionTable(tableKey),
+      });
+      const second = await bridge.publishDecision.execute(staff(tenant), {
+        decisionKey: tableKey,
+        dmnXml: decisionTable(tableKey, 'other'),
+      });
+      expect(first).toMatchObject({ ok: true, value: { revision: 1 } });
+      expect(second).toMatchObject({ ok: true, value: { revision: 2 } });
+      expect(audit.entries.at(-1)).toMatchObject({
+        action: 'process.decision.published',
+        after: { revision: 2 },
+      });
+      await drain();
+      // The first was replaced before the relay delivered it: deploying it now would make it
+      // the engine's latest.
+      const deployed = engine.decisions.filter((name) => name.startsWith(`${code}/${tableKey}@`));
+      expect(deployed).toEqual([`${code}/${tableKey}@${second.ok ? second.value.id : ''}`]);
+    });
+
+    it('refuses a table that would evaluate code in the shared engine, and stores nothing', async () => {
+      const key = `evil_${code.replace('-', '_')}`;
+      const xml = decisionTable(key).replace('&gt; 5', '${days.getClass()}');
+      expect(
+        await bridge.publishDecision.execute(staff(tenant), { decisionKey: key, dmnXml: xml }),
+      ).toEqual({
+        ok: false,
+        error: { code: 'process.dmn.forbidden-construct', field: 'expression' },
+      });
+      expect(
+        await rowsOf(tenant, 'SELECT 1 FROM process.decision_revision WHERE decision_key = $1', [
+          key,
+        ]),
+      ).toEqual([]);
+    });
+
+    it('publishes a process whose decision task names a published table, deploying both', async () => {
+      const key = `routed-${code.replace('-', '_')}`;
+      const result = await bridge.publish.execute(staff(tenant), {
+        processKey: key,
+        bpmnXml: decisionProcess(key, tableKey),
+      });
+      expect(result).toMatchObject({ ok: true, value: { revision: 1 } });
+      await drain();
+      expect(engine.deployments.get(`${code}/${key}@${result.ok ? result.value.id : ''}`)).toBe(
+        code,
+      );
+    });
+
+    it("refuses a process naming a table the tenant never published, even another tenant's", async () => {
+      const key = `unrouted-${code.replace('-', '_')}`;
+      for (const [of, table] of [
+        [tenant, 'never_published'],
+        [other, tableKey],
+      ] as const) {
+        expect(
+          await bridge.publish.execute(staff(of), {
+            processKey: key,
+            bpmnXml: decisionProcess(key, table),
+          }),
+        ).toEqual({ ok: false, error: { code: 'process.decision.not-found', field: 'route' } });
+        expect(
+          await rowsOf(of, 'SELECT 1 FROM process.process_revision WHERE process_key = $1', [key]),
+        ).toEqual([]);
+      }
     });
   });
 
@@ -690,6 +776,7 @@ describe.each(TEST_TENANTS)('the process bridge in tenant %s (database integrati
     it('shows no process row of this tenant to the other tenant', async () => {
       for (const table of [
         'process_revision',
+        'decision_revision',
         'process_instance',
         'process_task',
         'engine_command',

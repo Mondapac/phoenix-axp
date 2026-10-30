@@ -6,6 +6,7 @@ import { StaleAggregateError } from '../../../platform/unit-of-work/errors';
 import type {
   CalendarRecord,
   CommandRecord,
+  DecisionRecord,
   FormBinding,
   IncidentRecord,
   InstanceRecord,
@@ -112,6 +113,57 @@ export class PrismaProcessRepository implements ProcessRepository {
       select: { id: true, processKey: true, revision: true, bpmnXml: true },
     });
     return row === null ? null : { ...row, id: row.id as Id<'ProcessRevision'> };
+  }
+
+  async latestDecisionRevisionNumber(tenant: TenantContext, decisionKey: string): Promise<number> {
+    const latest = await this.prisma.tx(tenant).decisionRevision.findFirst({
+      where: { tenantId: tenant.tenantId, decisionKey },
+      orderBy: { revision: 'desc' },
+      select: { revision: true },
+    });
+    return latest?.revision ?? 0;
+  }
+
+  async insertDecisionRevision(
+    tenant: TenantContext,
+    decision: DecisionRecord & { readonly contentHash: string },
+    at: Temporal.Instant,
+  ): Promise<void> {
+    // As insertRevision: the second of two concurrent publishes inserts nothing (409).
+    const { count } = await this.prisma.tx(tenant).decisionRevision.createMany({
+      data: [
+        {
+          tenantId: tenant.tenantId,
+          id: decision.id,
+          decisionKey: decision.decisionKey,
+          revision: decision.revision,
+          dmnXml: decision.dmnXml,
+          contentHash: decision.contentHash,
+          publishedAt: dateOf(at),
+        },
+      ],
+      skipDuplicates: true,
+    });
+    if (count !== 1) throw new StaleAggregateError('DecisionRevision', decision.decisionKey);
+  }
+
+  async findDecisionRevision(tenant: TenantContext, id: string): Promise<DecisionRecord | null> {
+    const row = await this.prisma.tx(tenant).decisionRevision.findUnique({
+      where: { tenantId_id: { tenantId: tenant.tenantId, id }, tenantId: tenant.tenantId },
+      select: DECISION_COLUMNS,
+    });
+    return row === null ? null : decisionOf(row);
+  }
+
+  async latestDecisions(tenant: TenantContext, keys: readonly string[]): Promise<DecisionRecord[]> {
+    if (keys.length === 0) return [];
+    const rows = await this.prisma.tx(tenant).decisionRevision.findMany({
+      where: { tenantId: tenant.tenantId, decisionKey: { in: [...keys] } },
+      distinct: ['decisionKey'],
+      orderBy: [{ decisionKey: 'asc' }, { revision: 'desc' }],
+      select: DECISION_COLUMNS,
+    });
+    return rows.map(decisionOf);
   }
 
   async findTaskSettings(
@@ -801,3 +853,12 @@ function taskOf(row: {
     openedAt: instantOf(row.openedAt),
   };
 }
+
+const DECISION_COLUMNS = { id: true, decisionKey: true, revision: true, dmnXml: true } as const;
+
+const decisionOf = (row: {
+  id: string;
+  decisionKey: string;
+  revision: number;
+  dmnXml: string;
+}): DecisionRecord => ({ ...row, id: row.id as Id<'DecisionRevision'> });

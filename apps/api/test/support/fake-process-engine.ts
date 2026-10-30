@@ -3,6 +3,7 @@ import type { Clock, Temporal, TenantContext } from '@phoenix/shared-kernel';
 import {
   EngineRefusedError,
   EngineUnavailableError,
+  type EngineDecision,
   type EngineDeployment,
   type EngineInstance,
   type EngineOpenTask,
@@ -48,6 +49,8 @@ export class CallLostError extends Error {
 
 export class FakeProcessEngine implements ProcessEngine {
   readonly deployments = new Map<string, string>();
+  /** Deployed decision tables, `<tenant>/<decisionKey>@<revisionId>`, in deployment order. */
+  readonly decisions: string[] = [];
   readonly instances: Instance[] = [];
   readonly tasks: Task[] = [];
   readonly calls: string[] = [];
@@ -128,9 +131,21 @@ export class FakeProcessEngine implements ProcessEngine {
 
   // --- the port ---
 
+  deployDecision(tenant: TenantContext, decision: EngineDecision): Promise<void> {
+    return this.call('deployDecision', () => {
+      if (this.refuseDeployments) throw new EngineRefusedError('client-error');
+      const name = `${tenant.tenantId}/${decision.decisionKey}@${decision.revisionId}`;
+      if (!this.decisions.includes(name)) this.decisions.push(name);
+    });
+  }
+
   deployRevision(tenant: TenantContext, deployment: EngineDeployment): Promise<void> {
     return this.call('deployRevision', () => {
       if (this.refuseDeployments) throw new EngineRefusedError('client-error');
+      for (const decision of deployment.decisions) {
+        const name = `${tenant.tenantId}/${decision.decisionKey}@${decision.revisionId}`;
+        if (!this.decisions.includes(name)) this.decisions.push(name);
+      }
       this.deployments.set(this.deploymentKey(tenant, deployment), tenant.tenantId);
     });
   }
