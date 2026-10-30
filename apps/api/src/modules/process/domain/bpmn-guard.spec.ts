@@ -1,4 +1,4 @@
-import { checkBpmn, durationSeconds, MAX_BPMN_BYTES } from './bpmn-guard';
+import { checkBpmn, durationSeconds, MAX_BPMN_BYTES, processIdsOf } from './bpmn-guard';
 
 const model = (process: string, key = 'leave-approval') => `<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -659,5 +659,34 @@ describe('checkBpmn: decision tasks (slice 2.7)', () => {
     <sequenceFlow id="f4" sourceRef="again" targetRef="end"/>
     <endEvent id="end"/>`;
     expect(refusal(model(loop))).toEqual({ code: 'process.bpmn.unbounded-flow' });
+  });
+});
+
+describe('processIdsOf (a draft the guard stopped early, slice 2.10)', () => {
+  it('reads process elements only, never a comment, CDATA or another attribute', () => {
+    expect(processIdsOf(STUDIO_MODEL)).toEqual(['leave-request']);
+    expect(
+      processIdsOf(
+        `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL">
+  <!-- <process id="key"> -->
+  <process name=' id="key"' id="other"><documentation><![CDATA[<process id="key">]]></documentation></process>
+</definitions>`,
+      ),
+    ).toEqual(['other']);
+    expect(processIdsOf('<definitions><process/><bpmn:process id="b"/></definitions>')).toEqual([
+      null,
+      'b',
+    ]);
+  });
+
+  it('answers null for XML that does not scan or carries a declaration', () => {
+    expect(processIdsOf('<definitions')).toBeNull();
+    expect(processIdsOf('<!DOCTYPE x><definitions/>')).toBeNull();
+  });
+
+  it('reads a long run of unclosed tags in linear time', () => {
+    const started = performance.now();
+    expect(processIdsOf('<process '.repeat(7000))).toBeNull();
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });

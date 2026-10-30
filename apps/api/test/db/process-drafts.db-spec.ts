@@ -198,6 +198,14 @@ describe.each(TEST_TENANTS)('process drafts in tenant %s (database integration)'
         version: 0,
       }),
     ).toEqual({ ok: false, error: { code: 'process.bpmn.process-key-mismatch' } });
+    // Another attribute's value is not the process id (security re-review of the fix).
+    expect(
+      await use.save.execute(staff(tenant), {
+        processKey: key,
+        bpmnXml: model('other', script).replace('<process ', `<process name=' id="${key}"' `),
+        version: 0,
+      }),
+    ).toEqual({ ok: false, error: { code: 'process.bpmn.process-key-mismatch' } });
     expect(
       await use.save.execute(staff(tenant), {
         processKey: key,

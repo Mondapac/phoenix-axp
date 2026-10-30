@@ -6,7 +6,7 @@ import type { UnitOfWork } from '../../../../platform/unit-of-work/unit-of-work'
 import { StaleAggregateError } from '../../../../platform/unit-of-work/errors';
 import { PROCESS_DEFINITIONS_DESIGN } from '../../contracts/permissions';
 import { PROCESS_DRAFT_SAVED } from '../../domain/audit-actions';
-import { checkBpmn } from '../../domain/bpmn-guard';
+import { checkBpmn, processIdsOf } from '../../domain/bpmn-guard';
 import type { BpmnRefusal } from '../failures';
 import type { ProcessRepository } from '../process.repository';
 
@@ -33,14 +33,6 @@ const REFUSED: ReadonlySet<string> = new Set<DraftRefusal['code']>([
 
 const MALFORMED: DraftRefusal = { code: 'process.bpmn.malformed' };
 const KEY_MISMATCH: DraftRefusal = { code: 'process.bpmn.process-key-mismatch' };
-
-/** The id of the model's only process element, under any prefix; null for none or several. */
-function processIdOf(xml: string): string | null {
-  const found = [...xml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?process\b([^>]*)>/g)];
-  if (found.length !== 1) return null;
-  const id = /\sid\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(found[0]![1]!);
-  return id === null ? null : (id[1] ?? id[2] ?? null);
-}
 
 export interface SavedDraft {
   readonly version: number;
@@ -85,9 +77,9 @@ export class SaveProcessDraft extends UseCase<SaveProcessDraftInput, SavedDraft,
     if (!checked.ok) {
       if (checked.error.code === 'process.bpmn.forbidden-construct') {
         if (checked.error.field === 'declaration') return err(MALFORMED);
-        const keyed = processIdOf(input.bpmnXml);
-        if (keyed === null) return err(MALFORMED);
-        if (keyed !== input.processKey) return err(KEY_MISMATCH);
+        const ids = processIdsOf(input.bpmnXml);
+        if (ids === null) return err(MALFORMED);
+        if (ids.length !== 1 || ids[0] !== input.processKey) return err(KEY_MISMATCH);
       }
     }
     const problem = checked.ok ? null : checked.error;

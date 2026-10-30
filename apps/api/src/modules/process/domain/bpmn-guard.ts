@@ -413,6 +413,26 @@ interface DecisionTaskSeen {
   field: string | null;
 }
 
+/**
+ * The ids of a model's process elements, read by the guard's own scanner (comments, CDATA and
+ * attribute values are not elements); null when the XML does not scan or has a declaration.
+ * For a draft the guard stopped early: it still has to be a model of its key (slice 2.10).
+ */
+export function processIdsOf(xml: string): (string | null)[] | null {
+  const ids: (string | null)[] = [];
+  const scanned = scanXml<never>(xml, {
+    start: (tag) => {
+      if (tag.element === 'process') {
+        const id = tag.attributes.find(([name]) => localName(name) === 'id');
+        ids.push(id === undefined ? null : id[1]);
+      }
+      return null;
+    },
+    end: () => null,
+  });
+  return scanned === null ? ids : null;
+}
+
 /** The model as the core stores and deploys it, or why it is refused. */
 export function checkBpmn(xml: string, processKey: string): Result<CheckedModel, BpmnRefusal> {
   if (new TextEncoder().encode(xml).length > MAX_BPMN_BYTES) {
